@@ -18,6 +18,8 @@ import ShipmentsPage from "./pages/admin/shipmentsPage";
 import "./index.css";
 import CategoriesPage from "./pages/admin/categoryPage";
 import { HomeSectionsPage } from "./pages/admin/homeSectionsPage";
+import { Toaster } from "react-hot-toast";
+import BannersPage from "./pages/admin/bannerPage";
 
 
 // Admin Pages
@@ -143,6 +145,18 @@ function App() {
               }
             />
             <Route
+              path="/admin/banner"
+              element={
+                <ProtectedRoute
+                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+                  requiredModule="banner"
+                  requiredPermission="canRead"
+                >
+                  <BannersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/reviews"
               element={
                 <ProtectedRoute
@@ -207,6 +221,7 @@ function App() {
             {/* Catch all - redirect to root */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <Toaster />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

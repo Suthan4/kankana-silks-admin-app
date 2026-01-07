@@ -16,6 +16,7 @@ import {
   Warehouse,
   Layers,
   Grid,
+  Image,
   MoreHorizontal,
   Video,
 } from "lucide-react";
@@ -103,6 +104,13 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         icon: <Grid className="h-5 w-5" />,
         roles: ["ADMIN", "SUPER_ADMIN"],
         module: "home-sections",
+      },
+      {
+        name: "Banner",
+        path: "/admin/banner",
+        icon: <Image className="h-5 w-5" />,
+        roles: ["ADMIN", "SUPER_ADMIN"],
+        module: "banner",
       },
       {
         name: "Reviews",

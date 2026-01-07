@@ -1,581 +1,10 @@
-// import React, { useState } from "react";
-// import { useForm } from "react-hook-form";
-// import { zodResolver } from "@hookform/resolvers/zod";
-// import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-// import { MainLayout } from "@/components/layouts/mainLayout";
-// import { usePermissions } from "@/hooks/usePermissions";
-
-// import {
-//   Plus,
-//   Edit,
-//   Trash2,
-//   Upload,
-//   X,
-//   FolderTree,
-//   Eye,
-//   EyeOff,
-// } from "lucide-react";
-// import type { Category } from "@/lib/types/category/category";
-// import { categoryApi } from "@/lib/api/category.api";
-// import { createCategorySchema, type CreateCategoryFormData } from "@/lib/types/category/schema";
-
-// export const CategoriesPage: React.FC = () => {
-//   const queryClient = useQueryClient();
-//   const { hasPermission } = usePermissions();
-//   const [showCreateModal, setShowCreateModal] = useState(false);
-//   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-//   const [imagePreview, setImagePreview] = useState<string>("");
-//   const [isDragging, setIsDragging] = useState(false);
-
-//   const canCreate = hasPermission("categories", "canCreate");
-//   const canUpdate = hasPermission("categories", "canUpdate");
-//   const canDelete = hasPermission("categories", "canDelete");
-
-//   // Fetch categories
-//   const { data: categoriesData, isLoading } = useQuery({
-//     queryKey: ["categories"],
-//     queryFn: async () => {
-//       const response = await categoryApi.getCategories({ limit: 100 });
-//       return response.data;
-//     },
-//   });
-
-//   // Fetch category tree
-//   const { data: categoryTree } = useQuery({
-//     queryKey: ["category-tree"],
-//     queryFn: async () => {
-//       const response = await categoryApi.getCategoryTree();
-//       return response.data;
-//     },
-//   });
-
-//   // Create category mutation
-//   const createMutation = useMutation({
-//     mutationFn: categoryApi.createCategory,
-//     onSuccess: () => {
-//       queryClient.invalidateQueries({ queryKey: ["categories"] });
-//       queryClient.invalidateQueries({ queryKey: ["category-tree"] });
-//       setShowCreateModal(false);
-//       reset();
-//       setImagePreview("");
-//     },
-//   });
-
-//   // Update category mutation
-//   const updateMutation = useMutation({
-//     mutationFn: ({ id, data }: { id: string; data: any }) =>
-//       categoryApi.updateCategory(id, data),
-//     onSuccess: () => {
-//       queryClient.invalidateQueries({ queryKey: ["categories"] });
-//       queryClient.invalidateQueries({ queryKey: ["category-tree"] });
-//       setEditingCategory(null);
-//       reset();
-//       setImagePreview("");
-//     },
-//   });
-
-//   // Delete category mutation
-//   const deleteMutation = useMutation({
-//     mutationFn: categoryApi.deleteCategory,
-//     onSuccess: () => {
-//       queryClient.invalidateQueries({ queryKey: ["categories"] });
-//       queryClient.invalidateQueries({ queryKey: ["category-tree"] });
-//     },
-//   });
-
-//   const {
-//     register,
-//     handleSubmit,
-//     reset,
-//     setValue,
-//     watch,
-//     formState: { errors },
-//   } = useForm({
-//     resolver: zodResolver(createCategorySchema),
-//   });
-
-//   const watchedImage = watch("image");
-
-//   // Handle file drop
-//   const handleDrop = (e: React.DragEvent) => {
-//     e.preventDefault();
-//     setIsDragging(false);
-
-//     const file = e.dataTransfer.files[0];
-//     if (file && file.type.startsWith("image/")) {
-//       handleImageFile(file);
-//     }
-//   };
-
-//   // Handle file selection
-//   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     const file = e.target.files?.[0];
-//     if (file) {
-//       handleImageFile(file);
-//     }
-//   };
-
-//   // Process image file (you'd upload to cloud storage in production)
-//   const handleImageFile = (file: File) => {
-//     const reader = new FileReader();
-//     reader.onloadend = () => {
-//       const result = reader.result as string;
-//       setImagePreview(result);
-//       // In production, upload to cloud storage and get URL
-//       setValue("image", result);
-//     };
-//     reader.readAsDataURL(file);
-//   };
-
-//   const onSubmit = (data: CreateCategoryFormData) => {
-//     // Add defaults for optional fields
-//     const submitData = {
-//       ...data,
-//       isActive: data.isActive ?? true,
-//       order: data.order ?? 0,
-//       image: data.image || ""
-//     };
-
-//     if (editingCategory) {
-//       updateMutation.mutate({ id: editingCategory.id, data: submitData });
-//     } else {
-//       createMutation.mutate(submitData);
-//     }
-//   };
-
-//   const handleEdit = (category: Category) => {
-//     setEditingCategory(category);
-//     setValue("name", category.name);
-//     setValue("description", category.description || "");
-//     setValue("parentId", category.parentId || "");
-//     setValue("metaTitle", category.metaTitle || "");
-//     setValue("metaDesc", category.metaDesc || "");
-//     setValue("image", category.image || "");
-//     setValue("isActive", category.isActive);
-//     setValue("order", category.order);
-//     setImagePreview(category.image || "");
-//     setShowCreateModal(true);
-//   };
-
-//   const handleDelete = (id: string) => {
-//     if (window.confirm("Are you sure you want to delete this category?")) {
-//       deleteMutation.mutate(id);
-//     }
-//   };
-
-//   return (
-//     <MainLayout>
-//       <div className="space-y-6">
-//         {/* Header */}
-//         <div className="flex items-center justify-between">
-//           <div>
-//             <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
-//             <p className="text-sm text-gray-600 mt-1">
-//               Manage product categories
-//             </p>
-//           </div>
-//           {canCreate && (
-//             <button
-//               onClick={() => {
-//                 setEditingCategory(null);
-//                 reset({
-//                   name: "",
-//                   description: "",
-//                   parentId: "",
-//                   metaTitle: "",
-//                   metaDesc: "",
-//                   image: "",
-//                   isActive: true,
-//                   order: 0,
-//                 });
-//                 setImagePreview("");
-//                 setShowCreateModal(true);
-//               }}
-//               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-//             >
-//               <Plus className="h-4 w-4" />
-//               Add Category
-//             </button>
-//           )}
-//         </div>
-
-//         {/* Categories Table */}
-//         <div className="bg-white rounded-lg shadow-md overflow-hidden">
-//           <div className="overflow-x-auto">
-//             <table className="min-w-full divide-y divide-gray-200">
-//               <thead className="bg-gray-50">
-//                 <tr>
-//                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-//                     Category
-//                   </th>
-//                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-//                     Parent
-//                   </th>
-//                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-//                     Products
-//                   </th>
-//                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-//                     Order
-//                   </th>
-//                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-//                     Status
-//                   </th>
-//                   {(canUpdate || canDelete) && (
-//                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-//                       Actions
-//                     </th>
-//                   )}
-//                 </tr>
-//               </thead>
-//               <tbody className="bg-white divide-y divide-gray-200">
-//                 {isLoading ? (
-//                   <tr>
-//                     <td
-//                       colSpan={6}
-//                       className="px-6 py-12 text-center text-gray-500"
-//                     >
-//                       Loading...
-//                     </td>
-//                   </tr>
-//                 ) : categoriesData?.categories?.length === 0 ? (
-//                   <tr>
-//                     <td
-//                       colSpan={6}
-//                       className="px-6 py-12 text-center text-gray-500"
-//                     >
-//                       No categories found
-//                     </td>
-//                   </tr>
-//                 ) : (
-//                   categoriesData?.categories?.map((category) => (
-//                     <tr key={category.id} className="hover:bg-gray-50">
-//                       <td className="px-6 py-4">
-//                         <div className="flex items-center">
-//                           {category.image ? (
-//                             <img
-//                               src={category.image}
-//                               alt={category.name}
-//                               className="h-10 w-10 rounded-lg object-cover mr-3"
-//                             />
-//                           ) : (
-//                             <div className="h-10 w-10 bg-gray-200 rounded-lg flex items-center justify-center mr-3">
-//                               <FolderTree className="h-5 w-5 text-gray-500" />
-//                             </div>
-//                           )}
-//                           <div>
-//                             <div className="text-sm font-medium text-gray-900">
-//                               {category.name}
-//                             </div>
-//                             <div className="text-sm text-gray-500">
-//                               {category.slug}
-//                             </div>
-//                           </div>
-//                         </div>
-//                       </td>
-//                       <td className="px-6 py-4 text-sm text-gray-500">
-//                         {category.parent?.name || "-"}
-//                       </td>
-//                       <td className="px-6 py-4 text-sm text-gray-900">
-//                         {category._count?.products || 0}
-//                       </td>
-//                       <td className="px-6 py-4 text-sm text-gray-900">
-//                         {category.order}
-//                       </td>
-//                       <td className="px-6 py-4">
-//                         <span
-//                           className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-//                             category.isActive
-//                               ? "bg-green-100 text-green-800"
-//                               : "bg-red-100 text-red-800"
-//                           }`}
-//                         >
-//                           {category.isActive ? (
-//                             <>
-//                               <Eye className="h-3 w-3 mr-1" />
-//                               Active
-//                             </>
-//                           ) : (
-//                             <>
-//                               <EyeOff className="h-3 w-3 mr-1" />
-//                               Inactive
-//                             </>
-//                           )}
-//                         </span>
-//                       </td>
-//                       {(canUpdate || canDelete) && (
-//                         <td className="px-6 py-4 text-right text-sm font-medium">
-//                           {canUpdate && (
-//                             <button
-//                               onClick={() => handleEdit(category)}
-//                               className="text-blue-600 hover:text-blue-900 mr-3"
-//                             >
-//                               <Edit className="h-4 w-4 inline" />
-//                             </button>
-//                           )}
-//                           {canDelete && (
-//                             <button
-//                               onClick={() => handleDelete(category.id)}
-//                               className="text-red-600 hover:text-red-900"
-//                             >
-//                               <Trash2 className="h-4 w-4 inline" />
-//                             </button>
-//                           )}
-//                         </td>
-//                       )}
-//                     </tr>
-//                   ))
-//                 )}
-//               </tbody>
-//             </table>
-//           </div>
-//         </div>
-
-//         {/* Create/Edit Modal */}
-//         {showCreateModal && (
-//           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-//             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-//               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-//                 <h2 className="text-xl font-semibold text-gray-900">
-//                   {editingCategory ? "Edit Category" : "Create Category"}
-//                 </h2>
-//                 <button
-//                   onClick={() => {
-//                     setShowCreateModal(false);
-//                     setEditingCategory(null);
-//                     reset();
-//                     setImagePreview("");
-//                   }}
-//                   className="text-gray-400 hover:text-gray-600"
-//                 >
-//                   <X className="h-6 w-6" />
-//                 </button>
-//               </div>
-
-//               <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-//                 {/* Name */}
-//                 <div>
-//                   <label className="block text-sm font-medium text-gray-700 mb-1">
-//                     Name *
-//                   </label>
-//                   <input
-//                     {...register("name")}
-//                     type="text"
-//                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-//                     placeholder="Electronics, Clothing, etc."
-//                   />
-//                   {errors.name && (
-//                     <p className="mt-1 text-sm text-red-600">
-//                       {errors.name.message}
-//                     </p>
-//                   )}
-//                 </div>
-
-//                 {/* Description */}
-//                 <div>
-//                   <label className="block text-sm font-medium text-gray-700 mb-1">
-//                     Description
-//                   </label>
-//                   <textarea
-//                     {...register("description")}
-//                     rows={3}
-//                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-//                     placeholder="Category description..."
-//                   />
-//                 </div>
-
-//                 {/* Parent Category */}
-//                 <div>
-//                   <label className="block text-sm font-medium text-gray-700 mb-1">
-//                     Parent Category
-//                   </label>
-//                   <select
-//                     {...register("parentId")}
-//                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-//                   >
-//                     <option value="">None (Root Category)</option>
-//                     {categoriesData?.categories
-//                       ?.filter((cat) => cat.id !== editingCategory?.id)
-//                       .map((cat) => (
-//                         <option key={cat.id} value={cat.id}>
-//                           {cat.name}
-//                         </option>
-//                       ))}
-//                   </select>
-//                 </div>
-
-//                 {/* Image Upload with Drag & Drop */}
-//                 <div>
-//                   <label className="block text-sm font-medium text-gray-700 mb-1">
-//                     Category Image
-//                   </label>
-//                   <div
-//                     onDrop={handleDrop}
-//                     onDragOver={(e) => {
-//                       e.preventDefault();
-//                       setIsDragging(true);
-//                     }}
-//                     onDragLeave={() => setIsDragging(false)}
-//                     className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-//                       isDragging
-//                         ? "border-blue-500 bg-blue-50"
-//                         : "border-gray-300 hover:border-gray-400"
-//                     }`}
-//                   >
-//                     {imagePreview ? (
-//                       <div className="relative inline-block">
-//                         <img
-//                           src={imagePreview}
-//                           alt="Preview"
-//                           className="h-32 w-32 object-cover rounded-lg"
-//                         />
-//                         <button
-//                           type="button"
-//                           onClick={() => {
-//                             setImagePreview("");
-//                             setValue("image", "");
-//                           }}
-//                           className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
-//                         >
-//                           <X className="h-4 w-4" />
-//                         </button>
-//                       </div>
-//                     ) : (
-//                       <>
-//                         <Upload className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-//                         <p className="text-sm text-gray-600 mb-2">
-//                           Drag & drop an image here, or click to select
-//                         </p>
-//                         <input
-//                           type="file"
-//                           accept="image/*"
-//                           onChange={handleFileSelect}
-//                           className="hidden"
-//                           id="image-upload"
-//                         />
-//                         <label
-//                           htmlFor="image-upload"
-//                           className="cursor-pointer text-blue-600 hover:text-blue-700"
-//                         >
-//                           Browse files
-//                         </label>
-//                       </>
-//                     )}
-//                   </div>
-//                   {errors.image && (
-//                     <p className="mt-1 text-sm text-red-600">
-//                       {errors.image.message}
-//                     </p>
-//                   )}
-//                 </div>
-
-//                 {/* Meta Fields */}
-//                 <div className="grid grid-cols-2 gap-4">
-//                   <div>
-//                     <label className="block text-sm font-medium text-gray-700 mb-1">
-//                       Meta Title
-//                     </label>
-//                     <input
-//                       {...register("metaTitle")}
-//                       type="text"
-//                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-//                       placeholder="SEO title (max 60 chars)"
-//                     />
-//                   </div>
-
-//                   <div>
-//                     <label className="block text-sm font-medium text-gray-700 mb-1">
-//                       Meta Description
-//                     </label>
-//                     <input
-//                       {...register("metaDesc")}
-//                       type="text"
-//                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-//                       placeholder="SEO description (max 160 chars)"
-//                     />
-//                   </div>
-//                 </div>
-
-//                 {/* Order & Status */}
-//                 <div className="grid grid-cols-2 gap-4">
-//                   <div>
-//                     <label className="block text-sm font-medium text-gray-700 mb-1">
-//                       Display Order
-//                     </label>
-//                     <input
-//                       {...register("order", { valueAsNumber: true })}
-//                       type="number"
-//                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-//                       placeholder="0"
-//                     />
-//                   </div>
-
-//                   <div>
-//                     <label className="block text-sm font-medium text-gray-700 mb-1">
-//                       Status
-//                     </label>
-//                     <div className="flex items-center h-10">
-//                       <input
-//                         {...register("isActive")}
-//                         type="checkbox"
-//                         className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-//                       />
-//                       <span className="ml-2 text-sm text-gray-700">Active</span>
-//                     </div>
-//                   </div>
-//                 </div>
-
-//                 {/* Submit Buttons */}
-//                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-//                   <button
-//                     type="button"
-//                     onClick={() => {
-//                       setShowCreateModal(false);
-//                       setEditingCategory(null);
-//                       reset();
-//                       setImagePreview("");
-//                     }}
-//                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-//                   >
-//                     Cancel
-//                   </button>
-//                   <button
-//                     type="submit"
-//                     disabled={
-//                       createMutation.isPending || updateMutation.isPending
-//                     }
-//                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
-//                   >
-//                     {createMutation.isPending || updateMutation.isPending
-//                       ? "Saving..."
-//                       : editingCategory
-//                       ? "Update Category"
-//                       : "Create Category"}
-//                   </button>
-//                 </div>
-//               </form>
-//             </div>
-//           </div>
-//         )}
-
-//         {/* Read-Only Notice */}
-//         {!canCreate && !canUpdate && !canDelete && (
-//           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-//             <p className="text-sm text-yellow-800">
-//               You have read-only access to categories. Contact your
-//               administrator for additional permissions.
-//             </p>
-//           </div>
-//         )}
-//       </div>
-//     </MainLayout>
-//   );
-// };
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layouts/mainLayout";
 import { usePermissions } from "@/hooks/usePermissions";
+import { toast } from "react-hot-toast";
 
 import {
   Plus,
@@ -590,11 +19,15 @@ import {
   ChevronRight,
   ChevronDown,
   Grid3x3,
+  Loader2,
 } from "lucide-react";
 import { categoryApi } from "@/lib/api/category.api";
+import { s3Api } from "@/lib/api/s3.api";
 import type { Category } from "@/lib/types/category/category";
-import { createCategorySchema, type CreateCategoryFormData } from "@/lib/types/category/schema";
-
+import {
+  createCategorySchema,
+  type CreateCategoryFormData,
+} from "@/lib/types/category/schema";
 
 // Tree node component for hierarchical view
 const CategoryTreeNode: React.FC<{
@@ -616,7 +49,6 @@ const CategoryTreeNode: React.FC<{
         }`}
         style={{ paddingLeft: `${level * 2 + 1}rem` }}
       >
-        {/* Expand/Collapse button */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={`p-1 hover:bg-gray-200 rounded transition-colors ${
@@ -630,7 +62,6 @@ const CategoryTreeNode: React.FC<{
           )}
         </button>
 
-        {/* Category Image/Icon */}
         <div className="flex-shrink-0">
           {category.image ? (
             <img
@@ -645,7 +76,6 @@ const CategoryTreeNode: React.FC<{
           )}
         </div>
 
-        {/* Category Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium text-gray-900 truncate">
@@ -672,7 +102,6 @@ const CategoryTreeNode: React.FC<{
           </div>
         </div>
 
-        {/* Actions */}
         {(canUpdate || canDelete) && (
           <div className="flex items-center gap-2 flex-shrink-0">
             {canUpdate && (
@@ -697,7 +126,6 @@ const CategoryTreeNode: React.FC<{
         )}
       </div>
 
-      {/* Children */}
       {hasChildren && isExpanded && (
         <div>
           {category.children?.map((child) => (
@@ -728,7 +156,6 @@ const CategoryCard: React.FC<{
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start gap-3">
-        {/* Image */}
         {category.image ? (
           <img
             src={category.image}
@@ -741,7 +168,6 @@ const CategoryCard: React.FC<{
           </div>
         )}
 
-        {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
@@ -761,14 +187,12 @@ const CategoryCard: React.FC<{
             </span>
           </div>
 
-          {/* Meta info */}
           <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-600">
             {category.parent && <span>Parent: {category.parent.name}</span>}
             <span>{category._count?.products || 0} products</span>
             <span>Order: {category.order}</span>
           </div>
 
-          {/* Actions */}
           {(canUpdate || canDelete) && (
             <div className="mt-3 flex gap-2">
               {canUpdate && (
@@ -801,8 +225,10 @@ const CategoriesPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [viewMode, setViewMode] = useState<"tree" | "table" | "grid">("tree");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const canCreate = hasPermission("categories", "canCreate");
   const canUpdate = hasPermission("categories", "canUpdate");
@@ -835,6 +261,13 @@ const CategoriesPage: React.FC = () => {
       setShowCreateModal(false);
       reset();
       setImagePreview("");
+      setImageFile(null);
+      toast.success("Category created successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(
+        error?.response?.data?.message || "Failed to create category"
+      );
     },
   });
 
@@ -848,6 +281,13 @@ const CategoriesPage: React.FC = () => {
       setEditingCategory(null);
       reset();
       setImagePreview("");
+      setImageFile(null);
+      toast.success("Category updated successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(
+        error?.response?.data?.message || "Failed to update category"
+      );
     },
   });
 
@@ -857,6 +297,12 @@ const CategoriesPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["category-tree"] });
+      toast.success("Category deleted successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(
+        error?.response?.data?.message || "Failed to delete category"
+      );
     },
   });
 
@@ -890,31 +336,100 @@ const CategoriesPage: React.FC = () => {
     if (file) {
       handleImageFile(file);
     }
+    // Reset input value to allow selecting the same file again
+    e.target.value = "";
   };
 
-  // Process image file
+  // Process image file with size validation
   const handleImageFile = (file: File) => {
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file");
+      return;
+    }
+
+    // Validate file size (10MB = 10 * 1024 * 1024 bytes)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast.error(
+        `Image size must be less than 10MB. Your file is ${(
+          file.size /
+          (1024 * 1024)
+        ).toFixed(2)}MB`
+      );
+      return;
+    }
+
+    setImageFile(file);
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
       setImagePreview(result);
-      setValue("image", result);
+
+      // 🔑 THIS IS THE MISSING LINE
+      setValue("image", result, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
     };
     reader.readAsDataURL(file);
   };
 
-  const onSubmit = (data: CreateCategoryFormData) => {
-    const submitData = {
-      ...data,
-      isActive: data.isActive ?? true,
-      order: data.order ?? 0,
-      image: data.image || "",
-    };
+  // Upload image to S3
+  const uploadImageToS3 = async (): Promise<string | null> => {
+    if (!imageFile) return null;
 
-    if (editingCategory) {
-      updateMutation.mutate({ id: editingCategory.id, data: submitData });
-    } else {
-      createMutation.mutate(submitData);
+    setIsUploadingImage(true);
+    const uploadToast = toast.loading("Uploading image to S3...");
+
+    try {
+      const response = await s3Api.uploadSingle(imageFile, "categories");
+
+      if (!response.success) {
+        throw new Error("Failed to upload image");
+      }
+
+      toast.success("Image uploaded successfully!", { id: uploadToast });
+      return response.url;
+    } catch (error: any) {
+      console.error("Image upload error:", error);
+      toast.error(error?.response?.data?.message || "Failed to upload image", {
+        id: uploadToast,
+      });
+      throw error;
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const onSubmit = async (data: CreateCategoryFormData) => {
+    try {
+      // Upload image to S3 if there's a new file
+      let imageUrl = data.image || "";
+      if (imageFile) {
+        const uploadedUrl = await uploadImageToS3();
+        if (uploadedUrl) {
+          imageUrl = uploadedUrl;
+        }
+      }
+
+      const submitData = {
+        ...data,
+        isActive: data.isActive ?? true,
+        order: data.order ?? 0,
+        image: imageUrl,
+      };
+
+      if (editingCategory) {
+        await updateMutation.mutateAsync({
+          id: editingCategory.id,
+          data: submitData,
+        });
+      } else {
+        await createMutation.mutateAsync(submitData);
+      }
+    } catch (error) {
+      console.error("Category submit error:", error);
     }
   };
 
@@ -929,6 +444,7 @@ const CategoriesPage: React.FC = () => {
     setValue("isActive", category.isActive);
     setValue("order", category.order);
     setImagePreview(category.image || "");
+    setImageFile(null);
     setShowCreateModal(true);
   };
 
@@ -938,7 +454,6 @@ const CategoriesPage: React.FC = () => {
     }
   };
 
-  // Get root categories for tree view
   const rootCategories =
     categoryTree ||
     categoriesData?.categories?.filter((cat) => !cat.parentId) ||
@@ -1009,6 +524,7 @@ const CategoriesPage: React.FC = () => {
                     order: 0,
                   });
                   setImagePreview("");
+                  setImageFile(null);
                   setShowCreateModal(true);
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
@@ -1179,7 +695,7 @@ const CategoriesPage: React.FC = () => {
               </div>
             )}
 
-            {/* Grid View (Mobile-friendly cards) */}
+            {/* Grid View */}
             {viewMode === "grid" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {categoriesData?.categories?.map((category) => (
@@ -1197,11 +713,11 @@ const CategoriesPage: React.FC = () => {
           </>
         )}
 
-        {/* Create/Edit Modal - Same as before */}
+        {/* Create/Edit Modal */}
         {showCreateModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
                 <h2 className="text-xl font-semibold text-gray-900">
                   {editingCategory ? "Edit Category" : "Create Category"}
                 </h2>
@@ -1211,8 +727,14 @@ const CategoriesPage: React.FC = () => {
                     setEditingCategory(null);
                     reset();
                     setImagePreview("");
+                    setImageFile(null);
                   }}
                   className="text-gray-400 hover:text-gray-600"
+                  disabled={
+                    isUploadingImage ||
+                    createMutation.isPending ||
+                    updateMutation.isPending
+                  }
                 >
                   <X className="h-6 w-6" />
                 </button>
@@ -1300,9 +822,10 @@ const CategoriesPage: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setImagePreview("");
+                            setImageFile(null);
                             setValue("image", "");
                           }}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -1313,6 +836,9 @@ const CategoriesPage: React.FC = () => {
                         <p className="text-sm text-gray-600 mb-2">
                           Drag & drop an image here, or click to select
                         </p>
+                        <p className="text-xs text-gray-500 mb-2">
+                          PNG, JPG, WEBP up to 10MB
+                        </p>
                         <input
                           type="file"
                           accept="image/*"
@@ -1322,7 +848,7 @@ const CategoriesPage: React.FC = () => {
                         />
                         <label
                           htmlFor="image-upload"
-                          className="cursor-pointer text-blue-600 hover:text-blue-700"
+                          className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium"
                         >
                           Browse files
                         </label>
@@ -1401,23 +927,38 @@ const CategoriesPage: React.FC = () => {
                       setEditingCategory(null);
                       reset();
                       setImagePreview("");
+                      setImageFile(null);
                     }}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                    disabled={
+                      isUploadingImage ||
+                      createMutation.isPending ||
+                      updateMutation.isPending
+                    }
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={
-                      createMutation.isPending || updateMutation.isPending
+                      isUploadingImage ||
+                      createMutation.isPending ||
+                      updateMutation.isPending
                     }
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    {createMutation.isPending || updateMutation.isPending
-                      ? "Saving..."
-                      : editingCategory
-                      ? "Update Category"
-                      : "Create Category"}
+                    {isUploadingImage ||
+                    createMutation.isPending ||
+                    updateMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {isUploadingImage ? "Uploading..." : "Saving..."}
+                      </>
+                    ) : editingCategory ? (
+                      "Update Category"
+                    ) : (
+                      "Create Category"
+                    )}
                   </button>
                 </div>
               </form>
@@ -1438,4 +979,5 @@ const CategoriesPage: React.FC = () => {
     </MainLayout>
   );
 };
+
 export default CategoriesPage;
