@@ -1,6 +1,10 @@
-import type { CreateHomeSectionData, HomeSection, QueryHomeSectionParams, UpdateHomeSectionData } from "../types/heroSection/herosection";
+import type {
+  CreateHomeSectionData,
+  HomeSection,
+  QueryHomeSectionParams,
+  UpdateHomeSectionData,
+} from "../types/heroSection/herosection";
 import { apiCall, type ApiResponse } from "./api.base.service";
-
 
 // API functions
 export const homeSectionApi = {
@@ -34,10 +38,8 @@ export const homeSectionApi = {
   },
 
   // Create section
-  createHomeSection: (
-    data: CreateHomeSectionData
-  ): Promise<ApiResponse<HomeSection>> => {
-    return apiCall("POST", "/home-sections", { data });
+  createHomeSection: (data: CreateHomeSectionData) => {
+    return apiCall("POST", "/home-sections", data);
   },
 
   // Update section

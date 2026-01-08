@@ -19,6 +19,7 @@ import {
   Image,
   MoreHorizontal,
   Video,
+  TicketPercent,
 } from "lucide-react";
 
 interface NavItem {
@@ -111,6 +112,20 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         icon: <Image className="h-5 w-5" />,
         roles: ["ADMIN", "SUPER_ADMIN"],
         module: "banner",
+      },
+      {
+        name: "Consultation",
+        path: "/admin/consultations",
+        icon: <Video className="h-5 w-5" />,
+        roles: ["ADMIN", "SUPER_ADMIN"],
+        module: "consultation",
+      },
+      {
+        name: "Coupon",
+        path: "/admin/coupons",
+        icon: <TicketPercent className="h-5 w-5" />,
+        roles: ["ADMIN", "SUPER_ADMIN"],
+        module: "coupons",
       },
       {
         name: "Reviews",

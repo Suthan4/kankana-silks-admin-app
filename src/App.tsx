@@ -11,7 +11,6 @@ import ProductsPage from "./pages/admin/productsPage";
 import ReviewsPage from "./pages/admin/reviewsPage";
 import WarehousesPage from "./pages/admin/warehousesPage";
 import ReturnsPage from "./pages/admin/returnsPage";
-import ConsultationsPage from "./pages/admin/consultationsPage";
 import { SuperAdminDashboard } from "./pages/superAdmin/superAdminDashboard";
 import OrdersPage from "./pages/admin/ordersPage";
 import ShipmentsPage from "./pages/admin/shipmentsPage";
@@ -20,6 +19,8 @@ import CategoriesPage from "./pages/admin/categoryPage";
 import { HomeSectionsPage } from "./pages/admin/homeSectionsPage";
 import { Toaster } from "react-hot-toast";
 import BannersPage from "./pages/admin/bannerPage";
+import ConsultationsPage from "./pages/admin/consultationsPage";
+import { CouponsPage } from "./pages/admin/couponPage";
 
 
 // Admin Pages
@@ -157,6 +158,30 @@ function App() {
               }
             />
             <Route
+              path="/admin/consultations"
+              element={
+                <ProtectedRoute
+                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+                  requiredModule="consultations"
+                  requiredPermission="canRead"
+                >
+                  <ConsultationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/coupons"
+              element={
+                <ProtectedRoute
+                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+                  requiredModule="coupons"
+                  requiredPermission="canRead"
+                >
+                  <CouponsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/reviews"
               element={
                 <ProtectedRoute
@@ -177,18 +202,6 @@ function App() {
                   requiredPermission="canRead"
                 >
                   <ReturnsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/consultations"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="consultations"
-                  requiredPermission="canRead"
-                >
-                  <ConsultationsPage />
                 </ProtectedRoute>
               }
             />
