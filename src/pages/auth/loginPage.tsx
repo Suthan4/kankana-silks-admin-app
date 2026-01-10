@@ -27,7 +27,11 @@ export const LoginPage: React.FC = () => {
     mutationFn: authApi.login,
     onSuccess: (response) => {
       if (response.success && response.data) {
-        login(response.data.user, response.data.accessToken);
+        login(
+          response.data.user,
+          response.data.accessToken,
+          response.data.refreshToken
+        );
 
         // Redirect based on role
         if (response.data.user.role === "SUPER_ADMIN") {

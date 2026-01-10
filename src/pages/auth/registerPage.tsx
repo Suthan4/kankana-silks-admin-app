@@ -27,7 +27,7 @@ export const RegisterPage: React.FC = () => {
     mutationFn: authApi.register,
     onSuccess: (response) => {
       if (response.success && response.data) {
-        login(response.data.user, response.data.accessToken);
+        login(response.data.user, response.data.accessToken, response.data.refreshToken);
         navigate("/");
       }
     },
