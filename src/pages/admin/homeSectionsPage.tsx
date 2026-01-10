@@ -57,6 +57,7 @@ import {
 import { ImageUpload } from "@/components/ui/imageUpload";
 import { SectionTypeSelector } from "@/components/ui/Sectiontypeselector";
 import { s3Api } from "@/lib/api/s3.api";
+import toast from "react-hot-toast";
 
 // Section Type Configuration
 const getSectionConfig = (type: SectionType) => {
@@ -348,6 +349,7 @@ export const HomeSectionsPage: React.FC = () => {
     undefined
   );
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Form State
   const [media, setMedia] = useState<SectionMediaForm[]>([]);
@@ -418,6 +420,12 @@ export const HomeSectionsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["home-sections"] });
       setShowModal(false);
       resetForm();
+      toast.success("Home section created successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(
+        error?.response?.data?.message || "Failed to create home seciton"
+      );
     },
   });
 
@@ -429,6 +437,12 @@ export const HomeSectionsPage: React.FC = () => {
       setEditingSection(null);
       setShowModal(false);
       resetForm();
+      toast.success("Home section updated successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(
+        error?.response?.data?.message || "Failed to update home section"
+      );
     },
   });
 
@@ -461,7 +475,7 @@ export const HomeSectionsPage: React.FC = () => {
     reset();
     setMedia([]);
     setCtaButtons([]);
-    setValue("customTypeName","");
+    setValue("customTypeName", "");
     setBackgroundColor("#ffffff");
     setTextColor("#000000");
     setLayout("grid");
@@ -486,7 +500,7 @@ export const HomeSectionsPage: React.FC = () => {
       section.categories?.map((c) => c.id.toString()) || []
     );
 
-    setValue("customTypeName",section.customTypeName || "");
+    setValue("customTypeName", section.customTypeName || "");
     setBackgroundColor(section.backgroundColor || "#ffffff");
     setTextColor(section.textColor || "#000000");
     setLayout(section.layout || "grid");
@@ -506,44 +520,75 @@ export const HomeSectionsPage: React.FC = () => {
 
   // Submit Form
   const onSubmit = async (data: CreateHomeSectionFormData) => {
-    const uploadedMedia = await Promise.all(
-      media.map(async (m, idx) => {
-        let url = m.url ?? "";
+    setIsUploadingImage(true);
+    const uploadToast = toast.loading("Uploading image...");
 
-        if (m.file) {
-          const res = await s3Api.uploadSingle(m.file, "home-sections");
-          url = res.url;
-        }
+    try {
+      const uploadedMedia = await Promise.all(
+        media.map(async (m, idx) => {
+          let url = m.url ?? "";
 
-        // 👇 EXPLICIT RETURN (NO file)
-        return {
-          type: m.type,
-          url,
+          if (m.file) {
+            const res = await s3Api.uploadSingle(m.file, "home-sections");
+            url = res.url;
+          }
+
+          return {
+            type: m.type,
+            url,
+            order: idx,
+            overlayPosition: m.overlayPosition,
+            overlayTitle: m.overlayTitle,
+            overlaySubtitle: m.overlaySubtitle,
+          };
+        })
+      );
+
+      const payload = {
+        ...data,
+        customTypeName:
+          selectedType === "CUSTOM" ? getValues("customTypeName") : undefined,
+        backgroundColor,
+        textColor,
+        layout,
+        columns: layout === "grid" ? columns : undefined,
+        media: uploadedMedia,
+        ctaButtons: ctaButtons.map((c, idx) => ({
+          ...c,
           order: idx,
-          overlayPosition: m.overlayPosition,
-          overlayTitle: m.overlayTitle,
-          overlaySubtitle: m.overlaySubtitle,
-        };
-      })
-    );
+        })),
+      };
 
-    const payload = {
-      ...data,
-      customTypeName: selectedType === "CUSTOM" ? getValues("customTypeName") : undefined,
-      backgroundColor,
-      textColor,
-      layout,
-      columns: layout === "grid" ? columns : undefined,
-      media: uploadedMedia, // ✅ USE THE UPLOADED MEDIA
-      ctaButtons: ctaButtons.map((c, idx) => ({ ...c, order: idx })),
-    };
-
-    if (editingSection) {
-      updateMutation.mutate({ id: editingSection.id, data: payload });
-    } else {
-      createMutation.mutate(payload);
+      if (editingSection) {
+        updateMutation.mutate(
+          { id: editingSection.id, data: payload },
+          {
+            onSuccess: () => {
+              toast.success("Section updated successfully", {
+                id: uploadToast,
+              });
+            },
+          }
+        );
+      } else {
+        createMutation.mutate(payload, {
+          onSuccess: () => {
+            toast.success("Section created successfully", {
+              id: uploadToast,
+            });
+          },
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Image upload failed", {
+        id: uploadToast,
+      });
+    } finally {
+      setIsUploadingImage(false);
     }
   };
+
 
   // Media Handlers
   const handleAddMedia = () => {
@@ -655,7 +700,7 @@ export const HomeSectionsPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
                 <Home className="h-7 w-7 text-white" />
               </div>
               Home Sections
@@ -672,7 +717,7 @@ export const HomeSectionsPage: React.FC = () => {
                 resetForm();
                 setShowModal(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium"
             >
               <Plus className="h-4 w-4" />
               Add Section
@@ -800,8 +845,9 @@ export const HomeSectionsPage: React.FC = () => {
         ) : filteredSections.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
             <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Home className="h-10 w-10 text-purple-600" />
+              <Home className="h-10 w-10  text-indigo-600" />
             </div>
+
             <p className="text-gray-700 text-lg font-semibold">
               No sections found
             </p>
@@ -816,7 +862,10 @@ export const HomeSectionsPage: React.FC = () => {
                   resetForm();
                   setShowModal(true);
                 }}
-                className="mt-4 px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium"
+                bg-gradient-to-br
+                from-blue-500
+                to-indigo-600
+                className="mt-4 px-6 py-2 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium"
               >
                 Create First Section
               </button>
@@ -1083,7 +1132,7 @@ export const HomeSectionsPage: React.FC = () => {
                         setEditingCTAIndex(null);
                         setShowCTAModal(true);
                       }}
-                      className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium flex items-center gap-1"
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700text-white rounded-lg text-sm font-medium flex items-center gap-1"
                     >
                       <Plus className="h-4 w-4" />
                       Add Button
@@ -1442,7 +1491,7 @@ export const HomeSectionsPage: React.FC = () => {
                     disabled={
                       createMutation.isPending || updateMutation.isPending
                     }
-                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 disabled:opacity-50 font-medium"
+                    className="px-6 py-3 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg flex items-center gap-2 disabled:opacity-50 font-medium"
                   >
                     {createMutation.isPending || updateMutation.isPending ? (
                       <>

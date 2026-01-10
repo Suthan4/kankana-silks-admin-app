@@ -1277,7 +1277,7 @@ const ProductsPage: React.FC = () => {
     if (imagePreviews.length === 0) return [];
 
     setIsUploadingImages(true);
-    const uploadToast = toast.loading("Uploading images to S3...");
+    const uploadToast = toast.loading("Uploading images...");
 
     try {
       // Sort images: primary first, then by order

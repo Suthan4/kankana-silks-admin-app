@@ -375,7 +375,7 @@ const BannersPage: React.FC = () => {
 
     setIsUploadingMedia(true);
     const uploadToast = toast.loading(
-      `Uploading ${mediaType.toLowerCase()} to S3...`
+      `Uploading ${mediaType.toLowerCase()} ...`
     );
 
     try {
@@ -470,7 +470,7 @@ const BannersPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
                 <Sparkles className="h-7 w-7 text-white" />
               </div>
               Banners
@@ -499,7 +499,7 @@ const BannersPage: React.FC = () => {
                 setMediaType("IMAGE");
                 setShowCreateModal(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium"
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add Banner</span>
@@ -648,7 +648,7 @@ const BannersPage: React.FC = () => {
         {showCreateModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-4 flex items-center justify-between z-10 rounded-t-xl">
+              <div className="sticky top-0 bg-gradient-to-br from-blue-500 to-indigo-600 text-white px-6 py-4 flex items-center justify-between z-10 rounded-t-xl">
                 <h2 className="text-xl font-bold">
                   {editingBanner ? "Edit Banner" : "Create Banner"}
                 </h2>
@@ -912,7 +912,7 @@ const BannersPage: React.FC = () => {
                       createMutation.isPending ||
                       updateMutation.isPending
                     }
-                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                    className="px-6 py-2 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
                     {isUploadingMedia ||
                     createMutation.isPending ||

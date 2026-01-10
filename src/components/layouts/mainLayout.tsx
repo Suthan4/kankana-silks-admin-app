@@ -72,13 +72,6 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
 
     const adminItems: NavItem[] = [
       {
-        name: "Products",
-        path: "/admin/products",
-        icon: <Package className="h-5 w-5" />,
-        roles: ["ADMIN", "SUPER_ADMIN"],
-        module: "products",
-      },
-      {
         name: "Categories",
         path: "/admin/categories",
         icon: <Layers className="h-5 w-5" />,
@@ -86,18 +79,25 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         module: "categories",
       },
       {
-        name: "Orders",
-        path: "/admin/orders",
-        icon: <ShoppingCart className="h-5 w-5" />,
-        roles: ["ADMIN", "SUPER_ADMIN"],
-        module: "orders",
-      },
-      {
         name: "Warehouses",
         path: "/admin/warehouses",
         icon: <Warehouse className="h-5 w-5" />,
         roles: ["ADMIN", "SUPER_ADMIN"],
         module: "warehouses",
+      },
+      {
+        name: "Products",
+        path: "/admin/products",
+        icon: <Package className="h-5 w-5" />,
+        roles: ["ADMIN", "SUPER_ADMIN"],
+        module: "products",
+      },
+      {
+        name: "Orders",
+        path: "/admin/orders",
+        icon: <ShoppingCart className="h-5 w-5" />,
+        roles: ["ADMIN", "SUPER_ADMIN"],
+        module: "orders",
       },
       {
         name: "Home Sections",
@@ -112,13 +112,6 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         icon: <Image className="h-5 w-5" />,
         roles: ["ADMIN", "SUPER_ADMIN"],
         module: "banner",
-      },
-      {
-        name: "Consultation",
-        path: "/admin/consultations",
-        icon: <Video className="h-5 w-5" />,
-        roles: ["ADMIN", "SUPER_ADMIN"],
-        module: "consultation",
       },
       {
         name: "Coupon",
@@ -237,7 +230,18 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
                     <span>More</span>
                   </button>
 
-                  <div className="absolute right-0 mt-2 w-52 bg-white border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none group-hover:pointer-events-auto">
+                  {/* Dropdown */}
+                  <div
+                    className="
+      absolute right-0 top-full
+      pt-2
+      w-52
+      bg-white border rounded-lg shadow-lg
+      opacity-0 invisible
+      group-hover:opacity-100 group-hover:visible
+      transition
+    "
+                  >
                     {overflowItems.map((item) => (
                       <Link
                         key={item.path}

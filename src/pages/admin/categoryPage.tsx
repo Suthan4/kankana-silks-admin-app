@@ -380,7 +380,7 @@ const CategoriesPage: React.FC = () => {
     if (!imageFile) return null;
 
     setIsUploadingImage(true);
-    const uploadToast = toast.loading("Uploading image to S3...");
+    const uploadToast = toast.loading("Uploading image...");
 
     try {
       const response = await s3Api.uploadSingle(imageFile, "categories");

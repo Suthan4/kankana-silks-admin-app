@@ -385,7 +385,7 @@ export const CouponsPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
                 <Ticket className="h-7 w-7 text-white" />
               </div>
               Coupons
@@ -411,7 +411,7 @@ export const CouponsPage: React.FC = () => {
                 } as any);
                 setShowModal(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg shadow-lg font-medium"
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium"
             >
               <Plus className="h-4 w-4" />
               Create Coupon
@@ -500,7 +500,7 @@ export const CouponsPage: React.FC = () => {
             {canCreate && !searchQuery && (
               <button
                 onClick={() => setShowModal(true)}
-                className="mt-4 px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium"
+                className="mt-4 px-6 py-2 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium"
               >
                 Create First Coupon
               </button>
@@ -525,7 +525,7 @@ export const CouponsPage: React.FC = () => {
         {showModal && (
           <div className="fixed inset-0 bg-black/60 bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8">
-              <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
+              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
                 <h3 className="text-lg font-bold">
                   {editingCoupon ? "Edit Coupon" : "Create Coupon"}
                 </h3>
@@ -729,7 +729,7 @@ export const CouponsPage: React.FC = () => {
                       disabled={
                         createMutation.isPending || updateMutation.isPending
                       }
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
+                      className="px-4 py-2 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
                     >
                       {createMutation.isPending || updateMutation.isPending ? (
                         <>
