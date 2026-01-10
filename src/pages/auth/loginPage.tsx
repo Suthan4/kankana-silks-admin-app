@@ -8,8 +8,6 @@ import { useAuth } from "@/context/auth.context";
 import { loginSchema, type LoginFormData } from "@/lib/types/user/schema";
 import { authApi } from "@/lib/api/api.auth.service";
 
-
-
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -32,6 +30,7 @@ export const LoginPage: React.FC = () => {
           response.data.accessToken,
           response.data.refreshToken
         );
+        console.log("response", response);
 
         // Redirect based on role
         if (response.data.user.role === "SUPER_ADMIN") {

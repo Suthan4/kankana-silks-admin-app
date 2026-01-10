@@ -38,50 +38,57 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       if (response.success && response.data) {
         setPermissions(response.data);
       }
-    } catch {
+    } catch (error) {
+      console.error("Error fetching permissions:", error);
       setPermissions(null);
     }
   };
 
-  // 🔥 THIS IS WHERE YOUR QUESTION APPLIES
+  /**
+   * Init auth on app load
+   */
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem("accessToken"); // ✅ HERE
-      const refreshToken = localStorage.getItem("refreshToken"); // ✅ HERE
+      const accessToken = localStorage.getItem("accessToken");
+      const refreshToken = localStorage.getItem("refreshToken");
       const storedUser = localStorage.getItem("user");
 
-      if (token && refreshToken && storedUser) {
-        try {
-          const response = await authApi.getProfile();
-
-          if (response.success && response.data) {
-            setUser(response.data);
-            localStorage.setItem("user", JSON.stringify(response.data));
-
-            if (response.data.role === "ADMIN") {
-              await fetchPermissions(response.data.id);
-            }
-          } else {
-            clearStorage();
-          }
-        } catch {
-          clearStorage();
-        }
+      if (!accessToken || !refreshToken || !storedUser) {
+        setIsLoading(false);
+        return;
       }
 
-      setIsLoading(false);
+      try {
+        const response = await authApi.getProfile();
+        if (response.success && response.data) {
+          setUser(response.data);
+          localStorage.setItem("user", JSON.stringify(response.data));
+
+          if (response.data.role === "ADMIN") {
+            await fetchPermissions(response.data.id);
+          }
+        } else {
+          clearAuthStorage();
+        }
+      } catch {
+        clearAuthStorage();
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     initAuth();
   }, []);
 
+  /**
+   * Login handler
+   */
   const login = async (
     user: User,
     accessToken: string,
     refreshToken: string
   ) => {
     setUser(user);
-
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("refreshToken", refreshToken);
     localStorage.setItem("user", JSON.stringify(user));
@@ -91,34 +98,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
+  /**
+   * Logout handler
+   */
   const logout = async () => {
     try {
       await authApi.logout();
-    } catch {
-      // ignore
+    } catch (error) {
+      console.error("Logout error:", error);
     } finally {
-      clearStorage();
+      clearAuthStorage();
       setUser(null);
       setPermissions(null);
     }
   };
 
-  const updateUser = async (user: User) => {
-    setUser(user);
-    localStorage.setItem("user", JSON.stringify(user));
+  /**
+   * Update user profile
+   */
+  const updateUser = async (updatedUser: User) => {
+    setUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
 
-    if (user.role === "ADMIN") {
-      await fetchPermissions(user.id);
+    if (updatedUser.role === "ADMIN") {
+      await fetchPermissions(updatedUser.id);
     }
   };
 
+  /**
+   * Refresh permissions manually
+   */
   const refreshPermissions = async () => {
     if (user?.role === "ADMIN") {
       await fetchPermissions(user.id);
     }
   };
 
-  const clearStorage = () => {
+  const clearAuthStorage = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
@@ -145,7 +161,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

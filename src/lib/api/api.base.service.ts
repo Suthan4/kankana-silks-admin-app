@@ -7,7 +7,16 @@ import type { User } from "../types/user/user";
 
 // API Configuration
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+  // import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+  "http://localhost:3000/api";
+
+const PUBLIC_ROUTES = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/refresh-token",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+];
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
@@ -16,16 +25,22 @@ const apiClient: AxiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true, // can stay (no harm)
+  withCredentials: true, // Important for cookies (refreshToken)
 });
 
 // Request interceptor - Add auth token
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
-    if (token) {
+
+    const isPublicRoute = PUBLIC_ROUTES.some((route) =>
+      config.url?.includes(route)
+    );
+
+    if (token && !isPublicRoute) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -39,51 +54,51 @@ apiClient.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // If error is 401 and we haven't retried yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Prevent infinite loop
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes("/auth/login")
+    ) {
       originalRequest._retry = true;
 
       try {
-        // 🔥 GET refreshToken from localStorage
         const refreshToken = localStorage.getItem("refreshToken");
+        if (!refreshToken) throw new Error("No refresh token");
 
-        if (!refreshToken) {
-          throw new Error("No refresh token found");
-        }
-
-        // 🔥 SEND refreshToken IN BODY
         const response = await axios.post(
           `${API_BASE_URL}/auth/refresh-token`,
-          { refreshToken } // ✅ CHANGE
+          { refreshToken }
         );
 
         const { accessToken, refreshToken: newRefreshToken } =
           response.data.data;
 
-        // 🔥 UPDATE BOTH TOKENS
         localStorage.setItem("accessToken", accessToken);
         localStorage.setItem("refreshToken", newRefreshToken);
 
-        // Retry original request with new token
-        if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        }
+        originalRequest.headers = {
+          ...originalRequest.headers,
+          Authorization: `Bearer ${accessToken}`,
+        };
 
         return apiClient(originalRequest);
-      } catch (refreshError) {
-        // Refresh failed - logout user
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("user");
-
-        window.location.href = "/login";
-        return Promise.reject(refreshError);
+      } catch (err) {
+        clearAuthStorage();
+        return Promise.reject(err);
       }
     }
 
     return Promise.reject(error);
   }
 );
+
+// Helpers
+const clearAuthStorage = () => {
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
+};
 
 // API Response wrapper type
 export interface ApiResponse<T = any> {
@@ -111,7 +126,7 @@ export interface ApiError {
   details?: any;
 }
 
-// Generic API call function
+// Generic API call function with better typing
 export async function apiCall<T>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   url: string,
