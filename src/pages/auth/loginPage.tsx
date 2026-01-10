@@ -163,7 +163,7 @@ export const LoginPage: React.FC = () => {
             )}
           </button>
 
-          <div className="text-center">
+          {/* <div className="text-center">
             <p className="text-sm text-gray-600">
               Don't have an account?{" "}
               <Link
@@ -173,7 +173,7 @@ export const LoginPage: React.FC = () => {
                 Sign up
               </Link>
             </p>
-          </div>
+          </div> */}
         </form>
       </div>
     </div>
