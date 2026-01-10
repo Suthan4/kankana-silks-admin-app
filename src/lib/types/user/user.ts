@@ -25,6 +25,7 @@ export interface Permission {
 export interface AuthUser {
   user: User;
   accessToken: string;
+  refreshToken: string;
 }
 
 export interface LoginResponse {

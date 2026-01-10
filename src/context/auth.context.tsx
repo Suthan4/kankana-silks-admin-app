@@ -8,15 +8,18 @@ import React, {
   type ReactNode,
 } from "react";
 
-
 interface AuthContextType {
   user: User | null;
   permissions: Permission[] | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (user: User, token: string) => void;
-  logout: () => void;
-  updateUser: (user: User) => void;
+  login: (
+    user: User,
+    accessToken: string,
+    refreshToken: string
+  ) => Promise<void>;
+  logout: () => Promise<void>;
+  updateUser: (user: User) => Promise<void>;
   refreshPermissions: () => Promise<void>;
 }
 
@@ -35,53 +38,54 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       if (response.success && response.data) {
         setPermissions(response.data);
       }
-    } catch (error) {
-      console.error("Error fetching permissions:", error);
+    } catch {
       setPermissions(null);
     }
   };
 
+  // 🔥 THIS IS WHERE YOUR QUESTION APPLIES
   useEffect(() => {
-    // Check if user is logged in on mount
     const initAuth = async () => {
-      const token = localStorage.getItem("accessToken");
+      const token = localStorage.getItem("accessToken"); // ✅ HERE
+      const refreshToken = localStorage.getItem("refreshToken"); // ✅ HERE
       const storedUser = localStorage.getItem("user");
 
-      if (token && storedUser) {
+      if (token && refreshToken && storedUser) {
         try {
-          // Verify token is still valid by fetching profile
           const response = await authApi.getProfile();
+
           if (response.success && response.data) {
             setUser(response.data);
             localStorage.setItem("user", JSON.stringify(response.data));
 
-            // Fetch permissions for ADMIN users
             if (response.data.role === "ADMIN") {
               await fetchPermissions(response.data.id);
             }
           } else {
-            // Token invalid, clear storage
-            localStorage.removeItem("accessToken");
-            localStorage.removeItem("user");
+            clearStorage();
           }
-        } catch (error) {
-          // Error fetching profile, clear storage
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("user");
+        } catch {
+          clearStorage();
         }
       }
+
       setIsLoading(false);
     };
 
     initAuth();
   }, []);
 
-  const login = async (user: User, token: string) => {
+  const login = async (
+    user: User,
+    accessToken: string,
+    refreshToken: string
+  ) => {
     setUser(user);
-    localStorage.setItem("accessToken", token);
+
+    localStorage.setItem("accessToken", accessToken);
+    localStorage.setItem("refreshToken", refreshToken);
     localStorage.setItem("user", JSON.stringify(user));
 
-    // Fetch permissions for ADMIN users
     if (user.role === "ADMIN") {
       await fetchPermissions(user.id);
     }
@@ -90,13 +94,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
   const logout = async () => {
     try {
       await authApi.logout();
-    } catch (error) {
-      console.error("Logout error:", error);
+    } catch {
+      // ignore
     } finally {
+      clearStorage();
       setUser(null);
       setPermissions(null);
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("user");
     }
   };
 
@@ -104,16 +107,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
     setUser(user);
     localStorage.setItem("user", JSON.stringify(user));
 
-    // Refresh permissions if ADMIN
     if (user.role === "ADMIN") {
       await fetchPermissions(user.id);
     }
   };
 
   const refreshPermissions = async () => {
-    if (user && user.role === "ADMIN") {
+    if (user?.role === "ADMIN") {
       await fetchPermissions(user.id);
     }
+  };
+
+  const clearStorage = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
   };
 
   return (
@@ -136,8 +144,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
 };
