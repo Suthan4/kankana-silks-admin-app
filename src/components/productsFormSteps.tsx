@@ -23,6 +23,8 @@ import {
   ImageIcon,
   Video,
   Play,
+  Weight,
+  Maximize2,
 } from "lucide-react";
 import type { Category } from "@/lib/types/category/category";
 import type { CreateProductFormData } from "@/lib/types/product/schema";
@@ -155,6 +157,16 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
       return newPreviews;
     });
     removeMedia(index);
+  };
+
+  // Calculate volumetric weight
+  const calculateVolumetricWeight = () => {
+    const formData = watch();
+    const { length, breadth, height } = formData;
+    if (length && breadth && height) {
+      return ((length * breadth * height) / 5000).toFixed(3);
+    }
+    return "0.000";
   };
 
   // Step 1: Product Type Selection
@@ -353,6 +365,118 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
             <Info className="h-3 w-3" />
             HSN code for GST classification
           </p>
+        </div>
+
+        {/* Shipping Dimensions */}
+        <div className="border-t border-gray-200 pt-6">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Maximize2 className="h-5 w-5 text-blue-600" />
+            Shipping Dimensions (Required for Shiprocket)
+          </h4>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Weight (kg) *
+                </label>
+                <div className="relative">
+                  <Weight className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    {...register("weight")}
+                    type="number"
+                    step="0.001"
+                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.500"
+                  />
+                </div>
+                {errors.weight && (
+                  <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.weight.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Length (cm) *
+                </label>
+                <input
+                  {...register("length")}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="30"
+                />
+                {errors.length && (
+                  <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.length.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Breadth (cm) *
+                </label>
+                <input
+                  {...register("breadth")}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="20"
+                />
+                {errors.breadth && (
+                  <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.breadth.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Height (cm) *
+                </label>
+                <input
+                  {...register("height")}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="10"
+                />
+                {errors.height && (
+                  <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.height.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Volumetric Weight Display */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-blue-900 mb-1">
+                    Volumetric Weight
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    (Length × Breadth × Height) ÷ 5000
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-blue-600">
+                    {calculateVolumetricWeight()} kg
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Artisan Information */}
@@ -728,7 +852,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                 color: "",
                 fabric: "",
                 price: 0,
-                stock: { warehouseId: "", quantity: 0 },
+                stock: { warehouseId: "", quantity: 0, lowStockThreshold: 10 },
               })
             }
             className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors flex items-center justify-center gap-2 text-gray-700 font-medium"
@@ -830,23 +954,43 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Warehouse *
-                  </label>
-                  <select
-                    {...register(
-                      `variants.${index}.stock.warehouseId` as const
-                    )}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                  >
-                    <option value="">Select warehouse</option>
-                    {warehouses?.map((wh: any) => (
-                      <option key={wh.id} value={wh.id}>
-                        {wh.name} ({wh.code})
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Warehouse *
+                    </label>
+                    <select
+                      {...register(
+                        `variants.${index}.stock.warehouseId` as const
+                      )}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                    >
+                      <option value="">Select warehouse</option>
+                      {warehouses?.map((wh: any) => (
+                        <option key={wh.id} value={wh.id}>
+                          {wh.name} ({wh.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Low Stock Alert
+                    </label>
+                    <input
+                      {...register(
+                        `variants.${index}.stock.lowStockThreshold` as const
+                      )}
+                      type="number"
+                      min="0"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="10"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Alert when stock falls below this
+                    </p>
+                  </div>
                 </div>
               </div>
             ))}
@@ -954,6 +1098,53 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
               </div>
             )}
           </div>
+
+          {/* Shipping Dimensions Display */}
+          {(formData.weight ||
+            formData.length ||
+            formData.breadth ||
+            formData.height) && (
+            <div className="bg-white rounded-lg p-4">
+              <h5 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Maximize2 className="h-5 w-5 text-blue-600" />
+                Shipping Dimensions
+              </h5>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Weight: </span>
+                  <span className="font-medium text-gray-900">
+                    {formData.weight} kg
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Length: </span>
+                  <span className="font-medium text-gray-900">
+                    {formData.length} cm
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Breadth: </span>
+                  <span className="font-medium text-gray-900">
+                    {formData.breadth} cm
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Height: </span>
+                  <span className="font-medium text-gray-900">
+                    {formData.height} cm
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Volumetric Weight: </span>
+                  <span className="font-bold text-blue-600">
+                    {calculateVolumetricWeight()} kg
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {(formData.artisanName ||
             formData.artisanAbout ||
@@ -1088,7 +1279,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                           ₹{Number(variant?.price || 0).toLocaleString()}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                      <div className="grid grid-cols-3 gap-2 text-xs text-gray-600">
                         <div>
                           <span className="text-gray-500">Stock: </span>
                           <span className="font-medium">
@@ -1101,6 +1292,14 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                             {variantWarehouse?.name || "N/A"}
                           </span>
                         </div>
+                        {variant?.stock?.lowStockThreshold && (
+                          <div>
+                            <span className="text-gray-500">Alert: </span>
+                            <span className="font-medium">
+                              {variant.stock.lowStockThreshold}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
