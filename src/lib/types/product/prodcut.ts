@@ -1,10 +1,35 @@
-export interface ProductImage {
+// Updated Product Type Definitions
+// Aligns with backend ProductMedia implementation
+
+export type MediaType = "IMAGE" | "VIDEO";
+
+export interface Warehouse {
   id: string;
-  url: string;
-  altText?: string;
-  order: number;
+  name: string;
+  code: string;
+  isActive: boolean;
 }
 
+// UPDATED: ProductMedia (replaces ProductImage)
+export interface ProductMedia {
+  id: string;
+  type: MediaType;
+  url: string;
+  key?: string;
+  thumbnailUrl?: string;
+  altText?: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  fileSize?: number;
+  duration?: number;
+  width?: number;
+  height?: number;
+  order: number;
+  isActive: boolean;
+}
+
+// UPDATED: ProductVariant now includes stock relation
 export interface ProductVariant {
   id: string;
   size?: string;
@@ -12,6 +37,7 @@ export interface ProductVariant {
   fabric?: string;
   price: number;
   sku: string;
+  stock?: Stock[]; // Updated to include stock array
 }
 
 export interface Specification {
@@ -20,13 +46,19 @@ export interface Specification {
   value: string;
 }
 
+// UPDATED: Stock now includes warehouse relation
 export interface Stock {
   id: string;
+  productId: string;
+  variantId?: string | null;
   warehouseId: string;
+  warehouse?: Warehouse; // Added warehouse relation
   quantity: number;
   lowStockThreshold: number;
+  updatedAt: string;
 }
 
+// UPDATED: Product interface with media and proper relations
 export interface Product {
   id: string;
   name: string;
@@ -46,14 +78,19 @@ export interface Product {
   metaTitle?: string;
   metaDesc?: string;
   schemaMarkup?: string;
-  images?: ProductImage[];
+  media: ProductMedia[]; // UPDATED: Changed from images
   variants?: ProductVariant[];
   specifications?: Specification[];
-  stock?: Stock[];
+  stock?: Stock[]; // This is an array
   createdAt: string;
   updatedAt: string;
+  _count?: {
+    reviews: number;
+    variants: number;
+  };
 }
 
+// UPDATED: CreateProductData with media
 export interface CreateProductData {
   name: string;
   description: string;
@@ -69,7 +106,12 @@ export interface CreateProductData {
   metaDesc?: string;
   schemaMarkup?: string;
   specifications?: Array<{ key: string; value: string }>;
-  images?: Array<{ url: string; altText?: string; order?: number }>;
+  media?: Array<{
+    type?: MediaType;
+    url: string;
+    altText?: string;
+    order?: number;
+  }>;
   variants?: Array<{
     size?: string;
     color?: string;

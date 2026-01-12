@@ -7,8 +7,8 @@ import type { User } from "../types/user/user";
 
 // API Configuration
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3000/api";
-  // "http://localhost:3000/api";
+  // import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+  "http://localhost:3000/api";
 
 const PUBLIC_ROUTES = [
   "/auth/login",

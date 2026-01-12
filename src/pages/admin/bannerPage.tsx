@@ -273,6 +273,7 @@ const BannersPage: React.FC = () => {
       reset();
       setMediaPreview("");
       setMediaFile(null);
+      setShowCreateModal(false);
       toast.success("Banner updated successfully!");
     },
     onError: (error: any) => {

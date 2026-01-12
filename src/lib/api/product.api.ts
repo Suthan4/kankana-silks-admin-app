@@ -1,4 +1,13 @@
-import type { CreateProductData, Product, ProductImage, ProductVariant, QueryProductParams, Specification, Stock, UpdateProductData } from "../types/product/prodcut";
+import type { 
+  CreateProductData, 
+  Product, 
+  ProductMedia,  // UPDATED: Changed from ProductImage
+  ProductVariant, 
+  QueryProductParams, 
+  Specification, 
+  Stock, 
+  UpdateProductData 
+} from "../types/product/prodcut";
 import { apiCall, type ApiResponse } from "./api.base.service";
 
 // Product API
@@ -77,20 +86,28 @@ export const productApi = {
     return apiCall("DELETE", `/products/${productId}/specifications/${specId}`);
   },
 
-  // Add image
-  addImage: async (
+  // UPDATED: Add media (replaces addImage)
+  addMedia: async (
     productId: string,
-    data: { url: string; altText?: string; order?: number }
-  ): Promise<ApiResponse<ProductImage>> => {
+    data: { 
+      type?: "IMAGE" | "VIDEO";
+      url: string; 
+      altText?: string; 
+      order?: number;
+      thumbnailUrl?: string;
+      title?: string;
+      description?: string;
+    }
+  ): Promise<ApiResponse<ProductMedia>> => {
     return apiCall("POST", `/products/${productId}/images`, data);
   },
 
-  // Delete image
-  deleteImage: async (
+  // UPDATED: Delete media (replaces deleteImage)
+  deleteMedia: async (
     productId: string,
-    imageId: string
+    mediaId: string
   ): Promise<ApiResponse<void>> => {
-    return apiCall("DELETE", `/products/${productId}/images/${imageId}`);
+    return apiCall("DELETE", `/products/${productId}/images/${mediaId}`);
   },
 
   // Add variant

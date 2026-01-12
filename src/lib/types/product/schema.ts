@@ -11,10 +11,22 @@ const SpecificationSchema = z.object({
   value: z.string().min(1, "Specification value is required"),
 });
 
-const ImageSchema = z.object({
-  url: z.string().url("Invalid image URL"),
+// UPDATED: MediaSchema (replaces ImageSchema)
+const MediaSchema = z.object({
+  type: z.enum(["IMAGE", "VIDEO"]).optional().default("IMAGE"),
+  url: z.string().url("Invalid media URL"),
+  key: z.string().optional(),
+  thumbnailUrl: z.string().url().optional(),
   altText: z.string().optional(),
-  order: z.coerce.number().int().min(0).optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  mimeType: z.string().optional(),
+  fileSize: z.number().int().positive().optional(),
+  duration: z.number().int().positive().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  order: z.coerce.number().int().min(0).optional().default(0),
+  isActive: z.boolean().optional().default(true),
 });
 
 const VariantSchema = z.object({
@@ -41,7 +53,7 @@ export const createProductSchema = z
     metaDesc: z.string().optional(),
     schemaMarkup: z.string().optional(),
     specifications: z.array(SpecificationSchema).optional(),
-    images: z.array(ImageSchema).optional(),
+    media: z.array(MediaSchema).optional(), // UPDATED: Changed from images to media
     variants: z.array(VariantSchema).optional(),
     stock: StockSchema.optional(),
   })
@@ -67,8 +79,8 @@ export const updateProductSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().min(1).optional(),
   categoryId: z.string().min(1).optional(),
-  basePrice: z.number().positive().optional(),
-  sellingPrice: z.number().positive().optional(),
+  basePrice: z.coerce.number().positive().optional(),
+  sellingPrice: z.coerce.number().positive().optional(),
   isActive: z.boolean().optional(),
   hsnCode: z.string().optional(),
   metaTitle: z.string().optional(),
