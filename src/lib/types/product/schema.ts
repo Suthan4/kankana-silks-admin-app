@@ -4,7 +4,7 @@ import z from "zod";
 const StockSchema = z.object({
   warehouseId: z.string().min(1, "Warehouse is required"),
   quantity: z.coerce.number().int().min(0, "Quantity must be positive"),
-  lowStockThreshold: z.coerce.number().int().min(0).optional().default(10), // Defaults to 10 if not provided
+  lowStockThreshold: z.coerce.number().int().min(0).optional().default(10),
 });
 
 const SpecificationSchema = z.object({
@@ -12,7 +12,7 @@ const SpecificationSchema = z.object({
   value: z.string().min(1, "Specification value is required"),
 });
 
-// UPDATED: MediaSchema (replaces ImageSchema)
+// Media Schema for product-level media
 const MediaSchema = z.object({
   type: z.enum(["IMAGE", "VIDEO"]).optional().default("IMAGE"),
   url: z.string().url("Invalid media URL"),
@@ -30,13 +30,62 @@ const MediaSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
-// 🆕 UPDATED: VariantSchema - stock is now REQUIRED
+// 🆕 Variant Media Schema
+const VariantMediaSchema = z.object({
+  type: z.enum(["IMAGE", "VIDEO"]).optional().default("IMAGE"),
+  url: z.string().url("Invalid media URL"),
+  key: z.string().optional(),
+  thumbnailUrl: z.string().url().optional(),
+  altText: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  mimeType: z.string().optional(),
+  fileSize: z.number().int().positive().optional(),
+  duration: z.number().int().positive().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  order: z.coerce.number().int().min(0).optional().default(0),
+  isActive: z.boolean().optional().default(true),
+});
+
+// 🆕 ENHANCED: Variant Schema with media, pricing, dimensions, and attributes
 const VariantSchema = z.object({
+  // Dynamic attributes (flexible key-value pairs)
+  attributes: z.record(z.string(),z.string()).optional(),
+
+  // Legacy fields (backward compatibility)
   size: z.string().optional(),
   color: z.string().optional(),
   fabric: z.string().optional(),
-  price: z.coerce.number().positive("Variant price must be positive"),
-  stock: StockSchema, // 🆕 Now REQUIRED (was optional)
+
+  // Pricing (optional - falls back to product pricing)
+  basePrice: z.coerce
+    .number()
+    .positive("Base price must be positive")
+    .optional(),
+  sellingPrice: z.coerce
+    .number()
+    .positive("Selling price must be positive")
+    .optional(),
+  price: z.coerce.number().positive("Variant price must be positive"), // Legacy field
+
+  // Shipping dimensions (optional - falls back to product dimensions)
+  weight: z.coerce.number().positive().max(50).optional(),
+  length: z.coerce.number().positive().max(200).optional(),
+  breadth: z.coerce.number().positive().max(200).optional(),
+  height: z.coerce.number().positive().max(200).optional(),
+
+  // 🆕 Variant-specific media
+  media: z.array(VariantMediaSchema).optional(),
+
+  // Stock (required)
+  stock: StockSchema,
+});
+
+// 🆕 Dynamic Attribute Field Schema (for UI)
+const AttributeFieldSchema = z.object({
+  key: z.string().min(1, "Attribute name is required"),
+  value: z.string().min(1, "Attribute value is required"),
 });
 
 export const createProductSchema = z
@@ -47,6 +96,7 @@ export const createProductSchema = z
     categoryId: z.string().min(1, "Category is required"),
     basePrice: z.coerce.number().positive("Base price must be positive"),
     sellingPrice: z.coerce.number().positive("Selling price must be positive"),
+    sku: z.string().optional(), // 🆕 Optional - auto-generated if not provided
     isActive: z.boolean().optional().default(true),
     hsnCode: z.string().optional(),
 
@@ -55,7 +105,7 @@ export const createProductSchema = z
     artisanAbout: z.string().optional(),
     artisanLocation: z.string().optional(),
 
-    // 🆕 Shipping Dimensions (Required for Shiprocket)
+    // Shipping Dimensions (Required)
     weight: z.coerce
       .number()
       .positive("Weight must be positive")
@@ -72,7 +122,6 @@ export const createProductSchema = z
       .number()
       .positive("Height must be positive")
       .max(200, "Height cannot exceed 200cm"),
-    // Note: volumetricWeight is auto-calculated by backend
 
     // SEO
     metaTitle: z.string().optional(),
@@ -81,23 +130,21 @@ export const createProductSchema = z
 
     // Product Details
     specifications: z.array(SpecificationSchema).optional(),
-    media: z.array(MediaSchema).optional(), // UPDATED: Changed from images to media
+    media: z.array(MediaSchema).optional(),
 
-    // Stock Configuration (Simple Product OR Variants)
+    // Stock Configuration
     variants: z.array(VariantSchema).optional(),
     stock: StockSchema.optional(),
   })
   .refine(
     (data) => {
-      // Either variants OR stock must be provided, but not both
       const hasVariants = data.variants && data.variants.length > 0;
       const hasStock = !!data.stock;
 
       if (hasVariants && hasStock) return false; // Cannot have both
       if (!hasVariants && !hasStock) return false; // Must have one
 
-      // If has variants, each variant MUST have stock (now enforced by schema)
-      // This check is redundant but kept for clarity
+      // Each variant must have stock
       if (hasVariants) {
         return data.variants!.every((v) => v.stock !== undefined);
       }
@@ -111,12 +158,12 @@ export const createProductSchema = z
   );
 
 export const updateProductSchema = z.object({
-  // Basic Information
   name: z.string().min(1).optional(),
   description: z.string().min(1).optional(),
   categoryId: z.string().min(1).optional(),
   basePrice: z.coerce.number().positive().optional(),
   sellingPrice: z.coerce.number().positive().optional(),
+  sku: z.string().optional(), // 🆕 Allow SKU updates
   isActive: z.boolean().optional(),
   hsnCode: z.string().optional(),
 
@@ -125,12 +172,11 @@ export const updateProductSchema = z.object({
   artisanAbout: z.string().optional(),
   artisanLocation: z.string().optional(),
 
-  // 🆕 Shipping Dimensions (Optional in update)
+  // Shipping Dimensions
   weight: z.coerce.number().positive().max(50).optional(),
   length: z.coerce.number().positive().max(200).optional(),
   breadth: z.coerce.number().positive().max(200).optional(),
   height: z.coerce.number().positive().max(200).optional(),
-  // volumetricWeight is auto-calculated
 
   // SEO
   metaTitle: z.string().optional(),
@@ -138,5 +184,40 @@ export const updateProductSchema = z.object({
   schemaMarkup: z.string().optional(),
 });
 
+// 🆕 Add Variant Schema (for adding variants to existing products)
+export const addVariantSchema = z.object({
+  attributes: z.record(z.string(),z.string()).optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
+  fabric: z.string().optional(),
+  basePrice: z.coerce.number().positive().optional(),
+  sellingPrice: z.coerce.number().positive().optional(),
+  price: z.coerce.number().positive("Price is required"),
+  weight: z.coerce.number().positive().max(50).optional(),
+  length: z.coerce.number().positive().max(200).optional(),
+  breadth: z.coerce.number().positive().max(200).optional(),
+  height: z.coerce.number().positive().max(200).optional(),
+  media: z.array(VariantMediaSchema).optional(),
+  stock: StockSchema,
+});
+
+// 🆕 Update Variant Schema
+export const updateVariantSchema = z.object({
+  attributes: z.record(z.string(), z.string()).optional(),
+  size: z.string().optional(),
+  color: z.string().optional(),
+  fabric: z.string().optional(),
+  basePrice: z.coerce.number().positive().optional(),
+  sellingPrice: z.coerce.number().positive().optional(),
+  price: z.coerce.number().positive().optional(),
+  weight: z.coerce.number().positive().max(50).optional(),
+  length: z.coerce.number().positive().max(200).optional(),
+  breadth: z.coerce.number().positive().max(200).optional(),
+  height: z.coerce.number().positive().max(200).optional(),
+});
+
 export type CreateProductFormData = z.infer<typeof createProductSchema>;
 export type UpdateProductFormData = z.infer<typeof updateProductSchema>;
+export type AddVariantFormData = z.infer<typeof addVariantSchema>;
+export type UpdateVariantFormData = z.infer<typeof updateVariantSchema>;
+export type AttributeField = z.infer<typeof AttributeFieldSchema>;

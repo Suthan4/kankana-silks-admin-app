@@ -1,12 +1,15 @@
-import type { CreateWarehouseData, QueryWarehouseParams, UpdateWarehouseData, Warehouse } from "../types/warehouse/warehouse";
+import type {
+  CreateWarehouseData,
+  UpdateWarehouseData,
+  Warehouse,
+} from "../types/warehouse/warehouse";
 import { apiCall, type ApiResponse } from "./api.base.service";
-
 
 // Warehouse API
 export const warehouseApi = {
   // Get all warehouses
   getWarehouses: async (
-    params?: QueryWarehouseParams
+    params?: any
   ): Promise<
     ApiResponse<{
       warehouses: Warehouse[];
@@ -32,8 +35,31 @@ export const warehouseApi = {
   },
 
   // Get warehouse stock
-  getWarehouseStock: async (id: string): Promise<ApiResponse<any>> => {
-    return apiCall("GET", `/admin/warehouses/${id}/stock`);
+  getWarehouseStock: async (
+    id: string,
+    params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      startDate?: string;
+      endDate?: string;
+      sortBy?: string;
+      sortOrder?: "asc" | "desc";
+    }
+  ): Promise<ApiResponse<any>> => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append("page", params.page.toString());
+    if (params?.limit) queryParams.append("limit", params.limit.toString());
+    if (params?.search) queryParams.append("search", params.search);
+    if (params?.startDate) queryParams.append("startDate", params.startDate);
+    if (params?.endDate) queryParams.append("endDate", params.endDate);
+    if (params?.sortBy) queryParams.append("sortBy", params.sortBy);
+    if (params?.sortOrder) queryParams.append("sortOrder", params.sortOrder);
+
+    return apiCall(
+      "GET",
+      `/admin/warehouses/${id}/stock?${queryParams.toString()}`
+    );
   },
 
   // Create warehouse

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layouts/mainLayout";
@@ -25,14 +25,16 @@ import {
   Grid3x3,
   List,
 } from "lucide-react";
+import { warehouseApi } from "@/lib/api/warehouse.api";
 import {
-  warehouseApi,
-} from "@/lib/api/warehouse.api";
-import { type Warehouse as WarehouseType } from "@/lib/types/warehouse/warehouse";
+  type UpdateWarehouseData,
+  type Warehouse as WarehouseType,
+} from "@/lib/types/warehouse/warehouse";
 import {
   createWarehouseSchema,
   type CreateWarehouseFormData,
 } from "@/lib/types/warehouse/schema";
+import { useNavigate } from "react-router";
 
 // Stats Card Component
 const StatsCard: React.FC<{
@@ -75,13 +77,14 @@ const WarehouseCard: React.FC<{
   onEdit: (warehouse: WarehouseType) => void;
   onDelete: (id: string) => void;
   onViewStock: (id: string) => void;
+  handleViewStock: (id: string) => void;
   canUpdate: boolean;
   canDelete: boolean;
-}> = ({ warehouse, onEdit, onDelete, onViewStock, canUpdate, canDelete }) => {
-  const [showMenu, setShowMenu] = useState(false);
+}> = ({ warehouse, onEdit, onDelete, onViewStock,handleViewStock, canUpdate, canDelete }) => {
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:border-blue-300">
+    <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 border border-gray-200 hover:border-blue-300 relative">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
         <div className="flex items-start justify-between">
@@ -134,41 +137,50 @@ const WarehouseCard: React.FC<{
         </div>
 
         {/* Actions */}
+        {/* Actions */}
         <div className="flex gap-2 pt-3">
+          {/* View Details */}
           <button
-            onClick={() => onViewStock(warehouse.id)}
+            onClick={() => handleViewStock(warehouse.id)}
             className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1"
           >
             <Eye className="h-4 w-4" />
-            View Stock
+            View Stocks
           </button>
+
           {(canUpdate || canDelete) && (
             <div className="relative">
               <button
-                onClick={() => setShowMenu(!showMenu)}
+                onClick={() =>
+                  setOpenMenuId(
+                    openMenuId === warehouse.id ? null : warehouse.id
+                  )
+                }
                 className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <MoreVertical className="h-5 w-5" />
               </button>
-              {showMenu && (
-                <div className="absolute right-0 mt-1 w-32 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+
+              {openMenuId === warehouse.id && (
+                <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
                   {canUpdate && (
                     <button
                       onClick={() => {
-                        onEdit(warehouse);
-                        setShowMenu(false);
+                        onViewStock(warehouse.id);
+                        setOpenMenuId(null);
                       }}
-                      className="w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
                     >
                       <Edit className="h-4 w-4" />
                       Edit
                     </button>
                   )}
+
                   {canDelete && (
                     <button
                       onClick={() => {
                         onDelete(warehouse.id);
-                        setShowMenu(false);
+                        setOpenMenuId(null);
                       }}
                       className="w-full px-4 py-2 text-sm text-left text-red-600 hover:bg-red-50 flex items-center gap-2"
                     >
@@ -185,6 +197,12 @@ const WarehouseCard: React.FC<{
     </div>
   );
 };
+const Detail = ({ label, value }: { label: string; value?: string }) => (
+  <div>
+    <p className="text-gray-500">{label}</p>
+    <p className="font-medium">{value}</p>
+  </div>
+);
 
 const WarehousesPage = () => {
   const queryClient = useQueryClient();
@@ -197,10 +215,15 @@ const WarehousesPage = () => {
     undefined
   );
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [viewingWarehouse, setViewingWarehouse] =
+    useState<WarehouseType | null>(null);
+  const [stockWarehouseId, setStockWarehouseId] = useState<string | null>(null);
 
   const canCreate = hasPermission("warehouses", "canCreate");
   const canUpdate = hasPermission("warehouses", "canUpdate");
   const canDelete = hasPermission("warehouses", "canDelete");
+
+  const navigate = useNavigate();
 
   // Fetch warehouses
   const { data: warehousesData, isLoading } = useQuery({
@@ -215,6 +238,7 @@ const WarehousesPage = () => {
     },
   });
 
+
   // Create warehouse mutation
   const createMutation = useMutation({
     mutationFn: warehouseApi.createWarehouse,
@@ -227,7 +251,7 @@ const WarehousesPage = () => {
 
   // Update warehouse mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateWarehouseData }) =>
       warehouseApi.updateWarehouse(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["warehouses"] });
@@ -251,32 +275,65 @@ const WarehousesPage = () => {
     setValue,
     formState: { errors },
   } = useForm<CreateWarehouseFormData>({
-    resolver: zodResolver(createWarehouseSchema),
+    resolver: zodResolver(
+      createWarehouseSchema
+    ) as Resolver<CreateWarehouseFormData>,
   });
 
   const onSubmit = (data: CreateWarehouseFormData) => {
-    const submitData = {
-      ...data,
-      isActive: data.isActive ?? true,
-      code: data.code.toUpperCase(),
-    };
-
     if (editingWarehouse) {
-      updateMutation.mutate({ id: editingWarehouse.id, data: submitData });
+      const updateData: UpdateWarehouseData = {
+        name: data.name,
+        address: data.address,
+        addressLine2: data.addressLine2,
+        city: data.city,
+        state: data.state,
+        pincode: data.pincode,
+        country: data.country,
+        contactPerson: data.contactPerson,
+        phone: data.phone,
+        email: data.email,
+        isDefaultPickup: data.isDefaultPickup,
+        isActive: data.isActive,
+      };
+
+      updateMutation.mutate({
+        id: editingWarehouse.id,
+        data: updateData,
+      });
     } else {
-      createMutation.mutate(submitData);
+      const createData = {
+        ...data,
+        code: data.code.toUpperCase(),
+        country: data.country ?? "India",
+        isDefaultPickup: data.isDefaultPickup ?? false,
+        isActive: data.isActive ?? true,
+      };
+
+      createMutation.mutate(createData);
     }
   };
 
   const handleEdit = (warehouse: WarehouseType) => {
     setEditingWarehouse(warehouse);
+
     setValue("name", warehouse.name);
     setValue("code", warehouse.code);
+
     setValue("address", warehouse.address);
+    setValue("addressLine2", warehouse.addressLine2);
     setValue("city", warehouse.city);
     setValue("state", warehouse.state);
     setValue("pincode", warehouse.pincode);
+    setValue("country", warehouse.country);
+
+    setValue("contactPerson", warehouse.contactPerson);
+    setValue("phone", warehouse.phone);
+    setValue("email", warehouse.email);
+
+    setValue("isDefaultPickup", warehouse.isDefaultPickup);
     setValue("isActive", warehouse.isActive);
+
     setShowCreateModal(true);
   };
 
@@ -291,8 +348,8 @@ const WarehousesPage = () => {
   };
 
   const handleViewStock = (id: string) => {
-    // Navigate to stock view or open modal
-    console.log("View stock for warehouse:", id);
+    setStockWarehouseId(id);
+    navigate(`/admin/warehouses/${id}`);
   };
 
   // Calculate stats
@@ -327,11 +384,18 @@ const WarehousesPage = () => {
                   name: "",
                   code: "",
                   address: "",
+                  addressLine2: "",
                   city: "",
                   state: "",
                   pincode: "",
+                  country: "India",
+                  contactPerson: "",
+                  phone: "",
+                  email: "",
+                  isDefaultPickup: false,
                   isActive: true,
                 });
+
                 setShowCreateModal(true);
               }}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap shadow-md hover:shadow-lg"
@@ -480,7 +544,12 @@ const WarehousesPage = () => {
                     warehouse={warehouse}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
-                    onViewStock={handleViewStock}
+                    onViewStock={(id) =>
+                      setViewingWarehouse(
+                        filteredWarehouses.find((w) => w.id === id) || null
+                      )
+                    }
+                    handleViewStock={handleViewStock}
                     canUpdate={canUpdate}
                     canDelete={canDelete}
                   />
@@ -571,9 +640,10 @@ const WarehousesPage = () => {
                               <button
                                 onClick={() => handleViewStock(warehouse.id)}
                                 className="text-blue-600 hover:text-blue-900 mr-3"
-                                title="View Stock"
+                                title="View Details"
                               >
-                                <Eye className="h-4 w-4 inline" />
+                                <Eye className="h-4 w-4" />
+                                View Details
                               </button>
                               {canUpdate && (
                                 <button
@@ -603,6 +673,61 @@ const WarehousesPage = () => {
               </div>
             )}
           </>
+        )}
+
+        {viewingWarehouse && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex justify-end">
+            <div className="bg-white w-full max-w-md h-full shadow-xl overflow-y-auto">
+              <div className="p-6 border-b flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Warehouse Details</h3>
+                <button onClick={() => setViewingWarehouse(null)}>
+                  <X />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 text-sm">
+                <Detail label="Name" value={viewingWarehouse.name} />
+                <Detail label="Code" value={viewingWarehouse.code} />
+                <Detail label="Address" value={viewingWarehouse.address} />
+                <Detail
+                  label="Location"
+                  value={`${viewingWarehouse.city}, ${viewingWarehouse.state} - ${viewingWarehouse.pincode}`}
+                />
+                <Detail label="Country" value={viewingWarehouse.country} />
+                <Detail
+                  label="Contact"
+                  value={viewingWarehouse.contactPerson}
+                />
+                <Detail label="Phone" value={viewingWarehouse.phone} />
+                <Detail label="Email" value={viewingWarehouse.email ?? "—"} />
+
+                <div className="flex gap-2">
+                  {viewingWarehouse.isActive && (
+                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                      Active
+                    </span>
+                  )}
+                  {viewingWarehouse.isDefaultPickup && (
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                      Default Pickup
+                    </span>
+                  )}
+                </div>
+
+                {canUpdate && (
+                  <button
+                    onClick={() => {
+                      setViewingWarehouse(null);
+                      handleEdit(viewingWarehouse);
+                    }}
+                    className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg"
+                  >
+                    Edit Warehouse
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Create/Edit Modal */}
@@ -663,6 +788,7 @@ const WarehousesPage = () => {
                     <input
                       {...register("code")}
                       type="text"
+                      disabled={!!editingWarehouse}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono"
                       placeholder="WH-01"
                       maxLength={20}
@@ -692,6 +818,40 @@ const WarehousesPage = () => {
                   {errors.address && (
                     <p className="mt-1 text-sm text-red-600">
                       {errors.address.message}
+                    </p>
+                  )}
+                </div>
+                {/* Address Line 2 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address Line 2
+                  </label>
+                  <input
+                    {...register("addressLine2")}
+                    placeholder="Apartment, Floor (optional)"
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                  {errors.addressLine2 && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.addressLine2.message}
+                    </p>
+                  )}
+                </div>
+                {/* Country */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Country *
+                  </label>
+                  <input
+                    {...register("country")}
+                    defaultValue="India"
+                    disabled={true}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+
+                  {errors.country && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.country.message}
                     </p>
                   )}
                 </div>
@@ -749,18 +909,68 @@ const WarehousesPage = () => {
                       </p>
                     )}
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Contact Person *
+                    </label>
+                    <input
+                      {...register("contactPerson")}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="Contact Person Name"
+                    />
+
+                    {errors.contactPerson && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.contactPerson.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone *
+                    </label>
+                    <input
+                      {...register("phone")}
+                      className="w-full px-3 py-2 border rounded-lg font-mono"
+                      placeholder="9876543210"
+                    />
+
+                    {errors.phone && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.phone.message}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      {...register("email")}
+                      type="email"
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="email@example.com"
+                    />
+
+                    {errors.email && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.email.message}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Status */}
                 <div>
                   <label className="flex items-center space-x-2 cursor-pointer">
                     <input
-                      {...register("isActive")}
+                      {...register("isDefaultPickup")}
                       type="checkbox"
                       className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
                     />
                     <span className="text-sm text-gray-700">
-                      Warehouse is active and operational
+                      Warehouse is active and operational and Default Pickup
+                      Warehouse
                     </span>
                   </label>
                 </div>

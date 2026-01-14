@@ -1,22 +1,40 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { UserPlus, Users, Eye, EyeOff, Shield, Activity, RotateCcw, XCircle, Package, ShoppingCart, IndianRupee } from 'lucide-react';
-import { MainLayout } from '@/components/layouts/mainLayout';
-import { createAdminSchema, type CreateAdminFormData } from '@/lib/types/user/schema';
-import { adminUserApi } from '@/lib/api/api.auth.service';
-import type { User } from '@/lib/types/user/user';
-import { useAuth } from '@/context/auth.context';
-import { SetPermissionsModal } from '@/components/superAdmin/setpermissionsmodal';
+import {
+  UserPlus,
+  Users,
+  Eye,
+  EyeOff,
+  Shield,
+  Activity,
+  RotateCcw,
+  XCircle,
+  Package,
+  ShoppingCart,
+  IndianRupee,
+  ArrowRight,
+} from "lucide-react";
+import { MainLayout } from "@/components/layouts/mainLayout";
+import {
+  createAdminSchema,
+  type CreateAdminFormData,
+} from "@/lib/types/user/schema";
+import { adminUserApi } from "@/lib/api/api.auth.service";
+import type { User } from "@/lib/types/user/user";
+import { useAuth } from "@/context/auth.context";
+import { SetPermissionsModal } from "@/components/superAdmin/setpermissionsmodal";
+import { useNavigate } from "react-router";
 
-export const SuperAdminDashboard: React.FC = () => {
+export default function SuperAdminDashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+  const navigate = useNavigate();
 
   const {
     register,
@@ -62,6 +80,9 @@ export const SuperAdminDashboard: React.FC = () => {
     usersData?.users.filter((u: User) => u.role === "SUPER_ADMIN").length || 0;
   const activeUsers =
     usersData?.users.filter((u: User) => u.isActive).length || 0;
+
+  const displayedUsers = usersData?.users.slice(0, 4) || [];
+  const hasMoreUsers = totalUsers > 4;
 
   // Stats configuration - Comprehensive overview for Super Admin
   const stats = [
@@ -351,7 +372,7 @@ export const SuperAdminDashboard: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                {usersData?.users.map((user) => (
+                {displayedUsers?.map((user) => (
                   <div
                     key={user.id}
                     className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
@@ -394,6 +415,15 @@ export const SuperAdminDashboard: React.FC = () => {
                     )}
                   </div>
                 ))}
+                {hasMoreUsers && (
+                  <button
+                    onClick={() => navigate("/admin/user-management")}
+                    className="w-full py-3 text-center text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    View All {totalUsers} Users
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -412,4 +442,4 @@ export const SuperAdminDashboard: React.FC = () => {
       )}
     </MainLayout>
   );
-};
+}

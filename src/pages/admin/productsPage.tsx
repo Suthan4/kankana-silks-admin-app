@@ -77,6 +77,10 @@ export type ProductMediaForm = {
   altText?: string;
 };
 
+export type AttributeField = {
+  key: string;
+  value: string;
+};
 
 // Stats Card (unchanged)
 const StatsCard: React.FC<{
@@ -727,6 +731,77 @@ const ProductsPage: React.FC = () => {
   );
   const [mediaPreviews, setMediaPreviews] = useState<MediaPreviewItem[]>([]);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [variantMediaPreviews, setVariantMediaPreviews] = useState<
+    Record<number, MediaPreviewItem[]>
+  >({});
+
+  const [variantAttributeFields, setVariantAttributeFields] = useState<
+    Record<number, AttributeField[]>
+  >({});
+  const [isHydratingEdit, setIsHydratingEdit] = useState(false);
+
+  const appendVariantAttribute = (variantIndex: number) => {
+    setVariantAttributeFields((prev) => ({
+      ...prev,
+      [variantIndex]: [...(prev?.[variantIndex] ?? []), { key: "", value: "" }],
+    }));
+  };
+
+  const removeVariantAttribute = (variantIndex: number, attrIndex: number) => {
+    setVariantAttributeFields((prev) => ({
+      ...prev,
+      [variantIndex]: (prev?.[variantIndex] ?? []).filter(
+        (_, i) => i !== attrIndex
+      ),
+    }));
+  };
+
+  const updateVariantAttribute = (
+    variantIndex: number,
+    attrIndex: number,
+    field: "key" | "value",
+    value: string
+  ) => {
+    setVariantAttributeFields((prev) => ({
+      ...prev,
+      [variantIndex]: (prev?.[variantIndex] ?? []).map((attr, i) =>
+        i === attrIndex ? { ...attr, [field]: value } : attr
+      ),
+    }));
+  };
+  const handleVariantMediaUpload = (
+    variantIndex: number,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const items: MediaPreviewItem[] = Array.from(files).map((file) => {
+      const isVideo = file.type.startsWith("video/");
+      return {
+        file,
+        preview: URL.createObjectURL(file), // ✅ BEST PREVIEW
+        isPrimary: false,
+        id: `${Date.now()}-${variantIndex}-${crypto.randomUUID()}`,
+        type: isVideo ? "VIDEO" : "IMAGE",
+      };
+    });
+
+    setVariantMediaPreviews((prev) => {
+      const existing = prev?.[variantIndex] ?? [];
+      const merged = [...existing, ...items];
+
+      // ✅ ensure first item is primary
+      const fixed = merged.map((m, i) => ({
+        ...m,
+        isPrimary: i === 0,
+      }));
+
+      return { ...prev, [variantIndex]: fixed };
+    });
+
+    e.target.value = "";
+  };
 
   const canCreate = hasPermission("products", "canCreate");
   const canUpdate = hasPermission("products", "canUpdate");
@@ -837,6 +912,8 @@ const ProductsPage: React.FC = () => {
   });
 
   useEffect(() => {
+    if (isHydratingEdit) return;
+
     if (productType === "variable") {
       setValue("stock", undefined, { shouldValidate: false });
     }
@@ -844,208 +921,360 @@ const ProductsPage: React.FC = () => {
     if (productType === "simple") {
       setValue("variants", undefined, { shouldValidate: false });
     }
-  }, [productType, setValue]);
-
-  // Populate form when editing
-  useEffect(() => {
-    if (editingProduct) {
-      setValue("name", editingProduct.name);
-      setValue("description", editingProduct.description);
-      setValue("categoryId", editingProduct.categoryId);
-      setValue("basePrice", editingProduct.basePrice);
-      setValue("sellingPrice", editingProduct.sellingPrice);
-      setValue("isActive", editingProduct.isActive);
-
-      if (editingProduct.hsnCode) {
-        setValue("hsnCode", editingProduct.hsnCode);
-      }
-
-      if (editingProduct.artisanName) {
-        setValue("artisanName", editingProduct.artisanName);
-      }
-
-      if (editingProduct.artisanAbout) {
-        setValue("artisanAbout", editingProduct.artisanAbout);
-      }
-
-      if (editingProduct.artisanLocation) {
-        setValue("artisanLocation", editingProduct.artisanLocation);
-      }
-
-      const type = editingProduct.hasVariants ? "variable" : "simple";
-      setProductType(type);
-
-      if (
-        editingProduct.specifications &&
-        editingProduct.specifications.length > 0
-      ) {
-        setValue("specifications", editingProduct.specifications);
-      }
-
-      // Handle existing media
-      if (editingProduct.media && editingProduct.media.length > 0) {
-        const existingPreviews: MediaPreviewItem[] = editingProduct.media.map(
-          (mediaItem, idx) => ({
-            file: null,
-            preview: mediaItem.url,
-            isPrimary: mediaItem.order === 0,
-            id: `existing-${mediaItem.id || idx}`,
-            type: mediaItem.type,
-            thumbnailUrl: mediaItem.thumbnailUrl,
-          })
-        );
-        setMediaPreviews(existingPreviews);
-      }
-
-      if (
-        type === "simple" &&
-        editingProduct.stock &&
-        editingProduct.stock.length > 0
-      ) {
-        setValue("stock", {
-          warehouseId: editingProduct.stock[0].warehouseId,
-          quantity: editingProduct.stock[0].quantity,
-          lowStockThreshold: editingProduct.stock[0].lowStockThreshold,
-        });
-      } else if (type === "variable" && editingProduct.variants) {
-        setValue(
-          "variants",
-          editingProduct.variants.map((v) => {
-            const variantStock = editingProduct.stock?.find(
-              (s) => s.variantId === v.id
-            );
-
-            return {
-              size: v.size,
-              color: v.color,
-              fabric: v.fabric,
-              price: v.price,
-              stock: variantStock
-                ? {
-                    warehouseId: variantStock.warehouseId,
-                    quantity: variantStock.quantity,
-                    lowStockThreshold: variantStock.lowStockThreshold,
-                  }
-                : {
-                    warehouseId: "",
-                    quantity: 0,
-                    lowStockThreshold: 10,
-                  },
-            };
-          })
-        );
-      }
-    }
-  }, [editingProduct, setValue]);
+  }, [productType, setValue, isHydratingEdit]);
 
   const {
     fields: specFields,
     append: appendSpec,
     remove: removeSpec,
+    replace: replaceSpecs,
   } = useFieldArray({ control, name: "specifications" });
 
   const {
     fields: mediaFields,
     append: appendMedia,
     remove: removeMedia,
+    replace: replaceMedia,
   } = useFieldArray({ control, name: "media" });
 
   const {
     fields: variantFields,
     append: appendVariant,
     remove: removeVariant,
+    replace: replaceVariants,
   } = useFieldArray({ control, name: "variants" });
+
+  const { data: productDetailsData } = useQuery({
+    queryKey: ["product-details", editingProduct?.id],
+    queryFn: async () => {
+      if (!editingProduct?.id) return null;
+      const res = await productApi.getProduct(editingProduct.id);
+      return res.data;
+    },
+    enabled: !!editingProduct?.id,
+  });
+  console.log("productDetailsData", productDetailsData);
+
+  // Populate form when editing
+  useEffect(() => {
+    if (!productDetailsData) return;
+
+    const fullProduct = productDetailsData;
+
+    setIsHydratingEdit(true);
+
+    const type: "simple" | "variable" = fullProduct.hasVariants
+      ? "variable"
+      : "simple";
+
+    setProductType(type);
+
+    reset({
+      name: fullProduct.name ?? "",
+      description: fullProduct.description ?? "",
+      categoryId: fullProduct.categoryId ?? "",
+      sku: fullProduct.sku ?? "",
+      basePrice: Number(fullProduct.basePrice ?? 0),
+      sellingPrice: Number(fullProduct.sellingPrice ?? 0),
+      isActive: Boolean(fullProduct.isActive ?? true),
+
+      hsnCode: fullProduct.hsnCode ?? "",
+      artisanName: fullProduct.artisanName ?? "",
+      artisanAbout: fullProduct.artisanAbout ?? "",
+      artisanLocation: fullProduct.artisanLocation ?? "",
+
+      weight: Number(fullProduct.weight ?? 0),
+      length: Number(fullProduct.length ?? 0),
+      breadth: Number(fullProduct.breadth ?? 0),
+      height: Number(fullProduct.height ?? 0),
+
+      specifications: [],
+      media: [],
+      variants: type === "variable" ? [] : undefined,
+
+      stock:
+        type === "simple"
+          ? {
+              warehouseId: fullProduct.stock?.[0]?.warehouseId ?? "",
+              quantity: Number(fullProduct.stock?.[0]?.quantity ?? 0),
+              lowStockThreshold:
+                fullProduct.stock?.[0]?.lowStockThreshold ?? 10,
+            }
+          : undefined,
+    });
+
+    // ✅ specifications
+    replaceSpecs(
+      (fullProduct.specifications ?? []).map((s) => ({
+        key: s.key ?? "",
+        value: s.value ?? "",
+      }))
+    );
+
+    // ✅ media (all)
+    const sortedMedia = (fullProduct.media ?? [])
+      .slice()
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    replaceMedia(
+      sortedMedia.map((m, idx) => ({
+        type: m.type,
+        url: m.url,
+        order: idx,
+        isActive: true,
+        altText: m.altText ?? "",
+      }))
+    );
+
+    setMediaPreviews(
+      sortedMedia.map((m, idx) => ({
+        file: null,
+        preview: m.url,
+        isPrimary: (m.order ?? idx) === 0,
+        id: `existing-product-${m.id ?? idx}`,
+        type: m.type,
+        thumbnailUrl: (m as any).thumbnailUrl,
+      }))
+    );
+
+    // ✅ variants
+    if (type === "variable") {
+      replaceVariants(
+        (fullProduct.variants ?? []).map((v) => {
+          const variantStock = fullProduct.stock?.find(
+            (s) => s.variantId === v.id
+          );
+
+          return {
+            size: v.size ?? "",
+            color: v.color ?? "",
+            fabric: v.fabric ?? "",
+            price: Number(v.price ?? 0),
+
+            basePrice: Number(v.basePrice ?? 0),
+            sellingPrice: Number(v.sellingPrice ?? 0),
+
+            weight: Number(v.weight ?? 0),
+            length: Number(v.length ?? 0),
+            breadth: Number(v.breadth ?? 0),
+            height: Number(v.height ?? 0),
+
+            stock: {
+              warehouseId: variantStock?.warehouseId ?? "",
+              quantity: Number(variantStock?.quantity ?? 0),
+              lowStockThreshold: variantStock?.lowStockThreshold ?? 10,
+            },
+          };
+        })
+      );
+
+      // ✅ variant media previews
+      const nextVariantMedia: Record<number, MediaPreviewItem[]> = {};
+      (fullProduct.variants ?? []).forEach((v: any, idx: number) => {
+        const vMedia = Array.isArray(v.media) ? v.media : [];
+
+        nextVariantMedia[idx] = vMedia
+          .slice()
+          .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+          .map((m: any, mi: number) => ({
+            file: null,
+            preview: m.url,
+            isPrimary: (m.order ?? mi) === 0,
+            id: `existing-variant-${v.id}-${m.id ?? mi}`,
+            type: m.type,
+            thumbnailUrl: m.thumbnailUrl,
+          }));
+      });
+
+      setVariantMediaPreviews(nextVariantMedia);
+    }
+
+    setTimeout(() => setIsHydratingEdit(false), 0);
+  }, [productDetailsData, reset, replaceSpecs, replaceMedia, replaceVariants]);
 
   // Media Upload Handler
   const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file, index) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const preview = reader.result as string;
-        const id = `${Date.now()}-${index}`;
-        const isVideo = file.type.startsWith("video/");
-
-        setMediaPreviews((prev) => [
-          ...prev,
-          {
-            file,
-            preview,
-            isPrimary: prev.length === 0,
-            id,
-            type: isVideo ? "VIDEO" : "IMAGE",
-          },
-        ]);
+    const items: MediaPreviewItem[] = Array.from(files).map((file) => {
+      const isVideo = file.type.startsWith("video/");
+      return {
+        file,
+        preview: URL.createObjectURL(file),
+        isPrimary: false,
+        id: `${Date.now()}-${crypto.randomUUID()}`,
+        type: isVideo ? "VIDEO" : "IMAGE",
       };
-      reader.readAsDataURL(file);
+    });
+
+    setMediaPreviews((prev) => {
+      const merged = [...prev, ...items];
+      const fixed = merged.map((m, i) => ({
+        ...m,
+        isPrimary: i === 0,
+      }));
+      return fixed;
     });
 
     e.target.value = "";
   };
 
   // Upload media to S3 and get URLs
-  const uploadMediaToS3 = async (): Promise<
+  const uploadProductMediaToS3 = async (): Promise<
     Array<{
       type: "IMAGE" | "VIDEO";
       url: string;
       altText?: string;
       order: number;
+      isPrimary?: boolean;
     }>
   > => {
     const newMedia = mediaPreviews.filter((item) => item.file !== null);
     const existingMedia = mediaPreviews.filter((item) => item.file === null);
 
+    // ✅ no new upload → return existing
     if (newMedia.length === 0) {
       return existingMedia.map((item, index) => ({
         type: item.type,
         url: item.preview,
         altText: "",
         order: index,
+        isPrimary: item.isPrimary,
       }));
     }
 
     setIsUploadingMedia(true);
-    const uploadToast = toast.loading("Uploading media...");
+    const uploadToast = toast.loading("Uploading product media...");
 
     try {
-      const sortedNewMedia = [...newMedia].sort((a, b) => {
+      // ✅ keep same order as previews (drag order already arranged)
+      // ✅ just ensure primary is first if needed
+      const sorted = [...mediaPreviews].sort((a, b) => {
         if (a.isPrimary) return -1;
         if (b.isPrimary) return 1;
         return 0;
       });
 
-      const files = sortedNewMedia.map((item) => item.file!);
+      const newSorted = sorted.filter((x) => x.file !== null);
+      const oldSorted = sorted.filter((x) => x.file === null);
+
+      const files = newSorted.map((x) => x.file!);
       const response = await s3Api.uploadMultiple(files, "products");
 
-      if (!response.success) {
-        throw new Error("Failed to upload media");
-      }
+      if (!response.success) throw new Error("Failed to upload product media");
 
-      const newUrls = response.files?.map((item: any, idx: number) => ({
-        type: sortedNewMedia[idx].type,
-        url: item.url,
+      // ✅ map uploaded urls back
+      const uploadedMapped = response.files.map((f: any, idx: number) => ({
+        type: newSorted[idx].type,
+        url: f.url,
         altText: "",
-        order: existingMedia.length + idx,
+        order: oldSorted.length + idx,
+        isPrimary: newSorted[idx].isPrimary,
       }));
 
-      const existingUrls = existingMedia.map((item, idx) => ({
-        type: item.type,
-        url: item.preview,
+      const existingMapped = oldSorted.map((m, idx) => ({
+        type: m.type,
+        url: m.preview,
         altText: "",
         order: idx,
+        isPrimary: m.isPrimary,
       }));
 
-      const allMedia = [...existingUrls, ...newUrls];
-
-      toast.success("Media uploaded successfully!", { id: uploadToast });
-      return allMedia;
+      toast.success("Product media uploaded!", { id: uploadToast });
+      return [...existingMapped, ...uploadedMapped];
     } catch (error: any) {
-      console.error("Media upload error:", error);
-      toast.error(error?.response?.data?.message || "Failed to upload media", {
-        id: uploadToast,
-      });
+      console.error("Product media upload error:", error);
+      toast.error(
+        error?.response?.data?.message || "Failed to upload product media",
+        {
+          id: uploadToast,
+        }
+      );
+      throw error;
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const uploadVariantMediaToS3 = async (): Promise<
+    Record<
+      number,
+      Array<{
+        type: "IMAGE" | "VIDEO";
+        url: string;
+        altText?: string;
+        order: number;
+        isPrimary?: boolean;
+      }>
+    >
+  > => {
+    const result: Record<number, any[]> = {};
+
+    const variantEntries = Object.entries(variantMediaPreviews ?? {});
+
+    // ✅ if no variant media at all => return empty (no issue)
+    if (variantEntries.length === 0) return result;
+
+    setIsUploadingMedia(true);
+    const uploadToast = toast.loading("Uploading variant media...");
+
+    try {
+      for (const [variantIndexStr, previewList] of variantEntries) {
+        const variantIndex = Number(variantIndexStr);
+        const list = previewList ?? [];
+
+        // ✅ keep primary first + keep order
+        const sorted = [...list].sort((a, b) => {
+          if (a.isPrimary) return -1;
+          if (b.isPrimary) return 1;
+          return 0;
+        });
+
+        const existing = sorted.filter((m) => !m.file);
+        const newFiles = sorted.filter((m) => m.file);
+
+        const existingMapped = existing.map((m, idx) => ({
+          type: m.type,
+          url: m.preview,
+          altText: "",
+          order: idx,
+          isPrimary: m.isPrimary,
+        }));
+
+        // ✅ no new upload for this variant
+        if (newFiles.length === 0) {
+          result[variantIndex] = existingMapped;
+          continue;
+        }
+
+        const files = newFiles.map((m) => m.file!);
+        const response = await s3Api.uploadMultiple(files, "products/variants");
+
+        if (!response.success)
+          throw new Error("Failed to upload variant media");
+
+        const uploadedMapped = response.files.map((f: any, idx: number) => ({
+          type: newFiles[idx].type,
+          url: f.url,
+          altText: "",
+          order: existingMapped.length + idx,
+          isPrimary: newFiles[idx].isPrimary,
+        }));
+
+        result[variantIndex] = [...existingMapped, ...uploadedMapped];
+      }
+
+      toast.success("Variant media uploaded!", { id: uploadToast });
+      return result;
+    } catch (error: any) {
+      console.error("Variant media upload error:", error);
+      toast.error(
+        error?.response?.data?.message || "Failed to upload variant media",
+        {
+          id: uploadToast,
+        }
+      );
       throw error;
     } finally {
       setIsUploadingMedia(false);
@@ -1055,20 +1284,55 @@ const ProductsPage: React.FC = () => {
   // Form Submit Handler
   const onSubmit: SubmitHandler<CreateProductFormData> = async (data) => {
     try {
-      let media: Array<{
-        type: "IMAGE" | "VIDEO";
-        url: string;
-        altText?: string;
-        order: number;
-      }> = [];
+      // ✅ 1) Upload Product Media
+      const productMedia =
+        mediaPreviews.length > 0 ? await uploadProductMediaToS3() : [];
 
-      if (mediaPreviews.length > 0) {
-        media = await uploadMediaToS3();
-      }
+      // ✅ 2) Upload Variant Media (only if exists)
+      const hasAnyVariantMedia = Object.values(variantMediaPreviews ?? {}).some(
+        (arr) => (arr ?? []).length > 0
+      );
+
+      const variantMediaMap = hasAnyVariantMedia
+        ? await uploadVariantMediaToS3()
+        : {};
+
+      const finalVariants = data.variants?.map((v, idx) => {
+        const attrsArray = variantAttributeFields?.[idx] ?? [];
+        const attributes = attrsArray.reduce<Record<string, string>>(
+          (acc, item) => {
+            if (item.key?.trim() && item.value?.trim()) {
+              acc[item.key.trim()] = item.value.trim();
+            }
+            return acc;
+          },
+          {}
+        );
+
+        return {
+          ...v,
+          attributes:
+            Object.keys(attributes).length > 0 ? attributes : undefined,
+          // ✅ attach variant media only if available for this variant
+          media:
+            variantMediaMap?.[idx]?.length > 0
+              ? variantMediaMap[idx].map((m: any, order: number) => ({
+                  type: m.type,
+                  url: m.url,
+                  altText: `${data.name} - Variant ${idx + 1} - Media ${
+                    order + 1
+                  }`,
+                  order,
+                  isActive: true,
+                }))
+              : undefined,
+        };
+      });
 
       const productData = {
         ...data,
-        media: media.map((item, index) => ({
+        variants: finalVariants,
+        media: productMedia.map((item, index) => ({
           type: item.type,
           url: item.url,
           altText: item.altText || `${data.name} - Media ${index + 1}`,
@@ -1414,6 +1678,14 @@ const ProductsPage: React.FC = () => {
                     setMediaPreviews={setMediaPreviews}
                     handleMediaUpload={handleMediaUpload}
                     watch={watch}
+                    // ✅ NEW PROPS FIX
+                    variantMediaPreviews={variantMediaPreviews}
+                    setVariantMediaPreviews={setVariantMediaPreviews}
+                    handleVariantMediaUpload={handleVariantMediaUpload}
+                    variantAttributeFields={variantAttributeFields}
+                    appendVariantAttribute={appendVariantAttribute}
+                    removeVariantAttribute={removeVariantAttribute}
+                    updateVariantAttribute={updateVariantAttribute}
                   />
 
                   {/* Navigation Buttons */}

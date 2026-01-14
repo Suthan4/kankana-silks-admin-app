@@ -153,7 +153,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
     const superAdminItems: NavItem[] = [
       {
         name: "User Management",
-        path: "/admin/dashboard",
+        path: "/admin/user-management",
         icon: <Users className="h-5 w-5" />,
         roles: ["SUPER_ADMIN"],
       },

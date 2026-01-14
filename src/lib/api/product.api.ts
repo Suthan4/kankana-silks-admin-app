@@ -1,17 +1,22 @@
-import type { 
-  CreateProductData, 
-  Product, 
-  ProductMedia,  // UPDATED: Changed from ProductImage
-  ProductVariant, 
-  QueryProductParams, 
-  Specification, 
-  Stock, 
-  UpdateProductData 
+import type {
+  CreateProductData,
+  Product,
+  ProductMedia,
+  ProductVariant,
+  ProductVariantMedia,
+  QueryProductParams,
+  Specification,
+  Stock,
+  UpdateProductData,
 } from "../types/product/prodcut";
 import { apiCall, type ApiResponse } from "./api.base.service";
 
-// Product API
+// Product API with Enhanced Variant Support
 export const productApi = {
+  // ==========================================
+  // PRODUCT ENDPOINTS
+  // ==========================================
+
   // Get all products
   getProducts: async (
     params?: QueryProductParams
@@ -59,6 +64,10 @@ export const productApi = {
     return apiCall("DELETE", `/products/${id}`);
   },
 
+  // ==========================================
+  // SPECIFICATION ENDPOINTS
+  // ==========================================
+
   // Add specification
   addSpecification: async (
     productId: string,
@@ -86,38 +95,71 @@ export const productApi = {
     return apiCall("DELETE", `/products/${productId}/specifications/${specId}`);
   },
 
-  // UPDATED: Add media (replaces addImage)
+  // ==========================================
+  // PRODUCT MEDIA ENDPOINTS
+  // ==========================================
+
+  // Add product media
   addMedia: async (
     productId: string,
-    data: { 
+    data: {
       type?: "IMAGE" | "VIDEO";
-      url: string; 
-      altText?: string; 
+      url: string;
+      altText?: string;
       order?: number;
       thumbnailUrl?: string;
       title?: string;
       description?: string;
     }
   ): Promise<ApiResponse<ProductMedia>> => {
-    return apiCall("POST", `/products/${productId}/images`, data);
+    return apiCall("POST", `/products/${productId}/media`, data);
   },
 
-  // UPDATED: Delete media (replaces deleteImage)
+  // Delete product media
   deleteMedia: async (
     productId: string,
     mediaId: string
   ): Promise<ApiResponse<void>> => {
-    return apiCall("DELETE", `/products/${productId}/images/${mediaId}`);
+    return apiCall("DELETE", `/products/${productId}/media/${mediaId}`);
   },
 
-  // Add variant
+  // ==========================================
+  // 🆕 VARIANT ENDPOINTS (ENHANCED)
+  // ==========================================
+
+  // Add variant (with media, pricing, dimensions)
   addVariant: async (
     productId: string,
     data: {
+      // Dynamic attributes
+      attributes?: Record<string, any>;
+
+      // Legacy fields
       size?: string;
       color?: string;
       fabric?: string;
+
+      // Pricing
+      basePrice?: number;
+      sellingPrice?: number;
       price: number;
+
+      // Shipping dimensions
+      weight?: number;
+      length?: number;
+      breadth?: number;
+      height?: number;
+
+      // Variant media
+      media?: Array<{
+        type?: "IMAGE" | "VIDEO";
+        url: string;
+        altText?: string;
+        order?: number;
+        thumbnailUrl?: string;
+      }>;
+
+      // Stock
       stock?: {
         warehouseId: string;
         quantity: number;
@@ -128,6 +170,35 @@ export const productApi = {
     return apiCall("POST", `/products/${productId}/variants`, data);
   },
 
+  // 🆕 Get variant by ID
+  getVariant: async (
+    productId: string,
+    variantId: string
+  ): Promise<ApiResponse<ProductVariant>> => {
+    return apiCall("GET", `/products/${productId}/variants/${variantId}`);
+  },
+
+  // 🆕 Update variant (with pricing, dimensions, attributes)
+  updateVariant: async (
+    productId: string,
+    variantId: string,
+    data: {
+      attributes?: Record<string, any>;
+      size?: string;
+      color?: string;
+      fabric?: string;
+      basePrice?: number;
+      sellingPrice?: number;
+      price?: number;
+      weight?: number;
+      length?: number;
+      breadth?: number;
+      height?: number;
+    }
+  ): Promise<ApiResponse<ProductVariant>> => {
+    return apiCall("PUT", `/products/${productId}/variants/${variantId}`, data);
+  },
+
   // Delete variant
   deleteVariant: async (
     productId: string,
@@ -135,6 +206,47 @@ export const productApi = {
   ): Promise<ApiResponse<void>> => {
     return apiCall("DELETE", `/products/${productId}/variants/${variantId}`);
   },
+
+  // ==========================================
+  // 🆕 VARIANT MEDIA ENDPOINTS (NEW)
+  // ==========================================
+
+  // Add media to variant
+  addVariantMedia: async (
+    productId: string,
+    variantId: string,
+    data: {
+      type?: "IMAGE" | "VIDEO";
+      url: string;
+      altText?: string;
+      order?: number;
+      thumbnailUrl?: string;
+      title?: string;
+      description?: string;
+    }
+  ): Promise<ApiResponse<ProductVariantMedia>> => {
+    return apiCall(
+      "POST",
+      `/products/${productId}/variants/${variantId}/media`,
+      data
+    );
+  },
+
+  // Delete variant media
+  deleteVariantMedia: async (
+    productId: string,
+    variantId: string,
+    mediaId: string
+  ): Promise<ApiResponse<void>> => {
+    return apiCall(
+      "DELETE",
+      `/products/${productId}/variants/${variantId}/media/${mediaId}`
+    );
+  },
+
+  // ==========================================
+  // STOCK ENDPOINTS
+  // ==========================================
 
   // Get stock
   getStock: async (

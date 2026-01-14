@@ -1,5 +1,4 @@
-// Updated Product Type Definitions
-// Aligns with backend ProductMedia implementation + Shipping Dimensions
+// Enhanced Product Type Definitions with Variant Media, Pricing & Dimensions
 
 export type MediaType = "IMAGE" | "VIDEO";
 
@@ -10,7 +9,7 @@ export interface Warehouse {
   isActive: boolean;
 }
 
-// UPDATED: ProductMedia (replaces ProductImage)
+// Product Media (for product-level media)
 export interface ProductMedia {
   id: string;
   type: MediaType;
@@ -29,15 +28,54 @@ export interface ProductMedia {
   isActive: boolean;
 }
 
-// UPDATED: ProductVariant now includes stock relation
+// 🆕 Variant Media (for variant-specific media)
+export interface ProductVariantMedia {
+  id: string;
+  type: MediaType;
+  url: string;
+  key?: string;
+  thumbnailUrl?: string;
+  altText?: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  fileSize?: number;
+  duration?: number;
+  width?: number;
+  height?: number;
+  order: number;
+  isActive: boolean;
+}
+
+// 🆕 ENHANCED: ProductVariant with media, pricing, dimensions, and attributes
 export interface ProductVariant {
   id: string;
+
+  // Dynamic attributes (flexible key-value pairs)
+  attributes?: Record<string, any>;
+
+  // Legacy fields (backward compatibility)
   size?: string;
   color?: string;
   fabric?: string;
-  price: number;
+
+  // 🆕 Variant-specific pricing (optional - falls back to product pricing)
+  basePrice?: number;
+  sellingPrice?: number;
+  price: number; // Legacy price field
+
+  // 🆕 Variant-specific shipping dimensions
+  weight?: number;
+  length?: number;
+  breadth?: number;
+  height?: number;
+  volumetricWeight?: number;
+
   sku: string;
-  stock?: Stock[]; // Updated to include stock array
+
+  // 🆕 Variant-specific media
+  media?: ProductVariantMedia[];
+  stock?: Stock[];
 }
 
 export interface Specification {
@@ -46,19 +84,18 @@ export interface Specification {
   value: string;
 }
 
-// UPDATED: Stock now includes warehouse relation
 export interface Stock {
   id: string;
   productId: string;
   variantId?: string | null;
   warehouseId: string;
-  warehouse?: Warehouse; // Added warehouse relation
+  warehouse?: Warehouse;
   quantity: number;
   lowStockThreshold: number;
   updatedAt: string;
 }
 
-// UPDATED: Product interface with media, shipping dimensions and proper relations
+// Product interface with all enhancements
 export interface Product {
   id: string;
   name: string;
@@ -78,12 +115,12 @@ export interface Product {
   artisanAbout?: string;
   artisanLocation?: string;
 
-  // 🆕 Shipping & Dimensions
-  weight?: number; // Weight in kg
-  length?: number; // Length in cm
-  breadth?: number; // Breadth in cm
-  height?: number; // Height in cm
-  volumetricWeight?: number; // (L × B × H) / 5000
+  // Shipping & Dimensions
+  weight?: number;
+  length?: number;
+  breadth?: number;
+  height?: number;
+  volumetricWeight?: number;
 
   // SEO
   metaTitle?: string;
@@ -91,10 +128,10 @@ export interface Product {
   schemaMarkup?: string;
 
   // Relations
-  media: ProductMedia[]; // UPDATED: Changed from images
+  media: ProductMedia[];
   variants?: ProductVariant[];
   specifications?: Specification[];
-  stock?: Stock[]; // This is an array
+  stock?: Stock[];
 
   // Timestamps
   createdAt: string;
@@ -107,13 +144,14 @@ export interface Product {
   };
 }
 
-// UPDATED: CreateProductData with media and shipping dimensions
+// 🆕 ENHANCED: CreateProductData with variant enhancements
 export interface CreateProductData {
   name: string;
   description: string;
   categoryId: string;
   basePrice: number;
   sellingPrice: number;
+  sku?: string; // 🆕 Optional - auto-generated if not provided
   isActive?: boolean;
   hsnCode?: string;
 
@@ -122,12 +160,11 @@ export interface CreateProductData {
   artisanAbout?: string;
   artisanLocation?: string;
 
-  // 🆕 Shipping Dimensions (Required for Shiprocket)
-  weight: number; // Weight in kg (required)
-  length: number; // Length in cm (required)
-  breadth: number; // Breadth in cm (required)
-  height: number; // Height in cm (required)
-  // volumetricWeight is auto-calculated, no need to send
+  // Shipping Dimensions (Required)
+  weight: number;
+  length: number;
+  breadth: number;
+  height: number;
 
   // SEO
   metaTitle?: string;
@@ -143,23 +180,48 @@ export interface CreateProductData {
     order?: number;
   }>;
 
-  // Stock Configuration (Simple Product OR Variants)
+  // 🆕 ENHANCED: Variants with media, pricing, dimensions
   variants?: Array<{
+    // Dynamic attributes
+    attributes?: Record<string, any>;
+
+    // Legacy fields
     size?: string;
     color?: string;
     fabric?: string;
+
+    // Pricing
+    basePrice?: number;
+    sellingPrice?: number;
     price: number;
+
+    // Shipping dimensions
+    weight?: number;
+    length?: number;
+    breadth?: number;
+    height?: number;
+
+    // 🆕 Variant-specific media
+    media?: Array<{
+      type?: MediaType;
+      url: string;
+      altText?: string;
+      order?: number;
+      thumbnailUrl?: string;
+    }>;
+
     stock: {
-      // 🆕 Now REQUIRED for variants
       warehouseId: string;
       quantity: number;
-      lowStockThreshold?: number; // Defaults to 10
+      lowStockThreshold?: number;
     };
   }>;
+
+  // Simple product stock
   stock?: {
     warehouseId: string;
     quantity: number;
-    lowStockThreshold?: number; // Defaults to 10
+    lowStockThreshold?: number;
   };
 }
 
@@ -169,6 +231,7 @@ export interface UpdateProductData {
   categoryId?: string;
   basePrice?: number;
   sellingPrice?: number;
+  sku?: string; // 🆕 Allow SKU updates
   isActive?: boolean;
   hsnCode?: string;
 
@@ -177,12 +240,11 @@ export interface UpdateProductData {
   artisanAbout?: string;
   artisanLocation?: string;
 
-  // 🆕 Shipping Dimensions (Optional in update)
+  // Shipping Dimensions
   weight?: number;
   length?: number;
   breadth?: number;
   height?: number;
-  // volumetricWeight is auto-calculated
 
   // SEO
   metaTitle?: string;
@@ -195,16 +257,14 @@ export interface QueryProductParams {
   limit?: number;
   search?: string;
   categoryId?: string;
-  categorySlug?: string; // For category + descendants filtering
-  categoryIds?: string[]; // For multiple categories
+  categorySlug?: string;
+  categoryIds?: string[];
   isActive?: boolean;
   hasVariants?: boolean;
   minPrice?: number;
   maxPrice?: number;
   sortBy?: "createdAt" | "price" | "name" | "popularity";
   sortOrder?: "asc" | "desc";
-
-  // Advanced Filters
   color?: string;
   fabric?: string;
   size?: string;
