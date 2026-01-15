@@ -3,7 +3,7 @@ export interface Category {
   name: string;
   slug: string;
   description?: string;
-  parentId?: string;
+  parentId?: string | null;
   parent?: Category;
   children?: Category[];
   metaTitle?: string;
