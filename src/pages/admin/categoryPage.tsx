@@ -416,7 +416,7 @@ const CategoriesPage: React.FC = () => {
 
       const submitData = {
         ...data,
-        parentId: data.parentId ? data.parentId : null,
+        parentId: editingCategory ? data.parentId ? data.parentId : null : data?.parentId ? data.parentId : "",
         isActive: data.isActive ?? true,
         order: data.order ?? 0,
         image: imageUrl,
