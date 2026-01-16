@@ -21,7 +21,7 @@ export interface Category {
 export interface CreateCategoryData {
   name: string;
   description?: string;
-  parentId?: string;
+  parentId?: string | null;   // ✅ allow null
   metaTitle?: string;
   metaDesc?: string;
   image?: string;

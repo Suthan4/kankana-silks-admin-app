@@ -282,6 +282,7 @@ const CategoriesPage: React.FC = () => {
       reset();
       setImagePreview("");
       setImageFile(null);
+      setShowCreateModal(false);
       toast.success("Category updated successfully!");
     },
     onError: (error: any) => {
@@ -415,6 +416,7 @@ const CategoriesPage: React.FC = () => {
 
       const submitData = {
         ...data,
+        parentId: data.parentId ? data.parentId : null,
         isActive: data.isActive ?? true,
         order: data.order ?? 0,
         image: imageUrl,
@@ -437,7 +439,7 @@ const CategoriesPage: React.FC = () => {
     setEditingCategory(category);
     setValue("name", category.name);
     setValue("description", category.description || "");
-    setValue("parentId", category.parentId || "");
+    setValue("parentId", category.parentId ?? null);
     setValue("metaTitle", category.metaTitle || "");
     setValue("metaDesc", category.metaDesc || "");
     setValue("image", category.image || "");
