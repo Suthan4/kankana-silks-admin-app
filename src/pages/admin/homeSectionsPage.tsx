@@ -501,7 +501,7 @@ export const HomeSectionsPage: React.FC = () => {
       section.categories?.map((c) => c.id.toString()) || []
     );
 
-    setValue("customTypeName", section.customTypeName || "");
+    setValue("customTypeName", section.type === "CUSTOM" ? section.customTypeName || "": undefined);
     setBackgroundColor(section.backgroundColor || "#ffffff");
     setTextColor(section.textColor || "#000000");
     setLayout(section.layout || "grid");

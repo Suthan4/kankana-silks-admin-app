@@ -32,6 +32,7 @@ import type {
   Coupon,
   CouponScope,
   CouponUserEligibility,
+  DiscountType,
   UpdateCouponData,
 } from "@/lib/types/coupon/coupon";
 import {
@@ -479,28 +480,41 @@ const CouponsPage: React.FC = () => {
     const payload = {
       ...data,
       scope,
-      validFrom: data.validFrom
-        ? new Date(data.validFrom).toISOString()
-        : undefined,
-      validUntil: data.validUntil
-        ? new Date(data.validUntil).toISOString()
-        : undefined,
       categoryIds: selectedCategoryIds,
       productIds: selectedProductIds,
       userEligibility,
       eligibleUserIds: selectedUserIds,
-      newUserDays,
-      maxDiscountAmount,
+
+      // ✅ convert null to undefined (important)
+      newUserDays: newUserDays ?? undefined,
+      maxDiscountAmount: maxDiscountAmount ?? undefined,
     };
 
     if (editingCoupon) {
+      const updatePayload: UpdateCouponData = {
+        ...payload,
+        discountType: payload.discountType as DiscountType,
+        validFrom: new Date(data.validFrom).toISOString(),
+        validUntil: new Date(data.validUntil).toISOString(),
+      };
+
       updateMutation.mutate({
         id: editingCoupon.id,
-        data: payload as UpdateCouponData,
+        data: updatePayload,
       });
     } else {
       createMutation.mutate(payload as any);
     }
+  };
+
+  const toDateTimeLocal = (isoString: string) => {
+    const date = new Date(isoString);
+
+    const pad = (n: number) => String(n).padStart(2, "0");
+
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+      date.getDate(),
+    )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
 
   // Handle edit
@@ -514,8 +528,8 @@ const CouponsPage: React.FC = () => {
       minOrderValue: coupon.minOrderValue,
       maxUsage: coupon.maxUsage || ("" as any),
       perUserLimit: coupon.perUserLimit || ("" as any),
-      validFrom: new Date(coupon.validFrom).toISOString().split("T")[0],
-      validUntil: new Date(coupon.validUntil).toISOString().split("T")[0],
+      validFrom: toDateTimeLocal(coupon.validFrom),
+      validUntil: toDateTimeLocal(coupon.validUntil),
       isActive: coupon.isActive,
     });
 

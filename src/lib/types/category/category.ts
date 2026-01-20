@@ -11,6 +11,9 @@ export interface Category {
   image?: string;
   isActive: boolean;
   order: number;
+  hasVideoConsultation?: boolean;
+  videoPurchasingEnabled?: boolean;
+  videoConsultationNote?: string;
   createdAt: string;
   updatedAt: string;
   _count?: {
@@ -27,6 +30,9 @@ export interface CreateCategoryData {
   image?: string;
   isActive?: boolean;
   order?: number;
+  hasVideoConsultation?: boolean;
+  videoPurchasingEnabled?: boolean;
+  videoConsultationNote?: string;
 }
 
 export interface UpdateCategoryData {

@@ -97,8 +97,7 @@ export interface UpdateCouponData {
   discountType?: DiscountType;
   discountValue?: number;
   minOrderValue?: number;
-  
-  // 🆕 NEW: Enhanced fields
+
   maxDiscountAmount?: number;
   scope?: CouponScope;
   categoryIds?: string[];
@@ -106,13 +105,17 @@ export interface UpdateCouponData {
   userEligibility?: CouponUserEligibility;
   eligibleUserIds?: string[];
   newUserDays?: number;
-  
+
   maxUsage?: number;
   perUserLimit?: number;
-  validFrom?: string;
-  validUntil?: string;
+
+  // ✅ MAKE REQUIRED (since schema requires)
+  validFrom: string;
+  validUntil: string;
+
   isActive?: boolean;
 }
+
 
 // Cart Item for validation
 export interface CartItemData {

@@ -23,6 +23,7 @@ import WarehouseStockPage from "./pages/admin/warehouseStockPage";
 import UserManagementPage from "./pages/admin/userManagement";
 import SuperAdminDashboard from "./pages/superAdmin/superAdminDashboard";
 import CouponsPage from "./pages/admin/couponPage";
+import ProductRequestsPage from "./pages/admin/productRequest";
 
 
 // Admin Pages
@@ -180,6 +181,18 @@ function App() {
                   requiredPermission="canRead"
                 >
                   <ConsultationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/product-request"
+              element={
+                <ProtectedRoute
+                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+                  requiredModule="product-request"
+                  requiredPermission="canRead"
+                >
+                  <ProductRequestsPage />
                 </ProtectedRoute>
               }
             />

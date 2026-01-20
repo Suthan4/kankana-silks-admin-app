@@ -23,6 +23,10 @@ export const createCategorySchema = z.object({
     .optional(),
   isActive: z.boolean().optional(),
   order: z.coerce.number().int().optional(),
+    // 🆕 Video features
+  hasVideoConsultation: z.boolean().optional().default(false),
+  videoPurchasingEnabled: z.boolean().optional().default(false),
+  videoConsultationNote: z.string().optional(),
 });
 
 export const updateCategorySchema = z.object({
@@ -34,6 +38,10 @@ export const updateCategorySchema = z.object({
   image: z.string().url("Invalid image URL").optional().or(z.literal("")),
   isActive: z.boolean().optional(),
   order: z.number().int().optional(),
+   // 🆕 Video features
+  hasVideoConsultation: z.boolean().optional(),
+  videoPurchasingEnabled: z.boolean().optional(),
+  videoConsultationNote: z.string().optional(),
 });
 
 export type CreateCategoryFormData = z.infer<typeof createCategorySchema>;

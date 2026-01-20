@@ -13,8 +13,8 @@ export const CouponUserEligibilityEnum = z.enum([
 
 // Helper for optional numbers
 const optionalNumber = z.preprocess(
-  (val) => (val === "" ? undefined : val),
-  z.coerce.number().int().positive().optional()
+  (val) => (val === "" || val === null ? undefined : val),
+  z.coerce.number().positive().optional()
 );
 
 
@@ -193,8 +193,8 @@ export const updateCouponSchema = z
     perUserLimit: optionalNumber,
 
     // Validity
-   validFrom: z.string().date().optional(),
-   validUntil: z.string().date().optional(),
+validFrom: z.string().min(1, "Start date is required"),
+validUntil: z.string().min(1, "End date is required"),
 
     isActive: z.boolean().optional(),
   })
@@ -212,18 +212,16 @@ export const updateCouponSchema = z
       });
     }
 
-    // ✅ Date validation
-    if (data.validFrom && data.validUntil) {
-      const validFrom = new Date(data.validFrom);
-      const validUntil = new Date(data.validUntil);
+   // ✅ Date validation
+    const validFrom = new Date(data.validFrom);
+    const validUntil = new Date(data.validUntil);
 
-      if (validFrom >= validUntil) {
-        ctx.addIssue({
-          path: ["validUntil"],
-          code: z.ZodIssueCode.custom,
-          message: "End date must be after start date",
-        });
-      }
+    if (validFrom >= validUntil) {
+      ctx.addIssue({
+        path: ["validUntil"],
+        code: z.ZodIssueCode.custom,
+        message: "End date must be after start date",
+      });
     }
 
     // 🆕 NEW: Scope validation
