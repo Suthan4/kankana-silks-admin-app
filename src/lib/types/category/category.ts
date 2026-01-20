@@ -3,7 +3,7 @@ export interface Category {
   name: string;
   slug: string;
   description?: string;
-  parentId?: string;
+  parentId?: string | null;
   parent?: Category;
   children?: Category[];
   metaTitle?: string;
@@ -11,6 +11,9 @@ export interface Category {
   image?: string;
   isActive: boolean;
   order: number;
+  hasVideoConsultation?: boolean;
+  videoPurchasingEnabled?: boolean;
+  videoConsultationNote?: string;
   createdAt: string;
   updatedAt: string;
   _count?: {
@@ -21,12 +24,15 @@ export interface Category {
 export interface CreateCategoryData {
   name: string;
   description?: string;
-  parentId?: string;
+  parentId?: string | null;   // ✅ allow null
   metaTitle?: string;
   metaDesc?: string;
   image?: string;
   isActive?: boolean;
   order?: number;
+  hasVideoConsultation?: boolean;
+  videoPurchasingEnabled?: boolean;
+  videoConsultationNote?: string;
 }
 
 export interface UpdateCategoryData {

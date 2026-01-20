@@ -4,7 +4,7 @@ import z from "zod";
 const StockSchema = z.object({
   warehouseId: z.string().min(1, "Warehouse is required"),
   quantity: z.coerce.number().int().min(0, "Quantity must be positive"),
-  lowStockThreshold: z.coerce.number().int().min(0).optional().default(10),
+  lowStockThreshold: z.coerce.number().int().min(0).default(5),
 });
 
 const SpecificationSchema = z.object({
@@ -135,6 +135,10 @@ export const createProductSchema = z
     // Stock Configuration
     variants: z.array(VariantSchema).optional(),
     stock: StockSchema.optional(),
+    allowOutOfStockOrders: z.boolean().optional().default(false),
+    hasVideoConsultation: z.boolean().optional().default(false),
+    videoPurchasingEnabled: z.boolean().optional().default(false),
+    videoConsultationNote: z.string().optional(),
   })
   .refine(
     (data) => {

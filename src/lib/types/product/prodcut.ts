@@ -115,6 +115,11 @@ export interface Product {
   artisanAbout?: string;
   artisanLocation?: string;
 
+  allowOutOfStockOrders?: boolean;
+  hasVideoConsultation?: boolean;
+  videoPurchasingEnabled?: boolean;
+  videoConsultationNote?: string;
+
   // Shipping & Dimensions
   weight?: number;
   length?: number;
@@ -159,6 +164,11 @@ export interface CreateProductData {
   artisanName?: string;
   artisanAbout?: string;
   artisanLocation?: string;
+
+  allowOutOfStockOrders?: boolean;
+  hasVideoConsultation?: boolean;
+  videoPurchasingEnabled?: boolean;
+  videoConsultationNote?: string;
 
   // Shipping Dimensions (Required)
   weight: number;

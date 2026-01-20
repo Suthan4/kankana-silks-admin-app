@@ -266,7 +266,7 @@ const CategoriesPage: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(
-        error?.response?.data?.message || "Failed to create category"
+        error?.response?.data?.message || "Failed to create category",
       );
     },
   });
@@ -282,11 +282,12 @@ const CategoriesPage: React.FC = () => {
       reset();
       setImagePreview("");
       setImageFile(null);
+      setShowCreateModal(false);
       toast.success("Category updated successfully!");
     },
     onError: (error: any) => {
       toast.error(
-        error?.response?.data?.message || "Failed to update category"
+        error?.response?.data?.message || "Failed to update category",
       );
     },
   });
@@ -301,7 +302,7 @@ const CategoriesPage: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(
-        error?.response?.data?.message || "Failed to delete category"
+        error?.response?.data?.message || "Failed to delete category",
       );
     },
   });
@@ -355,7 +356,7 @@ const CategoriesPage: React.FC = () => {
         `Image size must be less than 10MB. Your file is ${(
           file.size /
           (1024 * 1024)
-        ).toFixed(2)}MB`
+        ).toFixed(2)}MB`,
       );
       return;
     }
@@ -415,6 +416,13 @@ const CategoriesPage: React.FC = () => {
 
       const submitData = {
         ...data,
+        parentId: editingCategory
+          ? data.parentId
+            ? data.parentId
+            : null
+          : data?.parentId
+            ? data.parentId
+            : "",
         isActive: data.isActive ?? true,
         order: data.order ?? 0,
         image: imageUrl,
@@ -437,7 +445,7 @@ const CategoriesPage: React.FC = () => {
     setEditingCategory(category);
     setValue("name", category.name);
     setValue("description", category.description || "");
-    setValue("parentId", category.parentId || "");
+    setValue("parentId", category.parentId ?? null);
     setValue("metaTitle", category.metaTitle || "");
     setValue("metaDesc", category.metaDesc || "");
     setValue("image", category.image || "");
@@ -914,6 +922,49 @@ const CategoriesPage: React.FC = () => {
                         className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">Active</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Video Consultation Features */}
+                <div className="border-t border-gray-200 pt-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                    Video Features
+                  </h4>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center">
+                      <input
+                        {...register("hasVideoConsultation")}
+                        type="checkbox"
+                        className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">
+                        Enable Video Consultation
+                      </label>
+                    </div>
+
+                    <div className="flex items-center">
+                      <input
+                        {...register("videoPurchasingEnabled")}
+                        type="checkbox"
+                        className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">
+                        Enable Video Purchasing
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Video Consultation Note
+                      </label>
+                      <textarea
+                        {...register("videoConsultationNote")}
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Add instructions for video consultation..."
+                      />
                     </div>
                   </div>
                 </div>

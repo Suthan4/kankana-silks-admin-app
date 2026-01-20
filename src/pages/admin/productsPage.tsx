@@ -314,8 +314,8 @@ const StepIndicator: React.FC<{
                     isCompleted
                       ? "bg-green-500 text-white"
                       : isActive
-                      ? "bg-blue-600 text-white ring-4 ring-blue-100"
-                      : "bg-gray-200 text-gray-500"
+                        ? "bg-blue-600 text-white ring-4 ring-blue-100"
+                        : "bg-gray-200 text-gray-500"
                   }`}
                 >
                   {isCompleted ? <CheckCircle className="h-5 w-5" /> : stepNum}
@@ -533,7 +533,7 @@ const ViewProductModal: React.FC<{
                     {Math.round(
                       ((product.basePrice - product.sellingPrice) /
                         product.basePrice) *
-                        100
+                        100,
                     )}
                     % off)
                   </p>
@@ -620,7 +620,7 @@ const ViewProductModal: React.FC<{
                             .join(" / ") || `Variant ${idx + 1}`;
 
                         const variantStock = product.stock?.find(
-                          (s) => s.variantId === variant.id
+                          (s) => s.variantId === variant.id,
                         );
 
                         return (
@@ -718,7 +718,7 @@ const ProductsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterActive, setFilterActive] = useState<boolean | undefined>(
-    undefined
+    undefined,
   );
   const [filterHasVariants, setFilterHasVariants] = useState<
     boolean | undefined
@@ -727,7 +727,7 @@ const ProductsPage: React.FC = () => {
   // Multi-step form state
   const [currentStep, setCurrentStep] = useState(1);
   const [productType, setProductType] = useState<"simple" | "variable">(
-    "simple"
+    "simple",
   );
   const [mediaPreviews, setMediaPreviews] = useState<MediaPreviewItem[]>([]);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
@@ -751,7 +751,7 @@ const ProductsPage: React.FC = () => {
     setVariantAttributeFields((prev) => ({
       ...prev,
       [variantIndex]: (prev?.[variantIndex] ?? []).filter(
-        (_, i) => i !== attrIndex
+        (_, i) => i !== attrIndex,
       ),
     }));
   };
@@ -760,18 +760,18 @@ const ProductsPage: React.FC = () => {
     variantIndex: number,
     attrIndex: number,
     field: "key" | "value",
-    value: string
+    value: string,
   ) => {
     setVariantAttributeFields((prev) => ({
       ...prev,
       [variantIndex]: (prev?.[variantIndex] ?? []).map((attr, i) =>
-        i === attrIndex ? { ...attr, [field]: value } : attr
+        i === attrIndex ? { ...attr, [field]: value } : attr,
       ),
     }));
   };
   const handleVariantMediaUpload = (
     variantIndex: number,
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const files = e.target.files;
     if (!files) return;
@@ -900,7 +900,7 @@ const ProductsPage: React.FC = () => {
     formState: { errors },
   } = useForm<CreateProductFormData>({
     resolver: zodResolver(
-      createProductSchema
+      createProductSchema,
     ) as Resolver<CreateProductFormData>,
     defaultValues: {
       specifications: [],
@@ -1008,7 +1008,7 @@ const ProductsPage: React.FC = () => {
       (fullProduct.specifications ?? []).map((s) => ({
         key: s.key ?? "",
         value: s.value ?? "",
-      }))
+      })),
     );
 
     // ✅ media (all)
@@ -1023,7 +1023,7 @@ const ProductsPage: React.FC = () => {
         order: idx,
         isActive: true,
         altText: m.altText ?? "",
-      }))
+      })),
     );
 
     setMediaPreviews(
@@ -1034,7 +1034,7 @@ const ProductsPage: React.FC = () => {
         id: `existing-product-${m.id ?? idx}`,
         type: m.type,
         thumbnailUrl: (m as any).thumbnailUrl,
-      }))
+      })),
     );
 
     // ✅ variants
@@ -1042,7 +1042,7 @@ const ProductsPage: React.FC = () => {
       replaceVariants(
         (fullProduct.variants ?? []).map((v) => {
           const variantStock = fullProduct.stock?.find(
-            (s) => s.variantId === v.id
+            (s) => s.variantId === v.id,
           );
 
           return {
@@ -1065,7 +1065,7 @@ const ProductsPage: React.FC = () => {
               lowStockThreshold: variantStock?.lowStockThreshold ?? 10,
             },
           };
-        })
+        }),
       );
 
       // ✅ variant media previews
@@ -1189,7 +1189,7 @@ const ProductsPage: React.FC = () => {
         error?.response?.data?.message || "Failed to upload product media",
         {
           id: uploadToast,
-        }
+        },
       );
       throw error;
     } finally {
@@ -1273,7 +1273,7 @@ const ProductsPage: React.FC = () => {
         error?.response?.data?.message || "Failed to upload variant media",
         {
           id: uploadToast,
-        }
+        },
       );
       throw error;
     } finally {
@@ -1290,7 +1290,7 @@ const ProductsPage: React.FC = () => {
 
       // ✅ 2) Upload Variant Media (only if exists)
       const hasAnyVariantMedia = Object.values(variantMediaPreviews ?? {}).some(
-        (arr) => (arr ?? []).length > 0
+        (arr) => (arr ?? []).length > 0,
       );
 
       const variantMediaMap = hasAnyVariantMedia
@@ -1306,7 +1306,7 @@ const ProductsPage: React.FC = () => {
             }
             return acc;
           },
-          {}
+          {},
         );
 
         return {
@@ -1380,11 +1380,156 @@ const ProductsPage: React.FC = () => {
     setEditingProduct(null);
   };
 
-  const nextStep = () => {
-    if (currentStep === 1 && !productType) {
-      toast.error("Please select a product type");
-      return;
+  // ✅ NEW: Step validation function
+  const validateStep = async (step: number): Promise<boolean> => {
+    const formValues = watch();
+
+    switch (step) {
+      case 1: // Product Type
+        if (!productType) {
+          toast.error("Please select a product type");
+          return false;
+        }
+        return true;
+
+      case 2: // Basic Info
+        const basicErrors: string[] = [];
+
+        if (!formValues.name?.trim())
+          basicErrors.push("Product name is required");
+        if (!formValues.description?.trim())
+          basicErrors.push("Description is required");
+        if (!formValues.categoryId) basicErrors.push("Category is required");
+        if (!formValues.sku?.trim()) basicErrors.push("SKU is required");
+        if (!formValues.basePrice || Number(formValues.basePrice) <= 0)
+          basicErrors.push("Base price must be greater than 0");
+        if (!formValues.sellingPrice || Number(formValues.sellingPrice) <= 0)
+          basicErrors.push("Selling price must be greater than 0");
+        if (Number(formValues.sellingPrice) > Number(formValues.basePrice)) {
+          basicErrors.push("Selling price cannot be greater than base price");
+        }
+
+        const invalidSpecIndex = (formValues.specifications || []).findIndex(
+          (s: any) => {
+            const hasKey = !!s?.key?.trim();
+            const hasValue = !!s?.value?.trim();
+
+            // ✅ block if either one missing OR both missing
+            return !hasKey || !hasValue;
+          },
+        );
+
+        if (invalidSpecIndex !== -1) {
+          toast.error(
+            `Specification row ${invalidSpecIndex + 1}: Please fill both Title and Value (or remove the row)`,
+          );
+          return false;
+        }
+
+
+        if (basicErrors.length > 0) {
+          toast.error(basicErrors[0]);
+          return false;
+        }
+        return true;
+
+      case 3: // Media
+        if (mediaPreviews.length === 0) {
+          toast.error("Please add at least one product image or video");
+          return false;
+        }
+        return true;
+
+      case 4: // Variants or Stock
+        if (productType === "variable") {
+          // Validate variants
+          if (!formValues.variants || formValues.variants.length === 0) {
+            toast.error("Please add at least one variant");
+            return false;
+          }
+
+          for (let i = 0; i < formValues.variants.length; i++) {
+            const variant = formValues.variants[i];
+            const variantLabel =
+              [variant.size, variant.color, variant.fabric]
+                .filter(Boolean)
+                .join(" / ") || `Variant ${i + 1}`;
+
+            if (!variant.size && !variant.color && !variant.fabric) {
+              toast.error(
+                `${variantLabel}: Please provide at least one attribute (size, color, or fabric)`,
+              );
+              return false;
+            }
+
+            if (!variant.price || Number(variant.price) <= 0) {
+              toast.error(
+                `${variantLabel}: Price is required and must be greater than 0`,
+              );
+              return false;
+            }
+
+            if (!variant.stock?.warehouseId) {
+              toast.error(`${variantLabel}: Warehouse is required`);
+              return false;
+            }
+
+            if (
+              variant.stock?.quantity === undefined ||
+              Number(variant.stock.quantity) < 0
+            ) {
+              toast.error(`${variantLabel}: Quantity must be 0 or greater`);
+              return false;
+            }
+
+            // ✅ ADD THIS (dimensions validation)
+            if (!variant.weight || Number(variant.weight) <= 0) {
+              toast.error(`${variantLabel}: Weight must be greater than 0`);
+              return false;
+            }
+
+            if (!variant.length || Number(variant.length) <= 0) {
+              toast.error(`${variantLabel}: Length must be greater than 0`);
+              return false;
+            }
+
+            if (!variant.breadth || Number(variant.breadth) <= 0) {
+              toast.error(`${variantLabel}: Breadth must be greater than 0`);
+              return false;
+            }
+
+            if (!variant.height || Number(variant.height) <= 0) {
+              toast.error(`${variantLabel}: Height must be greater than 0`);
+              return false;
+            }
+          }
+        } else {
+          // Validate simple product stock
+          if (!formValues.stock?.warehouseId) {
+            toast.error("Please select a warehouse");
+            return false;
+          }
+
+          if (
+            formValues.stock?.quantity === undefined ||
+            Number(formValues.stock.quantity) < 0
+          ) {
+            toast.error("Quantity must be 0 or greater");
+            return false;
+          }
+        }
+        return true;
+
+      default:
+        return true;
     }
+  };
+
+  // ✅ UPDATED: Next step with validation
+  const nextStep = async () => {
+    const isValid = await validateStep(currentStep);
+    if (!isValid) return;
+
     setCurrentStep((prev) => Math.min(prev + 1, 5));
   };
 
@@ -1406,6 +1551,7 @@ const ProductsPage: React.FC = () => {
     productType === "variable" ? "Variants" : "Stock",
     "Review",
   ];
+  console.log("errors", errors);
 
   return (
     <MainLayout>
@@ -1509,13 +1655,13 @@ const ProductsPage: React.FC = () => {
                 filterActive === undefined
                   ? "all"
                   : filterActive
-                  ? "active"
-                  : "inactive"
+                    ? "active"
+                    : "inactive"
               }
               onChange={(e) => {
                 const value = e.target.value;
                 setFilterActive(
-                  value === "all" ? undefined : value === "active"
+                  value === "all" ? undefined : value === "active",
                 );
               }}
               className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -1530,13 +1676,13 @@ const ProductsPage: React.FC = () => {
                 filterHasVariants === undefined
                   ? "all"
                   : filterHasVariants
-                  ? "variable"
-                  : "simple"
+                    ? "variable"
+                    : "simple"
               }
               onChange={(e) => {
                 const value = e.target.value;
                 setFilterHasVariants(
-                  value === "all" ? undefined : value === "variable"
+                  value === "all" ? undefined : value === "variable",
                 );
               }}
               className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -1737,8 +1883,8 @@ const ProductsPage: React.FC = () => {
                             {isUploadingMedia
                               ? "Uploading Media..."
                               : editingProduct
-                              ? "Updating..."
-                              : "Creating..."}
+                                ? "Updating..."
+                                : "Creating..."}
                           </>
                         ) : (
                           <>

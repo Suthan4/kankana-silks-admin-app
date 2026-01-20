@@ -58,6 +58,7 @@ import { ImageUpload } from "@/components/ui/imageUpload";
 import { SectionTypeSelector } from "@/components/ui/Sectiontypeselector";
 import { s3Api } from "@/lib/api/s3.api";
 import toast from "react-hot-toast";
+import { CategoryProductSelector } from "@/components/Categoryproductselector";
 
 // Section Type Configuration
 const getSectionConfig = (type: SectionType) => {
@@ -500,7 +501,7 @@ export const HomeSectionsPage: React.FC = () => {
       section.categories?.map((c) => c.id.toString()) || []
     );
 
-    setValue("customTypeName", section.customTypeName || "");
+    setValue("customTypeName", section.type === "CUSTOM" ? section.customTypeName || "": undefined);
     setBackgroundColor(section.backgroundColor || "#ffffff");
     setTextColor(section.textColor || "#000000");
     setLayout(section.layout || "grid");
@@ -1329,55 +1330,43 @@ export const HomeSectionsPage: React.FC = () => {
                 </div>
 
                 {/* 5. CONTENT SELECTION */}
-                <div className="space-y-4">
+                <div className="space-y-4 bg-purple-50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <Package className="h-5 w-5" />
                     Content Selection
                   </h3>
 
-                  {/* Products */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Products (Optional)
-                    </label>
-                    <select
-                      {...register("productIds")}
-                      multiple
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                      size={5}
-                    >
-                      {productsData?.products?.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} - ₹{product.sellingPrice}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Hold Ctrl/Cmd to select multiple
-                    </p>
-                  </div>
-
-                  {/* Categories */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Categories (Optional)
-                    </label>
-                    <select
-                      {...register("categoryIds")}
-                      multiple
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                      size={5}
-                    >
-                      {categoriesData?.categories?.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Hold Ctrl/Cmd to select multiple
-                    </p>
-                  </div>
+                  <CategoryProductSelector
+                    products={
+                      productsData?.products?.map((p) => ({
+                        id: p.id.toString(),
+                        name: p.name,
+                        sellingPrice: p.sellingPrice,
+                        media: p.media,
+                        category: p.category
+                          ? {
+                              id: p.category.id.toString(),
+                              name: p.category.name,
+                            }
+                          : undefined,
+                      })) || []
+                    }
+                    categories={
+                      categoriesData?.categories?.map((c) => ({
+                        id: c.id.toString(),
+                        name: c.name,
+                        children: c.children?.map((child) => ({
+                          id: child.id.toString(),
+                          name: child.name,
+                        })),
+                      })) || []
+                    }
+                    selectedProductIds={watch("productIds") || []}
+                    selectedCategoryIds={watch("categoryIds") || []}
+                    onProductsChange={(ids) => setValue("productIds", ids)}
+                    onCategoriesChange={(ids) => setValue("categoryIds", ids)}
+                    isLoading={false}
+                  />
                 </div>
 
                 {/* 6. DISPLAY SETTINGS */}

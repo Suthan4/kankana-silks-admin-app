@@ -19,10 +19,11 @@ import { HomeSectionsPage } from "./pages/admin/homeSectionsPage";
 import { Toaster } from "react-hot-toast";
 import BannersPage from "./pages/admin/bannerPage";
 import ConsultationsPage from "./pages/admin/consultationsPage";
-import { CouponsPage } from "./pages/admin/couponPage";
 import WarehouseStockPage from "./pages/admin/warehouseStockPage";
 import UserManagementPage from "./pages/admin/userManagement";
 import SuperAdminDashboard from "./pages/superAdmin/superAdminDashboard";
+import CouponsPage from "./pages/admin/couponPage";
+import ProductRequestsPage from "./pages/admin/productRequest";
 
 
 // Admin Pages
@@ -184,6 +185,18 @@ function App() {
               }
             />
             <Route
+              path="/admin/product-request"
+              element={
+                <ProtectedRoute
+                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+                  requiredModule="product-request"
+                  requiredPermission="canRead"
+                >
+                  <ProductRequestsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/coupons"
               element={
                 <ProtectedRoute
@@ -243,7 +256,6 @@ function App() {
                 </ProtectedRoute>
               }
             />
-
             {/* Super Admin Routes */}
             <Route
               path="/admin/dashboard"

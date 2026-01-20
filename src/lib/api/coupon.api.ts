@@ -6,19 +6,37 @@ import type {
   ApplyCouponData,
   ApplyCouponResult,
   QueryCouponParams,
+  ValidateCouponData,
+  ValidateCouponResult,
+  GetApplicableCouponsData,
 } from "../types/coupon/coupon";
 
-// Coupon API
+// Coupon API - ENHANCED
 export const couponApi = {
-  // Public endpoints
+  // 🆕 NEW: Public endpoints for validation
   getActiveCoupons: async (): Promise<ApiResponse<Coupon[]>> => {
     return apiCall("GET", "/coupons/active");
   },
 
+  // 🆕 NEW: Validate coupon before applying
+  validateCoupon: async (
+    data: ValidateCouponData
+  ): Promise<ApiResponse<ValidateCouponResult>> => {
+    return apiCall("POST", "/coupons/validate", data);
+  },
+
+  // Apply coupon at checkout
   applyCoupon: async (
     data: ApplyCouponData
   ): Promise<ApiResponse<ApplyCouponResult>> => {
     return apiCall("POST", "/coupons/apply", data);
+  },
+
+  // 🆕 NEW: Get applicable coupons for current cart
+  getApplicableCoupons: async (
+    data: GetApplicableCouponsData
+  ): Promise<ApiResponse<Coupon[]>> => {
+    return apiCall("POST", "/coupons/applicable", data);
   },
 
   // Admin endpoints

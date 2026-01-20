@@ -20,6 +20,7 @@ import {
   MoreHorizontal,
   Video,
   TicketPercent,
+  ClipboardList,
 } from "lucide-react";
 
 interface NavItem {
@@ -140,6 +141,13 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         icon: <Video className="h-5 w-5" />,
         roles: ["ADMIN", "SUPER_ADMIN"],
         module: "consultations",
+      },
+      {
+        name: "Product Request",
+        path: "/admin/product-request",
+        icon: <ClipboardList  className="h-5 w-5" />,
+        roles: ["ADMIN", "SUPER_ADMIN"],
+        module: "product-request",
       },
       {
         name: "Shipments",
@@ -329,7 +337,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       <footer className="bg-white border-t border-gray-200 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-sm text-gray-500">
-            © 2024 Admin App. All rights reserved.
+            © 2026 Kankanasilks Admin App. All rights reserved.
           </p>
         </div>
       </footer>

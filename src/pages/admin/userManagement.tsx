@@ -34,7 +34,9 @@ const UserManagementPage = () => {
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-
+ useOnClickOutside(menuRef, () => {
+  setOpenMenuId(null);
+ });
   const {
     register,
     handleSubmit,
@@ -312,10 +314,8 @@ const UserManagementPage = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredUsers?.map((user: User) => {
-                    useOnClickOutside(menuRef, () => {
-                      if (openMenuId === user.id) setOpenMenuId(null);
-                    });
+                  {Array.isArray(filteredUsers)&&filteredUsers?.map((user: User) => {
+                   
                     return (
                       <tr key={user.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4">
@@ -363,7 +363,7 @@ const UserManagementPage = () => {
                           {new Date(user.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div ref={menuRef} className="relative inline-block">
+                          <div ref={openMenuId === user.id ? menuRef : null} className="relative inline-block">
                             <button
                               onClick={() =>
                                 setOpenMenuId(
