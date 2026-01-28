@@ -34,7 +34,13 @@ import {
 import type { Category } from "@/lib/types/category/category";
 import type { CreateProductFormData } from "@/lib/types/product/schema";
 import type { FieldErrors, UseFormRegister } from "react-hook-form";
+import {
+  validateColorWithSuggestions,
+  getColorHex,
+  isColorAttribute,
+} from "@/lib/utils/colorValidation";
 import { s3Api } from "@/lib/api/s3.api";
+
 
 interface MediaPreviewItem {
   file: File | null;
@@ -71,6 +77,7 @@ interface ProductFormStepsProps {
   setMediaPreviews: React.Dispatch<React.SetStateAction<MediaPreviewItem[]>>;
   handleMediaUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   watch: any;
+  setValue: any;
   // 🆕 NEW: Variant-specific features
   variantMediaPreviews: Record<number, MediaPreviewItem[]>;
   setVariantMediaPreviews: React.Dispatch<
@@ -81,6 +88,7 @@ interface ProductFormStepsProps {
     e: React.ChangeEvent<HTMLInputElement>,
   ) => void;
   variantAttributeFields: Record<number, AttributeField[]>;
+  variantAttributeErrors?: Record<number, Record<number, string>>; // ✅ ADD THIS
   appendVariantAttribute: (variantIndex: number) => void;
   removeVariantAttribute: (variantIndex: number, attrIndex: number) => void;
   updateVariantAttribute: (
@@ -139,10 +147,12 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
   setMediaPreviews,
   handleMediaUpload,
   watch,
+  setValue,
   variantMediaPreviews,
   setVariantMediaPreviews,
   handleVariantMediaUpload,
   variantAttributeFields,
+  variantAttributeErrors,
   appendVariantAttribute,
   removeVariantAttribute,
   updateVariantAttribute,
@@ -1232,51 +1242,236 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                       0 ? (
                         <div className="space-y-3">
                           {(variantAttributeFields?.[variantIndex] ?? [])?.map(
-                            (attr, attrIndex) => (
-                              <div
-                                key={attrIndex}
-                                className="flex gap-3 bg-white p-3 rounded-lg border border-indigo-200"
-                              >
-                                <input
-                                  value={attr.key}
-                                  onChange={(e) =>
-                                    updateVariantAttribute(
-                                      variantIndex,
-                                      attrIndex,
-                                      "key",
-                                      e.target.value,
-                                    )
-                                  }
-                                  placeholder="Attribute (e.g., Material)"
-                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
-                                <input
-                                  value={attr.value}
-                                  onChange={(e) =>
-                                    updateVariantAttribute(
-                                      variantIndex,
-                                      attrIndex,
-                                      "value",
-                                      e.target.value,
-                                    )
-                                  }
-                                  placeholder="Value (e.g., Silk)"
-                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    removeVariantAttribute(
-                                      variantIndex,
-                                      attrIndex,
-                                    )
-                                  }
-                                  className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            (attr, attrIndex) => {
+                              const isColorField = isColorAttribute(attr.key);
+                              const hasError =
+                                variantAttributeErrors?.[variantIndex]?.[
+                                  attrIndex
+                                ];
+
+                              // Dynamic validation
+                              const colorValidation =
+                                isColorField && attr.value
+                                  ? validateColorWithSuggestions(attr.value)
+                                  : null;
+
+                              const isValidColorValue =
+                                colorValidation?.isValid ?? true;
+                              const colorHex = colorValidation?.hex;
+                              const suggestions =
+                                colorValidation?.suggestions || [];
+
+                              return (
+                                <div
+                                  key={attrIndex}
+                                  className="bg-white p-3 rounded-lg border border-indigo-200"
                                 >
-                                  <X className="h-5 w-5" />
-                                </button>
-                              </div>
-                            ),
+                                  <div className="flex gap-3 mb-2">
+                                    {/* Attribute Key Input */}
+                                    <div className="flex-1 relative">
+                                      <input
+                                        value={attr.key}
+                                        onChange={(e) =>
+                                          updateVariantAttribute(
+                                            variantIndex,
+                                            attrIndex,
+                                            "key",
+                                            e.target.value,
+                                          )
+                                        }
+                                        placeholder="Attribute (e.g., Material, Color)"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                      />
+                                      {isColorField && (
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                          <Palette className="h-4 w-4 text-indigo-500" />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Attribute Value Input with Color Preview */}
+                                    <div className="flex-1 relative">
+                                      <div className="flex gap-2">
+                                        <input
+                                          value={attr.value}
+                                          onChange={(e) =>
+                                            updateVariantAttribute(
+                                              variantIndex,
+                                              attrIndex,
+                                              "value",
+                                              e.target.value,
+                                            )
+                                          }
+                                          placeholder={
+                                            isColorField
+                                              ? "Any CSS color (red, #FF0000, rgb(255,0,0))"
+                                              : "Value (e.g., Silk)"
+                                          }
+                                          className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                                            hasError
+                                              ? "border-red-500 focus:ring-red-500"
+                                              : isColorField &&
+                                                  attr.value &&
+                                                  isValidColorValue
+                                                ? "border-green-500 focus:ring-green-500"
+                                                : "border-gray-300 focus:ring-indigo-500"
+                                          }`}
+                                        />
+
+                                        {/* Dynamic Color Preview Swatch */}
+                                        {isColorField &&
+                                          isValidColorValue &&
+                                          attr.value &&
+                                          colorHex && (
+                                            <div className="relative group">
+                                              <div
+                                                className="w-10 h-10 rounded-lg border-2 border-gray-300 shadow-sm flex-shrink-0 cursor-pointer transition-transform hover:scale-110"
+                                                style={{
+                                                  backgroundColor: colorHex,
+                                                }}
+                                                title={`${attr.value} (${colorHex})`}
+                                              />
+                                              {/* Tooltip */}
+                                              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                                                {colorHex}
+                                              </div>
+                                            </div>
+                                          )}
+                                      </div>
+
+                                      {/* Smart Suggestions Dropdown */}
+                                      {isColorField &&
+                                        suggestions.length > 0 &&
+                                        !isValidColorValue &&
+                                        attr.value && (
+                                          <div className="absolute z-20 w-full mt-1 bg-white border border-indigo-300 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                            <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-200 sticky top-0">
+                                              <p className="text-xs font-semibold text-indigo-900 flex items-center gap-1">
+                                                <Info className="h-3 w-3" />
+                                                Did you mean one of these?
+                                              </p>
+                                            </div>
+                                            {suggestions.map((suggestion) => {
+                                              const suggestedHex =
+                                                getColorHex(suggestion);
+                                              return (
+                                                <button
+                                                  key={suggestion}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    updateVariantAttribute(
+                                                      variantIndex,
+                                                      attrIndex,
+                                                      "value",
+                                                      suggestion,
+                                                    );
+                                                  }}
+                                                  className="w-full px-3 py-2.5 text-left hover:bg-indigo-50 flex items-center gap-3 transition-colors border-b border-gray-100 last:border-0"
+                                                >
+                                                  <div
+                                                    className="w-8 h-8 rounded-lg border-2 border-gray-300 shadow-sm flex-shrink-0"
+                                                    style={{
+                                                      backgroundColor:
+                                                        suggestedHex ||
+                                                        "#CCCCCC",
+                                                    }}
+                                                  />
+                                                  <div className="flex-1">
+                                                    <span className="text-sm font-medium capitalize block">
+                                                      {suggestion}
+                                                    </span>
+                                                    {suggestedHex && (
+                                                      <span className="text-xs text-gray-500 font-mono">
+                                                        {suggestedHex}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        removeVariantAttribute(
+                                          variantIndex,
+                                          attrIndex,
+                                        )
+                                      }
+                                      className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                    >
+                                      <X className="h-5 w-5" />
+                                    </button>
+                                  </div>
+
+                                  {/* Error Message with Smart Suggestions */}
+                                  {hasError && (
+                                    <div className="flex items-start gap-2 text-sm text-red-600 mt-2 bg-red-50 p-2 rounded-lg border border-red-200">
+                                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                      <span>{hasError}</span>
+                                    </div>
+                                  )}
+
+                                  {/* Valid Color Success Message with Hex */}
+                                  {isColorField &&
+                                    isValidColorValue &&
+                                    attr.value &&
+                                    !hasError &&
+                                    colorHex && (
+                                      <div className="flex items-center justify-between text-sm text-green-600 mt-2 bg-green-50 p-2 rounded-lg border border-green-200">
+                                        <div className="flex items-center gap-2">
+                                          <CheckCircle className="h-4 w-4" />
+                                          <span className="font-medium">
+                                            Valid color: {attr.value}
+                                          </span>
+                                        </div>
+                                        <span className="text-xs font-mono text-green-700 bg-white px-2 py-0.5 rounded border border-green-300">
+                                          {colorHex}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                  {/* Dynamic Helper Text */}
+                                  {isColorField && !attr.value && (
+                                    <div className="flex items-start gap-2 text-xs text-gray-500 mt-2 bg-gray-50 p-2 rounded-lg">
+                                      <Info className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                                      <div>
+                                        <p className="font-medium mb-1">
+                                          Accepts any CSS color format:
+                                        </p>
+                                        <ul className="list-disc list-inside space-y-0.5 text-gray-600">
+                                          <li>
+                                            Color names:{" "}
+                                            <code className="bg-white px-1 rounded">
+                                              red
+                                            </code>
+                                            ,{" "}
+                                            <code className="bg-white px-1 rounded">
+                                              lightblue
+                                            </code>
+                                          </li>
+                                          <li>
+                                            Hex codes:{" "}
+                                            <code className="bg-white px-1 rounded">
+                                              #FF0000
+                                            </code>
+                                          </li>
+                                          <li>
+                                            RGB:{" "}
+                                            <code className="bg-white px-1 rounded">
+                                              rgb(255, 0, 0)
+                                            </code>
+                                          </li>
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            },
                           )}
                         </div>
                       ) : (
@@ -1292,7 +1487,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                       )}
                     </div>
 
-                    {/* Legacy Fields (Size, Color, Fabric) */}
+                    {/* Legacy Fields (Size, Color, Fabric) - Enhanced with Color Validation */}
                     <div className="mb-6">
                       <div className="flex items-center gap-2 mb-3">
                         <Palette className="h-5 w-5 text-purple-600" />
@@ -1304,6 +1499,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                         </span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Size Field */}
                         <div>
                           <label className="block text-xs font-semibold text-gray-700 mb-2">
                             Size
@@ -1317,19 +1513,154 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                             placeholder="e.g., M, L, XL"
                           />
                         </div>
+
+                        {/* Color Field - Enhanced with Validation */}
                         <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-2">
+                          <label className="block text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
                             Color
+                            <Palette className="h-3 w-3 text-purple-500" />
                           </label>
-                          <input
-                            {...register(
-                              `variants.${variantIndex}.color` as const,
-                            )}
-                            type="text"
-                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                            placeholder="e.g., Red, Blue"
-                          />
+                          <div className="relative">
+                            {(() => {
+                              const colorValue = variant?.color || "";
+                              const colorValidation = colorValue
+                                ? validateColorWithSuggestions(colorValue)
+                                : null;
+                              const isValidColor =
+                                colorValidation?.isValid ?? true;
+                              const colorHex = colorValidation?.hex;
+                              const colorSuggestions =
+                                colorValidation?.suggestions || [];
+
+                              return (
+                                <>
+                                  <div className="flex gap-2">
+                                    <input
+                                      {...register(
+                                        `variants.${variantIndex}.color` as const,
+                                      )}
+                                      type="text"
+                                      className={`flex-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                                        colorValue && !isValidColor
+                                          ? "border-red-500 focus:ring-red-500"
+                                          : colorValue && isValidColor
+                                            ? "border-green-500 focus:ring-green-500"
+                                            : "border-gray-300 focus:ring-purple-500"
+                                      }`}
+                                      placeholder="Any CSS color (red, #FF0000)"
+                                    />
+
+                                    {/* Color Preview Swatch */}
+                                    {colorValue && isValidColor && colorHex && (
+                                      <div className="relative group">
+                                        <div
+                                          className="w-10 h-10 rounded-lg border-2 border-gray-300 shadow-sm flex-shrink-0 cursor-pointer transition-transform hover:scale-110"
+                                          style={{
+                                            backgroundColor: colorHex,
+                                          }}
+                                          title={`${colorValue} (${colorHex})`}
+                                        />
+                                        {/* Tooltip */}
+                                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                                          {colorHex}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Color Suggestions Dropdown */}
+                                  {colorValue &&
+                                    colorSuggestions.length > 0 &&
+                                    !isValidColor && (
+                                      <div className="absolute z-20 w-full mt-1 bg-white border border-purple-300 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                        <div className="px-3 py-2 bg-purple-50 border-b border-purple-200 sticky top-0">
+                                          <p className="text-xs font-semibold text-purple-900 flex items-center gap-1">
+                                            <Info className="h-3 w-3" />
+                                            Did you mean one of these?
+                                          </p>
+                                        </div>
+                                        {colorSuggestions.map((suggestion) => {
+                                          const suggestedHex =
+                                            getColorHex(suggestion);
+                                          return (
+                                            <button
+                                              key={suggestion}
+                                              type="button"
+                                              onClick={() => {
+                                                setValue(
+                                                  `variants.${variantIndex}.color` as const,
+                                                  suggestion,
+                                                  {
+                                                    shouldDirty: true,
+                                                    shouldValidate: true,
+                                                  },
+                                                );
+                                              }}
+                                              className="w-full px-3 py-2.5 text-left hover:bg-purple-50 flex items-center gap-3 transition-colors border-b border-gray-100 last:border-0"
+                                            >
+                                              <div
+                                                className="w-8 h-8 rounded-lg border-2 border-gray-300 shadow-sm flex-shrink-0"
+                                                style={{
+                                                  backgroundColor:
+                                                    suggestedHex || "#CCCCCC",
+                                                }}
+                                              />
+                                              <div className="flex-1">
+                                                <span className="text-sm font-medium capitalize block">
+                                                  {suggestion}
+                                                </span>
+                                                {suggestedHex && (
+                                                  <span className="text-xs text-gray-500 font-mono">
+                                                    {suggestedHex}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                  {/* Validation Messages */}
+                                  {colorValue && !isValidColor && (
+                                    <div className="flex items-center gap-1 text-xs text-red-600 mt-1">
+                                      <AlertCircle className="h-3 w-3" />
+                                      <span>
+                                        Invalid color
+                                        {colorSuggestions.length > 0 && (
+                                          <> - see suggestions below</>
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {colorValue && isValidColor && colorHex && (
+                                    <div className="flex items-center justify-between text-xs text-green-600 mt-1">
+                                      <div className="flex items-center gap-1">
+                                        <CheckCircle className="h-3 w-3" />
+                                        <span className="font-medium">
+                                          Valid: {colorValue}
+                                        </span>
+                                      </div>
+                                      <span className="font-mono text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
+                                        {colorHex}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {!colorValue && (
+                                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                                      <Info className="h-3 w-3" />
+                                      e.g., Red, Blue, #FF0000
+                                    </p>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
                         </div>
+
+                        {/* Fabric Field */}
                         <div>
                           <label className="block text-xs font-semibold text-gray-700 mb-2">
                             Fabric
@@ -2360,4 +2691,4 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
   return null;
 };
 
-export default ProductFormSteps;
+export default ProductFormSteps

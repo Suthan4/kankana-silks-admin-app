@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
 import {
   UserPlus,
   Users,
@@ -16,7 +15,25 @@ import {
   ShoppingCart,
   IndianRupee,
   ArrowRight,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+  BarChart3,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+} from "recharts";
 import { MainLayout } from "@/components/layouts/mainLayout";
 import {
   createAdminSchema,
@@ -27,14 +44,15 @@ import type { User } from "@/lib/types/user/user";
 import { useAuth } from "@/context/auth.context";
 import { SetPermissionsModal } from "@/components/superAdmin/setpermissionsmodal";
 import { useNavigate } from "react-router";
+import { orderAnalyticsApi } from "@/lib/api/order.analytics.api";
 
 export default function SuperAdminDashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
-  const navigate = useNavigate();
 
   const {
     register,
@@ -53,6 +71,25 @@ export default function SuperAdminDashboard() {
       return response.data;
     },
   });
+
+  // ✅ Fetch order analytics
+  const { data: analyticsData, isLoading: isLoadingAnalytics } = useQuery({
+    queryKey: ["order-analytics"],
+    queryFn: () => orderAnalyticsApi.getAnalytics(),
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  // ✅ Fetch order stats
+  const { data: statsData, isLoading: isLoadingStats } = useQuery({
+    queryKey: ["order-stats"],
+    queryFn: () => orderAnalyticsApi.getStats(),
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+console.log("analyticsData", analyticsData);
+
+  const analytics = analyticsData?.data || {};
+  const stats = statsData?.data || {};
+  const isLoading = isLoadingAnalytics || isLoadingStats;
 
   // Create admin mutation
   const createAdminMutation = useMutation({
@@ -84,8 +121,8 @@ export default function SuperAdminDashboard() {
   const displayedUsers = usersData?.users.slice(0, 4) || [];
   const hasMoreUsers = totalUsers > 4;
 
-  // Stats configuration - Comprehensive overview for Super Admin
-  const stats = [
+  // ✅ Stats configuration with REAL DATA
+  const statsCards = [
     // User Management Stats
     {
       label: "Total Users",
@@ -93,6 +130,7 @@ export default function SuperAdminDashboard() {
       icon: <Users className="h-6 w-6" />,
       color: "blue",
       change: `${activeUsers} active`,
+      changeType: "neutral",
       visible: true,
     },
     {
@@ -101,55 +139,62 @@ export default function SuperAdminDashboard() {
       icon: <Shield className="h-6 w-6" />,
       color: "purple",
       change: `${totalSuperAdmins} super admins`,
+      changeType: "neutral",
       visible: true,
     },
-    // Business Stats (visible to all in Super Admin dashboard)
-    {
-      label: "Total Products",
-      value: "234",
-      icon: <Package className="h-6 w-6" />,
-      color: "indigo",
-      change: "+12% this month",
-      visible: true,
-    },
+    // ✅ Real Order Stats
     {
       label: "Total Orders",
-      value: "1,234",
+      value: analytics?.overview.totalOrders.toString() || "0",
       icon: <ShoppingCart className="h-6 w-6" />,
       color: "green",
-      change: "+8% this month",
+      change: `${stats?.today || 0} today`,
+      changeType: "positive",
       visible: true,
     },
     {
       label: "Total Revenue",
-      value: "₹ 45,678",
+      value: `₹${analytics?.overview.totalRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 }) || "0"}`,
       icon: <IndianRupee className="h-6 w-6" />,
       color: "emerald",
-      change: "+23% from last month",
-      visible: user?.role === "SUPER_ADMIN", // Only SUPER_ADMIN can see revenue
+      change: `Avg: ₹${analytics?.overview.averageOrderValue.toFixed(0) || "0"}`,
+      changeType: "positive",
+      visible: true,
     },
     {
-      label: "Pending Returns",
-      value: "12",
-      icon: <RotateCcw className="h-6 w-6" />,
-      color: "orange",
-      change: "-5% this month",
+      label: "Pending Orders",
+      value: analytics?.overview.pendingOrders.toString() || "0",
+      icon: <Package className="h-6 w-6" />,
+      color: "yellow",
+      change: `${analytics?.overview.processingOrders || 0} processing`,
+      changeType: "neutral",
+      visible: true,
+    },
+    {
+      label: "Delivered Orders",
+      value: analytics?.overview.deliveredOrders.toString() || "0",
+      icon: <TrendingUp className="h-6 w-6" />,
+      color: "indigo",
+      change: `${analytics?.overview.shippedOrders || 0} in transit`,
+      changeType: "positive",
       visible: true,
     },
     {
       label: "Cancellations",
-      value: "8",
+      value: analytics?.overview.cancelledOrders.toString() || "0",
       icon: <XCircle className="h-6 w-6" />,
       color: "red",
-      change: "3 today",
+      change: `${stats?.cancelledToday || 0} today`,
+      changeType: "negative",
       visible: true,
     },
     {
-      label: "System Activity",
-      value: "99.9%",
+      label: "This Month",
+      value: stats?.thisMonth.toString() || "0",
       icon: <Activity className="h-6 w-6" />,
       color: "teal",
-      change: "Uptime",
+      change: `${stats?.thisWeek || 0} this week`,
+      changeType: "positive",
       visible: true,
     },
   ].filter((stat) => stat.visible);
@@ -159,22 +204,27 @@ export default function SuperAdminDashboard() {
       <div className="space-y-6">
         {/* Welcome Section */}
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg p-8 text-white">
-          <div className="flex items-center space-x-4">
-            <div className="h-16 w-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-              <UserPlus className="h-8 w-8" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="h-16 w-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                <UserPlus className="h-8 w-8" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold">Super Admin Panel</h1>
+                <p className="text-purple-100 mt-1">
+                  Complete system overview and administration
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold">Super Admin Panel</h1>
-              <p className="text-purple-100 mt-1">
-                Manage administrators and permissions
-              </p>
-            </div>
+            {isLoading && (
+              <RefreshCw className="h-6 w-6 animate-spin text-white/70" />
+            )}
           </div>
         </div>
 
         {/* Stats Grid - Comprehensive Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
+          {statsCards.map((stat, index) => (
             <div
               key={index}
               className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
@@ -189,11 +239,11 @@ export default function SuperAdminDashboard() {
                   </p>
                   <p
                     className={`text-sm mt-1 ${
-                      stat.change.startsWith("+")
+                      stat.changeType === "positive"
                         ? "text-green-600"
-                        : stat.change.startsWith("-")
-                        ? "text-red-600"
-                        : "text-gray-500"
+                        : stat.changeType === "negative"
+                          ? "text-red-600"
+                          : "text-gray-500"
                     }`}
                   >
                     {stat.change}
@@ -204,18 +254,20 @@ export default function SuperAdminDashboard() {
                     stat.color === "blue"
                       ? "bg-blue-100 text-blue-600"
                       : stat.color === "purple"
-                      ? "bg-purple-100 text-purple-600"
-                      : stat.color === "green"
-                      ? "bg-green-100 text-green-600"
-                      : stat.color === "indigo"
-                      ? "bg-indigo-100 text-indigo-600"
-                      : stat.color === "emerald"
-                      ? "bg-emerald-100 text-emerald-600"
-                      : stat.color === "orange"
-                      ? "bg-orange-100 text-orange-600"
-                      : stat.color === "red"
-                      ? "bg-red-100 text-red-600"
-                      : "bg-teal-100 text-teal-600"
+                        ? "bg-purple-100 text-purple-600"
+                        : stat.color === "green"
+                          ? "bg-green-100 text-green-600"
+                          : stat.color === "indigo"
+                            ? "bg-indigo-100 text-indigo-600"
+                            : stat.color === "emerald"
+                              ? "bg-emerald-100 text-emerald-600"
+                              : stat.color === "orange"
+                                ? "bg-orange-100 text-orange-600"
+                                : stat.color === "red"
+                                  ? "bg-red-100 text-red-600"
+                                  : stat.color === "yellow"
+                                    ? "bg-yellow-100 text-yellow-600"
+                                    : "bg-teal-100 text-teal-600"
                   }`}
                 >
                   {stat.icon}
@@ -225,6 +277,89 @@ export default function SuperAdminDashboard() {
           ))}
         </div>
 
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Revenue & Orders Trends */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+              Monthly Performance
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={analytics?.monthlyTrends || []}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip />
+                <Legend />
+                <Area
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#10b981"
+                  fillOpacity={1}
+                  fill="url(#colorRevenue)"
+                  name="Revenue (₹)"
+                />
+                <Area
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="orders"
+                  stroke="#3b82f6"
+                  fillOpacity={1}
+                  fill="url(#colorOrders)"
+                  name="Orders"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Top Products */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-green-600" />
+              Top Selling Products
+            </h3>
+            <div className="space-y-3">
+              {analytics?.topProducts.slice(0, 5).map((product, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full font-semibold text-sm">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900 text-sm">
+                        {product.productName}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {product.quantity} units sold
+                      </p>
+                    </div>
+                  </div>
+                  <p className="font-bold text-green-600">
+                    ₹{product.revenue.toLocaleString("en-IN")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Admin Management Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Create Admin Form */}
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -388,8 +523,8 @@ export default function SuperAdminDashboard() {
                             user.role === "SUPER_ADMIN"
                               ? "bg-purple-100 text-purple-700"
                               : user.role === "ADMIN"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-700"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-gray-100 text-gray-700"
                           }`}
                         >
                           {user.role}
@@ -426,6 +561,58 @@ export default function SuperAdminDashboard() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Recent Orders Overview */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Recent Orders
+            </h3>
+            <button
+              onClick={() => navigate("/admin/orders")}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              View All →
+            </button>
+          </div>
+          <div className="space-y-3">
+            {analytics?.recentOrders.slice(0, 5).map((order) => (
+              <div
+                key={order.id}
+                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
+              >
+                <div>
+                  <p className="font-medium text-gray-900">
+                    {order.orderNumber}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {order.user.firstName} {order.user.lastName}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900">
+                    ₹{Number(order.total).toLocaleString("en-IN")}
+                  </p>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      order.status === "DELIVERED"
+                        ? "bg-green-100 text-green-700"
+                        : order.status === "SHIPPED"
+                          ? "bg-blue-100 text-blue-700"
+                          : order.status === "PROCESSING"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : order.status === "CANCELLED"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {order.status}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
