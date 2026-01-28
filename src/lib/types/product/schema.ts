@@ -47,11 +47,15 @@ const VariantMediaSchema = z.object({
   order: z.coerce.number().int().min(0).optional().default(0),
   isActive: z.boolean().optional().default(true),
 });
-
+// 🆕 Dynamic Attribute Field Schema (for UI)
+const AttributeFieldSchema = z.object({
+  key: z.string().min(1, "Attribute name is required"),
+  value: z.string().min(1, "Attribute value is required"),
+});
 // 🆕 ENHANCED: Variant Schema with media, pricing, dimensions, and attributes
 const VariantSchema = z.object({
   // Dynamic attributes (flexible key-value pairs)
-  attributes: z.record(z.string(),z.string()).optional(),
+  attributes: z.record(z.string(), z.string()).optional(),
 
   // Legacy fields (backward compatibility)
   size: z.string().optional(),
@@ -82,11 +86,7 @@ const VariantSchema = z.object({
   stock: StockSchema,
 });
 
-// 🆕 Dynamic Attribute Field Schema (for UI)
-const AttributeFieldSchema = z.object({
-  key: z.string().min(1, "Attribute name is required"),
-  value: z.string().min(1, "Attribute value is required"),
-});
+
 
 export const createProductSchema = z
   .object({

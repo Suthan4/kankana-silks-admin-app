@@ -60,6 +60,7 @@ import type { Category } from "@/lib/types/category/category";
 import ProductFormSteps from "@/components/productsFormSteps";
 import { s3Api } from "@/lib/api/s3.api";
 import { toast } from "react-hot-toast";
+import { getColorSuggestions, isColorAttribute, isValidCSSColor, validateColorWithSuggestions } from "@/lib/utils/colorValidation";
 
 interface MediaPreviewItem {
   file: File | null;
@@ -739,21 +740,49 @@ const ProductsPage: React.FC = () => {
     Record<number, AttributeField[]>
   >({});
   const [isHydratingEdit, setIsHydratingEdit] = useState(false);
+  // Add this after variantAttributeFields state
+  const [variantAttributeErrors, setVariantAttributeErrors] = useState<
+    Record<number, Record<number, string>>
+  >({});
 
   const appendVariantAttribute = (variantIndex: number) => {
-    setVariantAttributeFields((prev) => ({
-      ...prev,
-      [variantIndex]: [...(prev?.[variantIndex] ?? []), { key: "", value: "" }],
-    }));
+    setVariantAttributeFields((prev) => {
+      const updated = [...(prev?.[variantIndex] ?? []), { key: "", value: "" }];
+
+      // ✅ update RHF too (still empty record)
+      setValue(
+        `variants.${variantIndex}.attributes` as any,
+        {},
+        {
+          shouldDirty: true,
+          shouldValidate: false,
+        },
+      );
+
+      return { ...prev, [variantIndex]: updated };
+    });
   };
 
   const removeVariantAttribute = (variantIndex: number, attrIndex: number) => {
-    setVariantAttributeFields((prev) => ({
-      ...prev,
-      [variantIndex]: (prev?.[variantIndex] ?? []).filter(
+    setVariantAttributeFields((prev) => {
+      const updated = (prev?.[variantIndex] ?? []).filter(
         (_, i) => i !== attrIndex,
-      ),
-    }));
+      );
+
+      const record: Record<string, string> = {};
+      updated.forEach((a) => {
+        if (a.key?.trim() && a.value?.trim()) {
+          record[a.key.trim()] = a.value.trim();
+        }
+      });
+
+      setValue(`variants.${variantIndex}.attributes` as any, record, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+
+      return { ...prev, [variantIndex]: updated };
+    });
   };
 
   const updateVariantAttribute = (
@@ -762,13 +791,64 @@ const ProductsPage: React.FC = () => {
     field: "key" | "value",
     value: string,
   ) => {
-    setVariantAttributeFields((prev) => ({
-      ...prev,
-      [variantIndex]: (prev?.[variantIndex] ?? []).map((attr, i) =>
+    setVariantAttributeFields((prev) => {
+      const current = prev?.[variantIndex] ?? [];
+      const updated = current.map((attr, i) =>
         i === attrIndex ? { ...attr, [field]: value } : attr,
-      ),
-    }));
+      );
+
+      // ✅ Validate color fields dynamically
+      if (field === "value") {
+        const currentAttr = updated[attrIndex];
+
+        if (isColorAttribute(currentAttr.key) && value) {
+          const validation = validateColorWithSuggestions(value);
+
+          if (!validation.isValid) {
+            setVariantAttributeErrors((prevErrors) => ({
+              ...prevErrors,
+              [variantIndex]: {
+                ...(prevErrors[variantIndex] || {}),
+                [attrIndex]:
+                  validation.suggestions.length > 0
+                    ? `Invalid color. Did you mean: ${validation.suggestions.slice(0, 3).join(", ")}?`
+                    : "Please enter a valid CSS color name or hex code",
+              },
+            }));
+          } else {
+            // Clear error if valid
+            setVariantAttributeErrors((prevErrors) => {
+              const newErrors = { ...prevErrors };
+              if (newErrors[variantIndex]) {
+                delete newErrors[variantIndex][attrIndex];
+                if (Object.keys(newErrors[variantIndex]).length === 0) {
+                  delete newErrors[variantIndex];
+                }
+              }
+              return newErrors;
+            });
+          }
+        }
+      }
+
+      // ✅ convert array -> record (Zod expects record now)
+      const record: Record<string, string> = {};
+      updated.forEach((a) => {
+        if (a.key?.trim() && a.value?.trim()) {
+          record[a.key.trim()] = a.value.trim();
+        }
+      });
+
+      // ✅ push into react-hook-form
+      setValue(`variants.${variantIndex}.attributes` as any, record, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+
+      return { ...prev, [variantIndex]: updated };
+    });
   };
+
   const handleVariantMediaUpload = (
     variantIndex: number,
     e: React.ChangeEvent<HTMLInputElement>,
@@ -1046,6 +1126,8 @@ const ProductsPage: React.FC = () => {
           );
 
           return {
+            attributes: v.attributes ?? undefined, // ✅ ADD THIS
+
             size: v.size ?? "",
             color: v.color ?? "",
             fabric: v.fabric ?? "",
@@ -1067,6 +1149,21 @@ const ProductsPage: React.FC = () => {
           };
         }),
       );
+      const nextAttrFields: Record<number, AttributeField[]> = {};
+
+      (fullProduct.variants ?? []).forEach((v: any, idx: number) => {
+        const attrs = v.attributes ?? {}; // record
+
+        nextAttrFields[idx] = Object.entries(attrs).map(([key, value]) => ({
+          key,
+          value: String(value),
+        }));
+
+        // ✅ also push into RHF
+        setValue(`variants.${idx}.attributes` as any, attrs);
+      });
+
+      setVariantAttributeFields(nextAttrFields);
 
       // ✅ variant media previews
       const nextVariantMedia: Record<number, MediaPreviewItem[]> = {};
@@ -1385,14 +1482,14 @@ const ProductsPage: React.FC = () => {
     const formValues = watch();
 
     switch (step) {
-      case 1: // Product Type
+      case 1:
         if (!productType) {
           toast.error("Please select a product type");
           return false;
         }
         return true;
 
-      case 2: // Basic Info
+      case 2: {
         const basicErrors: string[] = [];
 
         if (!formValues.name?.trim())
@@ -1405,6 +1502,7 @@ const ProductsPage: React.FC = () => {
           basicErrors.push("Base price must be greater than 0");
         if (!formValues.sellingPrice || Number(formValues.sellingPrice) <= 0)
           basicErrors.push("Selling price must be greater than 0");
+
         if (Number(formValues.sellingPrice) > Number(formValues.basePrice)) {
           basicErrors.push("Selling price cannot be greater than base price");
         }
@@ -1413,8 +1511,6 @@ const ProductsPage: React.FC = () => {
           (s: any) => {
             const hasKey = !!s?.key?.trim();
             const hasValue = !!s?.value?.trim();
-
-            // ✅ block if either one missing OR both missing
             return !hasKey || !hasValue;
           },
         );
@@ -1426,85 +1522,161 @@ const ProductsPage: React.FC = () => {
           return false;
         }
 
-
         if (basicErrors.length > 0) {
           toast.error(basicErrors[0]);
           return false;
         }
-        return true;
 
-      case 3: // Media
+        return true;
+      }
+
+      case 3:
         if (mediaPreviews.length === 0) {
           toast.error("Please add at least one product image or video");
           return false;
         }
         return true;
 
-      case 4: // Variants or Stock
+      case 4: {
         if (productType === "variable") {
-          // Validate variants
-          if (!formValues.variants || formValues.variants.length === 0) {
-            toast.error("Please add at least one variant");
-            return false;
-          }
-
-          for (let i = 0; i < formValues.variants.length; i++) {
-            const variant = formValues.variants[i];
-            const variantLabel =
-              [variant.size, variant.color, variant.fabric]
-                .filter(Boolean)
-                .join(" / ") || `Variant ${i + 1}`;
-
-            if (!variant.size && !variant.color && !variant.fabric) {
-              toast.error(
-                `${variantLabel}: Please provide at least one attribute (size, color, or fabric)`,
-              );
+          if (productType === "variable") {
+            if (!formValues.variants || formValues.variants.length === 0) {
+              toast.error("Please add at least one variant");
               return false;
             }
 
-            if (!variant.price || Number(variant.price) <= 0) {
-              toast.error(
-                `${variantLabel}: Price is required and must be greater than 0`,
-              );
-              return false;
-            }
+            for (let i = 0; i < formValues.variants.length; i++) {
+              const variant = formValues.variants[i];
 
-            if (!variant.stock?.warehouseId) {
-              toast.error(`${variantLabel}: Warehouse is required`);
-              return false;
-            }
+              // ✅ standard attributes
+              const hasStandardAttr =
+                !!variant.size || !!variant.color || !!variant.fabric;
 
-            if (
-              variant.stock?.quantity === undefined ||
-              Number(variant.stock.quantity) < 0
-            ) {
-              toast.error(`${variantLabel}: Quantity must be 0 or greater`);
-              return false;
-            }
+              // ✅ custom attributes (variant.attributes)
+              const attrs = normalizeVariantAttributes(variant);
 
-            // ✅ ADD THIS (dimensions validation)
-            if (!variant.weight || Number(variant.weight) <= 0) {
-              toast.error(`${variantLabel}: Weight must be greater than 0`);
-              return false;
-            }
+              const hasCustomAttr =
+                attrs &&
+                typeof attrs === "object" &&
+                Object.entries(attrs).some(([k, v]) => {
+                  return (
+                    String(k).trim().length > 0 && String(v).trim().length > 0
+                  );
+                });
 
-            if (!variant.length || Number(variant.length) <= 0) {
-              toast.error(`${variantLabel}: Length must be greater than 0`);
-              return false;
-            }
+              const customLabel = attrs
+                ? Object.entries(attrs)
+                    .map(([k, v]) => `${k}:${v}`)
+                    .join(" / ")
+                : "";
 
-            if (!variant.breadth || Number(variant.breadth) <= 0) {
-              toast.error(`${variantLabel}: Breadth must be greater than 0`);
-              return false;
-            }
+              const variantLabel =
+                [variant.size, variant.color, variant.fabric]
+                  .filter(Boolean)
+                  .join(" / ") ||
+                customLabel ||
+                `Variant ${i + 1}`;
 
-            if (!variant.height || Number(variant.height) <= 0) {
-              toast.error(`${variantLabel}: Height must be greater than 0`);
-              return false;
+              // ✅ main rule: either standard OR custom must exist
+              if (!hasStandardAttr && !hasCustomAttr) {
+                toast.error(
+                  `${variantLabel}: Please provide at least one attribute (Size/Color/Fabric) OR add custom attributes`,
+                );
+                return false;
+              }
+
+              // ✅ price validation
+              if (!variant.price || Number(variant.price) <= 0) {
+                toast.error(`${variantLabel}: Price must be greater than 0`);
+                return false;
+              }
+
+              // ✅ stock
+              if (!variant.stock?.warehouseId) {
+                toast.error(`${variantLabel}: Warehouse is required`);
+                return false;
+              }
+
+              if (
+                variant.stock?.quantity === undefined ||
+                Number(variant.stock.quantity) < 0
+              ) {
+                toast.error(`${variantLabel}: Quantity must be 0 or greater`);
+                return false;
+              }
+
+              // ✅ dimensions
+              if (!variant.weight || Number(variant.weight) <= 0) {
+                toast.error(`${variantLabel}: Weight must be greater than 0`);
+                return false;
+              }
+
+              if (!variant.length || Number(variant.length) <= 0) {
+                toast.error(`${variantLabel}: Length must be greater than 0`);
+                return false;
+              }
+
+              if (!variant.breadth || Number(variant.breadth) <= 0) {
+                toast.error(`${variantLabel}: Breadth must be greater than 0`);
+                return false;
+              }
+
+              if (!variant.height || Number(variant.height) <= 0) {
+                toast.error(`${variantLabel}: Height must be greater than 0`);
+                return false;
+              }
+              
+              // ✅ VALIDATE LEGACY COLOR FIELD
+              if (variant.color && !isValidCSSColor(variant.color)) {
+                const suggestions = getColorSuggestions(variant.color);
+                const variantLabel =
+                  [variant.size, variant.color, variant.fabric]
+                    .filter(Boolean)
+                    .join(" / ") || `Variant ${i + 1}`;
+
+                const suggestionText =
+                  suggestions.length > 0
+                    ? ` Did you mean: ${suggestions.slice(0, 3).join(", ")}?`
+                    : "";
+
+                toast.error(
+                  `${variantLabel}: "${variant.color}" is not a valid color in the Standard Attributes field.${suggestionText}`,
+                );
+                return false;
+              }
+
+              // Validate custom attributes - especially colors
+              const variantAttrs = variantAttributeFields[i] || [];
+
+              for (let j = 0; j < variantAttrs.length; j++) {
+                const attr = variantAttrs[j];
+                const variantLabel =
+                  [variant.size, variant.color, variant.fabric]
+                    .filter(Boolean)
+                    .join(" / ") || `Variant ${i + 1}`;
+
+                if (attr.key && attr.value) {
+                  // Validate color attributes dynamically
+                  if (isColorAttribute(attr.key)) {
+                    if (!isValidCSSColor(attr.value)) {
+                      const suggestions = getColorSuggestions(attr.value);
+                      const suggestionText =
+                        suggestions.length > 0
+                          ? ` Did you mean: ${suggestions.slice(0, 3).join(", ")}?`
+                          : "";
+
+                      toast.error(
+                        `${variantLabel}: "${attr.value}" is not a valid color.${suggestionText}`,
+                      );
+                      return false;
+                    }
+                  }
+                }
+              }
             }
           }
         } else {
-          // Validate simple product stock
+          // ✅ simple product
           if (!formValues.stock?.warehouseId) {
             toast.error("Please select a warehouse");
             return false;
@@ -1518,7 +1690,9 @@ const ProductsPage: React.FC = () => {
             return false;
           }
         }
+
         return true;
+      }
 
       default:
         return true;
@@ -1552,6 +1726,7 @@ const ProductsPage: React.FC = () => {
     "Review",
   ];
   console.log("errors", errors);
+  console.log("variants", watch("variants"));
 
   return (
     <MainLayout>
@@ -1824,11 +1999,13 @@ const ProductsPage: React.FC = () => {
                     setMediaPreviews={setMediaPreviews}
                     handleMediaUpload={handleMediaUpload}
                     watch={watch}
+                    setValue={setValue}
                     // ✅ NEW PROPS FIX
                     variantMediaPreviews={variantMediaPreviews}
                     setVariantMediaPreviews={setVariantMediaPreviews}
                     handleVariantMediaUpload={handleVariantMediaUpload}
                     variantAttributeFields={variantAttributeFields}
+                    variantAttributeErrors={variantAttributeErrors}
                     appendVariantAttribute={appendVariantAttribute}
                     removeVariantAttribute={removeVariantAttribute}
                     updateVariantAttribute={updateVariantAttribute}
@@ -1930,3 +2107,32 @@ const ProductsPage: React.FC = () => {
 };
 
 export default ProductsPage;
+const normalizeVariantAttributes = (variant: any) => {
+  // if already proper record -> return
+  if (
+    variant?.attributes &&
+    typeof variant.attributes === "object" &&
+    !Array.isArray(variant.attributes)
+  ) {
+    return variant.attributes;
+  }
+
+  // if UI uses customAttributes array [{key,value}]
+  const arr =
+    variant?.customAttributes ??
+    variant?.dynamicAttributes ??
+    variant?.attributeFields ??
+    [];
+
+  if (!Array.isArray(arr)) return undefined;
+
+  const record: Record<string, string> = {};
+
+  for (const row of arr) {
+    const k = String(row?.key ?? row?.attribute ?? "").trim();
+    const v = String(row?.value ?? "").trim();
+    if (k && v) record[k] = v;
+  }
+
+  return Object.keys(record).length > 0 ? record : undefined;
+};

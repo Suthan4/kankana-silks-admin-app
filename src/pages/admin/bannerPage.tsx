@@ -222,10 +222,10 @@ const BannersPage: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [filterType, setFilterType] = useState<"ALL" | "IMAGE" | "VIDEO">(
-    "ALL"
+    "ALL",
   );
   const [filterActive, setFilterActive] = useState<boolean | undefined>(
-    undefined
+    undefined,
   );
 
   const canCreate = hasPermission("banners", "canCreate");
@@ -331,8 +331,25 @@ const BannersPage: React.FC = () => {
     e.target.value = "";
   };
 
+  const validateImageSize = (file: File) => {
+    return new Promise<void>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        if (img.width !== 1920 || img.height !== 600) {
+          reject(
+            new Error("Invalid image size. Only 1920×600 images are allowed."),
+          );
+          return;
+        }
+        resolve();
+      };
+      img.onerror = () => reject(new Error("Invalid image file"));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   // Process media file with validation
-  const handleMediaFile = (file: File) => {
+  const handleMediaFile = async (file: File) => {
     const isImage = file.type.startsWith("image/");
     const isVideo = file.type.startsWith("video/");
 
@@ -341,13 +358,22 @@ const BannersPage: React.FC = () => {
       return;
     }
 
+    if (isImage) {
+      try {
+        await validateImageSize(file);
+      } catch (err: any) {
+        toast.error(err.message);
+        return;
+      }
+    }
+
     // Validate file size (10MB for images, 50MB for videos)
     const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
     if (file.size > maxSize) {
       toast.error(
         `File size must be less than ${
           isVideo ? "40MB" : "10MB"
-        }. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`
+        }. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
       );
       return;
     }
@@ -376,7 +402,7 @@ const BannersPage: React.FC = () => {
 
     setIsUploadingMedia(true);
     const uploadToast = toast.loading(
-      `Uploading ${mediaType.toLowerCase()} ...`
+      `Uploading ${mediaType.toLowerCase()} ...`,
     );
 
     try {
@@ -443,7 +469,7 @@ const BannersPage: React.FC = () => {
     setValue("isActive", banner.isActive);
     setValue("order", banner.order);
     setMediaPreview(
-      banner.type === "VIDEO" ? banner.thumbnailUrl || banner.url : banner.url
+      banner.type === "VIDEO" ? banner.thumbnailUrl || banner.url : banner.url,
     );
     setMediaType(banner.type);
     setMediaFile(null);
@@ -586,13 +612,13 @@ const BannersPage: React.FC = () => {
                 filterActive === undefined
                   ? "all"
                   : filterActive
-                  ? "active"
-                  : "inactive"
+                    ? "active"
+                    : "inactive"
               }
               onChange={(e) => {
                 const value = e.target.value;
                 setFilterActive(
-                  value === "all" ? undefined : value === "active"
+                  value === "all" ? undefined : value === "active",
                 );
               }}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
