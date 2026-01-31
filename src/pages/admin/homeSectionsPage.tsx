@@ -551,8 +551,8 @@ const LAYOUT_OPTIONS = [
             url,
             order: idx,
             overlayPosition: m.overlayPosition,
-            overlayTitle: m.overlayTitle,
-            overlaySubtitle: m.overlaySubtitle,
+            overlayTitle: m.overlayTitle ?? "",
+            overlaySubtitle: m.overlaySubtitle ?? "",
           };
         })
       );

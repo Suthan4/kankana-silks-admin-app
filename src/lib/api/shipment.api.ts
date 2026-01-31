@@ -20,6 +20,11 @@ export interface ShippingRateRequest {
   weight?: number;
 }
 
+export interface GenerateAwbRequest {
+  orderId: string;
+  courierId: number;
+}
+
 // Shipment API
 export const shipmentApi = {
   // Public Endpoints
@@ -57,24 +62,35 @@ export const shipmentApi = {
     return apiCall("POST", "/admin/shipments/create", data);
   },
 
-  getAvailableCouriers: async (orderId: string): Promise<ApiResponse<any>> => {
+  getAvailableCouriers: async (orderId: string) => {
     return apiCall("GET", `/admin/shipments/couriers/${orderId}`);
   },
 
-  assignCourier: async (
-    data: AssignCourierRequest
+  // ✅ NEW: Separate Generate AWB endpoint
+  generateAwb: async (
+    data: GenerateAwbRequest
   ): Promise<ApiResponse<any>> => {
-    return apiCall("POST", "/admin/shipments/assign-courier", data);
+    return apiCall("POST", "/admin/shipments/generateawb&assign-courier", data);
   },
 
+    // ⚠️ DEPRECATED: Use generateAwb instead
+  // assignCourier: async (
+  //   data: AssignCourierRequest
+  // ): Promise<ApiResponse<any>> => {
+  //   return apiCall("POST", "/admin/shipments/assign-courier", data);
+  // },
+
+    // ✅ Schedule Pickup (requires AWB to be generated first)
   schedulePickup: async (orderId: string): Promise<ApiResponse<any>> => {
     return apiCall("POST", "/admin/shipments/schedule-pickup", { orderId });
   },
 
+  // ✅ Generate Label (requires AWB)
   generateLabel: async (orderId: string): Promise<ApiResponse<any>> => {
     return apiCall("POST", "/admin/shipments/generate-label", { orderId });
   },
 
+  // ✅ Generate Manifest (requires AWB)
   generateManifest: async (orderId: string): Promise<ApiResponse<any>> => {
     return apiCall("POST", "/admin/shipments/generate-manifest", { orderId });
   },
