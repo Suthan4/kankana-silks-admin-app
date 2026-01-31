@@ -44,7 +44,7 @@ import type { User } from "@/lib/types/user/user";
 import { useAuth } from "@/context/auth.context";
 import { SetPermissionsModal } from "@/components/superAdmin/setpermissionsmodal";
 import { useNavigate } from "react-router";
-import { orderAnalyticsApi } from "@/lib/api/order.analytics.api";
+import { orderAnalyticsApi, type OrderAnalytics, type OrderStats } from "@/lib/api/order.analytics.api";
 
 export default function SuperAdminDashboard() {
   const { user } = useAuth();
@@ -87,8 +87,8 @@ export default function SuperAdminDashboard() {
   });
 console.log("analyticsData", analyticsData);
 
-  const analytics = analyticsData?.data || {};
-  const stats = statsData?.data || {};
+  const analytics = analyticsData?.data as OrderAnalytics;
+  const stats = statsData?.data as OrderStats;
   const isLoading = isLoadingAnalytics || isLoadingStats;
 
   // Create admin mutation

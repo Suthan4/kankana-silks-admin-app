@@ -36,6 +36,7 @@ import {
   ExternalLink,
   ArrowUp,
   ArrowDown,
+  Maximize2,
 } from "lucide-react";
 import { homeSectionApi } from "@/lib/api/homesection.api";
 import { productApi } from "@/lib/api/product.api";
@@ -382,7 +383,18 @@ export const HomeSectionsPage: React.FC = () => {
     order: 0,
     openNewTab: false,
   });
-
+const LAYOUT_OPTIONS = [
+  { value: "grid", label: "Grid" },
+  { value: "carousel", label: "Carousel" },
+  { value: "list", label: "List" },
+  { value: "banner", label: "Banner" },
+  { 
+    value: "aesthetic-fullscreen", 
+    label: "Aesthetic Fullscreen",
+    icon: <Maximize2 />,
+    description: "✨ Immersive full-screen layout with elegant overlays"
+  }
+];
   // Fetch sections
   const { data: sectionsData, isLoading } = useQuery({
     queryKey: ["home-sections", filterActive, filterType],
@@ -539,8 +551,8 @@ export const HomeSectionsPage: React.FC = () => {
             url,
             order: idx,
             overlayPosition: m.overlayPosition,
-            overlayTitle: m.overlayTitle,
-            overlaySubtitle: m.overlaySubtitle,
+            overlayTitle: m.overlayTitle ?? "",
+            overlaySubtitle: m.overlaySubtitle ?? "",
           };
         })
       );
@@ -587,6 +599,7 @@ export const HomeSectionsPage: React.FC = () => {
       });
     } finally {
       setIsUploadingImage(false);
+      toast.dismiss(uploadToast)
     }
   };
 
@@ -796,13 +809,13 @@ export const HomeSectionsPage: React.FC = () => {
                 filterActive === undefined
                   ? "all"
                   : filterActive
-                  ? "active"
-                  : "inactive"
+                    ? "active"
+                    : "inactive"
               }
               onChange={(e) => {
                 const value = e.target.value;
                 setFilterActive(
-                  value === "all" ? undefined : value === "active"
+                  value === "all" ? undefined : value === "active",
                 );
               }}
               className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
@@ -936,7 +949,7 @@ export const HomeSectionsPage: React.FC = () => {
                         {
                           shouldValidate: true,
                           shouldDirty: true,
-                        }
+                        },
                       );
                     }}
                     customTypeName={watch("customTypeName")}
@@ -1162,10 +1175,10 @@ export const HomeSectionsPage: React.FC = () => {
                               cta.style === "PRIMARY"
                                 ? "bg-blue-600 text-white"
                                 : cta.style === "SECONDARY"
-                                ? "bg-gray-600 text-white"
-                                : cta.style === "OUTLINE"
-                                ? "border-2 border-blue-600 text-blue-600"
-                                : "text-blue-600"
+                                  ? "bg-gray-600 text-white"
+                                  : cta.style === "OUTLINE"
+                                    ? "border-2 border-blue-600 text-blue-600"
+                                    : "text-blue-600"
                             }`}
                           >
                             {cta.style}
@@ -1223,109 +1236,186 @@ export const HomeSectionsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 4. LAYOUT & STYLING SECTION */}
+                {/* UPDATED LAYOUT & STYLING SECTION */}
                 <div className="space-y-4 bg-green-50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <Palette className="h-5 w-5" />
                     Layout & Styling
                   </h3>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Layout */}
+                  <div className="grid grid-cols-1 gap-4">
+                    {/* Layout Selector with Visual Cards */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Layout
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        Layout Style
                       </label>
-                      <select
-                        value={layout}
-                        onChange={(e) => {
-                          setLayout(e.target.value);
-                          setValue("layout" as any, e.target.value);
-                        }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                      >
-                        <option value="grid">Grid</option>
-                        <option value="carousel">Carousel</option>
-                        <option value="list">List</option>
-                        <option value="banner">Banner</option>
-                      </select>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {LAYOUT_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setLayout(option.value);
+                              setValue("layout" as any, option.value);
+                            }}
+                            className={`
+                              relative p-4 rounded-lg border-2 transition-all
+                              ${
+                                layout === option.value
+                                  ? "border-purple-500 bg-purple-50 shadow-md"
+                                  : "border-gray-200 hover:border-gray-300 bg-white"
+                              }
+                            `}
+                          >
+                            <div className="flex flex-col items-center gap-2 text-center">
+                              <div
+                                className={`
+                                p-2 rounded-full
+                                ${layout === option.value ? "bg-purple-100" : "bg-gray-100"}
+                              `}
+                              >
+                                {option.icon}
+                              </div>
+                              <span
+                                className={`
+                                text-sm font-medium
+                                ${layout === option.value ? "text-purple-700" : "text-gray-700"}
+                              `}
+                              >
+                                {option.label}
+                              </span>
+                              {layout === option.value && (
+                                <CheckCircle className="absolute top-2 right-2 h-5 w-5 text-purple-500" />
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                              {option.description}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
-                    {/* Columns (only for grid) */}
+                    {/* Columns (only for grid layout) */}
                     {layout === "grid" && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                          Columns
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="12"
-                          value={columns}
-                          onChange={(e) => {
-                            setColumns(Number(e.target.value));
-                            setValue("columns" as any, Number(e.target.value));
-                          }}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Grid Columns
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="12"
+                            value={columns}
+                            onChange={(e) => {
+                              setColumns(Number(e.target.value));
+                              setValue(
+                                "columns" as any,
+                                Number(e.target.value),
+                              );
+                            }}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
                       </div>
                     )}
 
-                    {/* Background Color */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Background Color
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="color"
-                          value={backgroundColor}
-                          onChange={(e) => {
-                            setBackgroundColor(e.target.value);
-                            setValue("backgroundColor" as any, e.target.value);
-                          }}
-                          className="h-12 w-20 rounded border border-gray-300 cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={backgroundColor}
-                          onChange={(e) => {
-                            setBackgroundColor(e.target.value);
-                            setValue("backgroundColor" as any, e.target.value);
-                          }}
-                          className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                          placeholder="#ffffff"
-                        />
+                    {/* Color pickers */}
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+                      {/* Background Color */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Background Color
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={backgroundColor}
+                            onChange={(e) => {
+                              setBackgroundColor(e.target.value);
+                              setValue(
+                                "backgroundColor" as any,
+                                e.target.value,
+                              );
+                            }}
+                            className="h-12 w-20 rounded border border-gray-300 cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={backgroundColor}
+                            onChange={(e) => {
+                              setBackgroundColor(e.target.value);
+                              setValue(
+                                "backgroundColor" as any,
+                                e.target.value,
+                              );
+                            }}
+                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            placeholder="#ffffff"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Text Color */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Text Color
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={textColor}
+                            onChange={(e) => {
+                              setTextColor(e.target.value);
+                              setValue("textColor" as any, e.target.value);
+                            }}
+                            className="h-12 w-20 rounded border border-gray-300 cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={textColor}
+                            onChange={(e) => {
+                              setTextColor(e.target.value);
+                              setValue("textColor" as any, e.target.value);
+                            }}
+                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            placeholder="#000000"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Text Color */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Text Color
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="color"
-                          value={textColor}
-                          onChange={(e) => {
-                            setTextColor(e.target.value);
-                            setValue("textColor" as any, e.target.value);
-                          }}
-                          className="h-12 w-20 rounded border border-gray-300 cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={textColor}
-                          onChange={(e) => {
-                            setTextColor(e.target.value);
-                            setValue("textColor" as any, e.target.value);
-                          }}
-                          className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                          placeholder="#000000"
-                        />
+                    {/* Info alert for aesthetic-fullscreen */}
+                    {layout === "aesthetic-fullscreen" && (
+                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4">
+                        <div className="flex gap-3">
+                          <Maximize2 className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                          <div className="space-y-2">
+                            <h4 className="font-semibold text-purple-900">
+                              Aesthetic Fullscreen Mode
+                            </h4>
+                            <p className="text-sm text-purple-700">
+                              This layout creates an immersive full-screen
+                              experience with:
+                            </p>
+                            <ul className="text-sm text-purple-600 space-y-1 ml-4">
+                              <li>• Elegant typography with letter-spacing</li>
+                              <li>• Smooth transitions between slides</li>
+                              <li>
+                                • Overlay text support for each media item
+                              </li>
+                              <li>• Sophisticated button styling</li>
+                              <li>• Perfect for luxury/fashion brands</li>
+                            </ul>
+                            <p className="text-xs text-purple-500 italic">
+                              💡 Tip: Add overlay titles to your media for the
+                              best effect
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -1812,10 +1902,10 @@ export const HomeSectionsPage: React.FC = () => {
                             ? style === "PRIMARY"
                               ? "bg-blue-600 text-white border-blue-600"
                               : style === "SECONDARY"
-                              ? "bg-gray-600 text-white border-gray-600"
-                              : style === "OUTLINE"
-                              ? "border-blue-600 text-blue-600"
-                              : "border-gray-300 text-blue-600"
+                                ? "bg-gray-600 text-white border-gray-600"
+                                : style === "OUTLINE"
+                                  ? "border-blue-600 text-blue-600"
+                                  : "border-gray-300 text-blue-600"
                             : "border-gray-300 text-gray-600 hover:border-gray-400"
                         }`}
                       >

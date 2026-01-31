@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { useAuth } from "@/context/auth.context";
 import { MainLayout } from "@/components/layouts/mainLayout";
 import { useQuery } from "@tanstack/react-query";
-import { orderAnalyticsApi } from "@/lib/api/order.analytics.api";
+import { orderAnalyticsApi, type OrderAnalytics, type OrderStats } from "@/lib/api/order.analytics.api";
 import {
   LayoutDashboard,
   Package,
@@ -54,8 +54,8 @@ export const AdminDashboard: React.FC = () => {
   });
 console.log("analyticsData", analyticsData);
 
-  const analytics = analyticsData?.data || {};
-  const stats = statsData?.data || {};
+  const analytics = analyticsData?.data as OrderAnalytics;
+  const stats = statsData?.data as OrderStats;
 
   const isLoading = isLoadingAnalytics || isLoadingStats;
 
@@ -226,7 +226,7 @@ console.log("analyticsData", analyticsData);
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={(entry) => `${entry.name}: ${entry.orders}`}
+                  label={(entry) => `${entry.name}: ${entry.order}`}
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="orders"
