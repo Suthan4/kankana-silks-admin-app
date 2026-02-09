@@ -60,7 +60,12 @@ import type { Category } from "@/lib/types/category/category";
 import ProductFormSteps from "@/components/productsFormSteps";
 import { s3Api } from "@/lib/api/s3.api";
 import { toast } from "react-hot-toast";
-import { getColorSuggestions, isColorAttribute, isValidCSSColor, validateColorWithSuggestions } from "@/lib/utils/colorValidation";
+import {
+  getColorSuggestions,
+  isColorAttribute,
+  isValidCSSColor,
+  validateColorWithSuggestions,
+} from "@/lib/utils/colorValidation";
 
 interface MediaPreviewItem {
   file: File | null;
@@ -1507,6 +1512,23 @@ const ProductsPage: React.FC = () => {
           basicErrors.push("Selling price cannot be greater than base price");
         }
 
+        // ✅ Shipping Dimensions Validation
+        if (!formValues.weight || Number(formValues.weight) <= 0) {
+          basicErrors.push("Weight is required and must be greater than 0");
+        }
+
+        if (!formValues.length || Number(formValues.length) <= 0) {
+          basicErrors.push("Length is required and must be greater than 0");
+        }
+
+        if (!formValues.breadth || Number(formValues.breadth) <= 0) {
+          basicErrors.push("Breadth is required and must be greater than 0");
+        }
+
+        if (!formValues.height || Number(formValues.height) <= 0) {
+          basicErrors.push("Height is required and must be greater than 0");
+        }
+
         const invalidSpecIndex = (formValues.specifications || []).findIndex(
           (s: any) => {
             const hasKey = !!s?.key?.trim();
@@ -1625,7 +1647,7 @@ const ProductsPage: React.FC = () => {
                 toast.error(`${variantLabel}: Height must be greater than 0`);
                 return false;
               }
-              
+
               // ✅ VALIDATE LEGACY COLOR FIELD
               if (variant.color && !isValidCSSColor(variant.color)) {
                 const suggestions = getColorSuggestions(variant.color);
