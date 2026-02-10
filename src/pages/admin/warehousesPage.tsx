@@ -35,6 +35,7 @@ import {
   type CreateWarehouseFormData,
 } from "@/lib/types/warehouse/schema";
 import { useNavigate } from "react-router";
+import toast from "react-hot-toast";
 
 // Stats Card Component
 const StatsCard: React.FC<{
@@ -266,6 +267,10 @@ const WarehousesPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["warehouses"] });
     },
+    onError:(error)=>{
+      console.log("error",error);
+      toast.error(error?.message)
+    }
   });
 
   const {

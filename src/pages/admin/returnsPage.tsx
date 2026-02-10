@@ -24,6 +24,10 @@ import {
   FileText,
   Calendar,
   MapPin,
+  Video,
+  ExternalLink,
+  Upload,
+  Send,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { format } from "date-fns";
@@ -46,6 +50,14 @@ const ReturnsPage: React.FC = () => {
     startDate: "",
     endDate: "",
   });
+
+  // ✅ Media viewer state
+  const [selectedMedia, setSelectedMedia] = useState<any>(null);
+  const [mediaModalOpen, setMediaModalOpen] = useState(false);
+
+  // ✅ Request more media state
+  const [showRequestMediaModal, setShowRequestMediaModal] = useState(false);
+  const [mediaRequestMessage, setMediaRequestMessage] = useState("");
 
   const limit = 10;
 
@@ -101,6 +113,21 @@ const ReturnsPage: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to reject return");
+    },
+  });
+
+  // ✅ Request more media mutation
+  const requestMediaMutation = useMutation({
+    mutationFn: ({ id, message }: { id: string; message: string }) =>
+      returnApi.requestMoreMedia(id, message),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-returns"] });
+      toast.success("Media request sent to customer");
+      setShowRequestMediaModal(false);
+      setMediaRequestMessage("");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to request media");
     },
   });
 
@@ -200,6 +227,18 @@ const ReturnsPage: React.FC = () => {
     });
   };
 
+  // ✅ Handle request more media
+  const handleRequestMoreMedia = () => {
+    if (!selectedReturn || !mediaRequestMessage.trim()) {
+      toast.error("Please provide a message explaining what media is needed");
+      return;
+    }
+    requestMediaMutation.mutate({
+      id: selectedReturn.id,
+      message: mediaRequestMessage,
+    });
+  };
+
   const handleProcessRefund = (returnItem: Return) => {
     if (
       window.confirm(
@@ -257,6 +296,21 @@ const ReturnsPage: React.FC = () => {
     toast.success("Returns exported successfully");
   };
 
+  // ✅ Format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  // ✅ Format duration
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return "";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -276,759 +330,1049 @@ const ReturnsPage: React.FC = () => {
 
   return (
     <MainLayout>
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Returns Management
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Process return requests and refunds
-          </p>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Returns Management
+            </h1>
+            <p className="text-gray-600 mt-1">
+              Process return requests and refunds
+            </p>
+          </div>
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
         </div>
-        <button
-          onClick={exportToCSV}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          Export CSV
-        </button>
-      </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Returns</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {pagination?.total || 0}
-              </p>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Returns</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {pagination?.total || 0}
+                </p>
+              </div>
+              <Package className="w-8 h-8 text-blue-600" />
             </div>
-            <Package className="w-8 h-8 text-blue-600" />
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {returns.filter((r) => r.status === "PENDING").length}
+                </p>
+              </div>
+              <Clock className="w-8 h-8 text-yellow-600" />
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Approved</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {returns.filter((r) => r.status === "APPROVED").length}
+                </p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">In Transit</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {
+                    returns.filter(
+                      (r) =>
+                        r.status === "PICKED_UP" || r.status === "IN_TRANSIT",
+                    ).length
+                  }
+                </p>
+              </div>
+              <Truck className="w-8 h-8 text-purple-600" />
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Refund Completed</p>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {
+                    returns.filter((r) => r.status === "REFUND_COMPLETED")
+                      .length
+                  }
+                </p>
+              </div>
+              <DollarSign className="w-8 h-8 text-emerald-600" />
+            </div>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Pending</p>
-              <p className="text-2xl font-bold text-yellow-600">
-                {returns.filter((r) => r.status === "PENDING").length}
-              </p>
-            </div>
-            <Clock className="w-8 h-8 text-yellow-600" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Approved</p>
-              <p className="text-2xl font-bold text-green-600">
-                {returns.filter((r) => r.status === "APPROVED").length}
-              </p>
-            </div>
-            <CheckCircle className="w-8 h-8 text-green-600" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">In Transit</p>
-              <p className="text-2xl font-bold text-purple-600">
-                {
-                  returns.filter(
-                    (r) =>
-                      r.status === "PICKED_UP" || r.status === "IN_TRANSIT",
-                  ).length
-                }
-              </p>
-            </div>
-            <Truck className="w-8 h-8 text-purple-600" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Refund Completed</p>
-              <p className="text-2xl font-bold text-emerald-600">
-                {returns.filter((r) => r.status === "REFUND_COMPLETED").length}
-              </p>
-            </div>
-            <DollarSign className="w-8 h-8 text-emerald-600" />
-          </div>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search returns..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <select
+              value={selectedStatus}
+              onChange={(e) =>
+                setSelectedStatus(e.target.value as ReturnStatus | "ALL")
+              }
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="ALL">All Status</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="PICKUP_SCHEDULED">Pickup Scheduled</option>
+              <option value="PICKED_UP">Picked Up</option>
+              <option value="IN_TRANSIT">In Transit</option>
+              <option value="RECEIVED">Received</option>
+              <option value="INSPECTING">Inspecting</option>
+              <option value="REFUND_INITIATED">Refund Initiated</option>
+              <option value="REFUND_COMPLETED">Refund Completed</option>
+            </select>
             <input
-              type="text"
-              placeholder="Search returns..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              type="date"
+              placeholder="Start Date"
+              value={dateRange.startDate}
+              onChange={(e) =>
+                setDateRange({ ...dateRange, startDate: e.target.value })
+              }
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <input
+              type="date"
+              placeholder="End Date"
+              value={dateRange.endDate}
+              onChange={(e) =>
+                setDateRange({ ...dateRange, endDate: e.target.value })
+              }
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <select
-            value={selectedStatus}
-            onChange={(e) =>
-              setSelectedStatus(e.target.value as ReturnStatus | "ALL")
-            }
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="ALL">All Status</option>
-            <option value="PENDING">Pending</option>
-            <option value="APPROVED">Approved</option>
-            <option value="REJECTED">Rejected</option>
-            <option value="PICKUP_SCHEDULED">Pickup Scheduled</option>
-            <option value="PICKED_UP">Picked Up</option>
-            <option value="IN_TRANSIT">In Transit</option>
-            <option value="RECEIVED">Received</option>
-            <option value="INSPECTING">Inspecting</option>
-            <option value="REFUND_INITIATED">Refund Initiated</option>
-            <option value="REFUND_COMPLETED">Refund Completed</option>
-          </select>
-          <input
-            type="date"
-            placeholder="Start Date"
-            value={dateRange.startDate}
-            onChange={(e) =>
-              setDateRange({ ...dateRange, startDate: e.target.value })
-            }
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <input
-            type="date"
-            placeholder="End Date"
-            value={dateRange.endDate}
-            onChange={(e) =>
-              setDateRange({ ...dateRange, endDate: e.target.value })
-            }
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
         </div>
-      </div>
 
-      {/* Returns Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-            </div>
-          ) : filteredReturns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64">
-              <Package className="w-16 h-16 text-gray-400 mb-4" />
-              <p className="text-gray-600 text-lg">No returns found</p>
-              <p className="text-gray-400 text-sm mt-2">
-                Try adjusting your filters
-              </p>
-            </div>
-          ) : (
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Return
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Reason
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Refund
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredReturns.map((returnItem) => (
-                  <tr
-                    key={returnItem.id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {returnItem.returnNumber}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Order: {returnItem.order.orderNumber}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {returnItem.user.firstName} {returnItem.user.lastName}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {returnItem.user.email}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {getReasonLabel(returnItem.reason)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {returnItem.returnItems.length} item(s)
-                        </p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">
-                          ₹{returnItem.refundAmount.toFixed(2)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {returnItem.refundMethod.replace("_", " ")}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                          returnItem.status,
-                        )}`}
-                      >
-                        {getStatusIcon(returnItem.status)}
-                        {returnItem.status.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {format(new Date(returnItem.createdAt), "dd MMM yyyy")}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {format(new Date(returnItem.createdAt), "HH:mm")}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedReturn(returnItem);
-                            setShowDetailsModal(true);
-                          }}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {returnItem.status === "PENDING" && (
-                          <>
-                            <button
-                              onClick={() => {
-                                setSelectedReturn(returnItem);
-                                setShowApproveModal(true);
-                              }}
-                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Approve Return"
-                            >
-                              <ThumbsUp className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedReturn(returnItem);
-                                setShowRejectModal(true);
-                              }}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Reject Return"
-                            >
-                              <ThumbsDown className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                        {returnItem.status === "RECEIVED" && (
-                          <button
-                            onClick={() => handleProcessRefund(returnItem)}
-                            disabled={refundMutation.isPending}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
-                            title="Process Refund"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
+        {/* Returns Table */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+              </div>
+            ) : filteredReturns.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64">
+                <Package className="w-16 h-16 text-gray-400 mb-4" />
+                <p className="text-gray-600 text-lg">No returns found</p>
+                <p className="text-gray-400 text-sm mt-2">
+                  Try adjusting your filters
+                </p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Return
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Customer
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Reason
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Media
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Refund
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredReturns.map((returnItem) => (
+                    <tr
+                      key={returnItem.id}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {returnItem.returnNumber}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Order: {returnItem.order.orderNumber}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {returnItem.user.firstName}{" "}
+                            {returnItem.user.lastName}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {returnItem.user.email}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {getReasonLabel(returnItem.reason)}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {returnItem.returnItems.length} item(s)
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {/* ✅ Media indicator */}
+                        {returnItem.media && returnItem.media.length > 0 ? (
+                          <div className="flex items-center gap-1">
+                            <ImageIcon className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm text-blue-600 font-medium">
+                              {returnItem.media.length}
+                            </span>
+                          </div>
+                        ) : returnItem.images &&
+                          returnItem.images.length > 0 ? (
+                          <div className="flex items-center gap-1">
+                            <ImageIcon className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-gray-600">
+                              {returnItem.images.length}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-red-600">No media</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">
+                            ₹{returnItem.refundAmount.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {returnItem.refundMethod.replace("_", " ")}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                            returnItem.status,
+                          )}`}
+                        >
+                          {getStatusIcon(returnItem.status)}
+                          {returnItem.status.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {format(
+                            new Date(returnItem.createdAt),
+                            "dd MMM yyyy",
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {format(new Date(returnItem.createdAt), "HH:mm")}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedReturn(returnItem);
+                              setShowDetailsModal(true);
+                            }}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {returnItem.status === "PENDING" && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setSelectedReturn(returnItem);
+                                  setShowApproveModal(true);
+                                }}
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                title="Approve Return"
+                              >
+                                <ThumbsUp className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedReturn(returnItem);
+                                  setShowRejectModal(true);
+                                }}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Reject Return"
+                              >
+                                <ThumbsDown className="w-4 h-4" />
+                              </button>
+                              {/* ✅ Request More Media Button */}
+                              <button
+                                onClick={() => {
+                                  setSelectedReturn(returnItem);
+                                  setShowRequestMediaModal(true);
+                                }}
+                                className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                                title="Request Additional Media"
+                              >
+                                <Upload className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                          {returnItem.status === "RECEIVED" && (
+                            <button
+                              onClick={() => handleProcessRefund(returnItem)}
+                              disabled={refundMutation.isPending}
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                              title="Process Refund"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Showing {(currentPage - 1) * limit + 1} to{" "}
+                {Math.min(currentPage * limit, pagination.total)} of{" "}
+                {pagination.total} results
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="px-4 py-1 border border-gray-300 rounded-lg bg-gray-50">
+                  {currentPage} / {pagination.totalPages}
+                </span>
+                <button
+                  onClick={() =>
+                    setCurrentPage((p) =>
+                      Math.min(pagination.totalPages, p + 1),
+                    )
+                  }
+                  disabled={currentPage === pagination.totalPages}
+                  className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Pagination */}
-        {pagination && pagination.totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              Showing {(currentPage - 1) * limit + 1} to{" "}
-              {Math.min(currentPage * limit, pagination.total)} of{" "}
-              {pagination.total} results
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="px-4 py-1 border border-gray-300 rounded-lg bg-gray-50">
-                {currentPage} / {pagination.totalPages}
-              </span>
-              <button
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))
-                }
-                disabled={currentPage === pagination.totalPages}
-                className="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
+        {/* Return Details Modal */}
+        {showDetailsModal && selectedReturn && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Return Details - {selectedReturn.returnNumber}
+                </h2>
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Status & Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Status</p>
+                    <span
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
+                        selectedReturn.status,
+                      )}`}
+                    >
+                      {getStatusIcon(selectedReturn.status)}
+                      {selectedReturn.status.replace("_", " ")}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">Refund Amount</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      ₹{selectedReturn.refundAmount.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Customer & Order Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <User className="w-5 h-5" />
+                      Customer
+                    </h3>
+                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                      <div>
+                        <p className="text-sm text-gray-600">Name</p>
+                        <p className="text-sm font-medium">
+                          {selectedReturn.user.firstName}{" "}
+                          {selectedReturn.user.lastName}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Email</p>
+                        <p className="text-sm font-medium">
+                          {selectedReturn.user.email}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Phone</p>
+                        <p className="text-sm font-medium">
+                          {selectedReturn.user.phone || "N/A"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <FileText className="w-5 h-5" />
+                      Order Info
+                    </h3>
+                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                      <div>
+                        <p className="text-sm text-gray-600">Order Number</p>
+                        <p className="text-sm font-medium">
+                          {selectedReturn.order.orderNumber}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Order Total</p>
+                        <p className="text-sm font-medium">
+                          ₹{selectedReturn.order.total.toFixed(2)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Return Date</p>
+                        <p className="text-sm font-medium">
+                          {format(
+                            new Date(selectedReturn.createdAt),
+                            "dd MMM yyyy HH:mm",
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Return Reason */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5" />
+                    Return Reason
+                  </h3>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-900 mb-2">
+                      {getReasonLabel(selectedReturn.reason)}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {selectedReturn.reasonDetails}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Return Items */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Package className="w-5 h-5" />
+                    Return Items
+                  </h3>
+                  <div className="border border-gray-200 rounded-lg divide-y">
+                    {selectedReturn.returnItems.map((item) => (
+                      <div key={item.id} className="p-4 flex gap-4">
+                        {item.product.media[0] && (
+                          <img
+                            src={item.product.media[0].url}
+                            alt={item.product.name}
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <p className="font-medium">{item.product.name}</p>
+                          {item.variant && (
+                            <p className="text-sm text-gray-600">
+                              Variant: {item.variant.name}
+                            </p>
+                          )}
+                          <p className="text-sm text-gray-600">
+                            Quantity: {item.quantity}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">
+                            ₹{item.price.toFixed(2)}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Total: ₹{(item.price * item.quantity).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ✅ Uploaded Media Section */}
+                {selectedReturn.media && selectedReturn.media.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <ImageIcon className="w-5 h-5" />
+                      Uploaded Media ({selectedReturn.media.length})
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      {selectedReturn.media
+                        .sort((a: any, b: any) => a.order - b.order)
+                        .map((media: any) => (
+                          <button
+                            key={media.id}
+                            onClick={() => {
+                              setSelectedMedia(media);
+                              setMediaModalOpen(true);
+                            }}
+                            className="relative group aspect-square rounded-lg overflow-hidden bg-gray-100 hover:ring-2 hover:ring-blue-600 transition-all"
+                          >
+                            {media.type === "IMAGE" ? (
+                              <img
+                                src={media.url}
+                                alt={media.description || "Return media"}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="relative w-full h-full">
+                                <img
+                                  src={
+                                    media.thumbnailUrl ||
+                                    "/placeholder-video.png"
+                                  }
+                                  alt="Video thumbnail"
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20">
+                                  <Video className="w-12 h-12 text-white" />
+                                </div>
+                                {media.duration && (
+                                  <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+                                    {formatDuration(media.duration)}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div className="absolute top-2 left-2">
+                              {media.type === "IMAGE" ? (
+                                <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                                  IMAGE
+                                </span>
+                              ) : (
+                                <span className="bg-purple-500 text-white text-xs px-2 py-1 rounded">
+                                  VIDEO
+                                </span>
+                              )}
+                            </div>
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all flex items-center justify-center">
+                              <ExternalLink className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+
+                    {/* ✅ Request More Media Button (in modal) */}
+                    {selectedReturn.status === "PENDING" && (
+                      <button
+                        onClick={() => {
+                          setShowDetailsModal(false);
+                          setShowRequestMediaModal(true);
+                        }}
+                        className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors font-medium"
+                      >
+                        <Upload className="w-4 h-4" />
+                        Request Additional Media
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Legacy Images */}
+                {selectedReturn.images && selectedReturn.images.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <ImageIcon className="w-5 h-5" />
+                      Product Images ({selectedReturn.images.length})
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      {selectedReturn.images.map((image, index) => (
+                        <img
+                          key={index}
+                          src={image}
+                          alt={`Return image ${index + 1}`}
+                          className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-75 transition-opacity"
+                          onClick={() => window.open(image, "_blank")}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Refund Details */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <DollarSign className="w-5 h-5" />
+                    Refund Details
+                  </h3>
+                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">
+                        Refund Method
+                      </span>
+                      <span className="text-sm font-medium">
+                        {selectedReturn.refundMethod.replace("_", " ")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">
+                        Refund Amount
+                      </span>
+                      <span className="text-sm font-semibold">
+                        ₹{selectedReturn.refundAmount.toFixed(2)}
+                      </span>
+                    </div>
+                    {selectedReturn.razorpayRefundId && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">
+                          Razorpay ID
+                        </span>
+                        <span className="text-sm font-mono">
+                          {selectedReturn.razorpayRefundId}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Admin Notes */}
+                {(selectedReturn.adminNotes ||
+                  selectedReturn.rejectionReason) && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                      Admin Notes
+                    </h3>
+                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                      {selectedReturn.rejectionReason && (
+                        <div>
+                          <p className="text-sm font-medium text-red-600">
+                            Rejection Reason:
+                          </p>
+                          <p className="text-sm text-gray-900">
+                            {selectedReturn.rejectionReason}
+                          </p>
+                        </div>
+                      )}
+                      {selectedReturn.adminNotes && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            Notes:
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {selectedReturn.adminNotes}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Shipment Tracking */}
+                {selectedReturn.returnShipment && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Truck className="w-5 h-5" />
+                      Return Shipment
+                    </h3>
+                    <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">AWB Code</p>
+                        <p className="text-sm font-mono font-medium">
+                          {selectedReturn.returnShipment.awb}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Courier</p>
+                        <p className="text-sm font-medium">
+                          {selectedReturn.returnShipment.courierName}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Pickup Date</p>
+                        <p className="text-sm font-medium">
+                          {format(
+                            new Date(selectedReturn.returnShipment.pickupDate),
+                            "dd MMM yyyy",
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Status</p>
+                        <p className="text-sm font-medium">
+                          {selectedReturn.returnShipment.status}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Media Viewer Modal */}
+        {mediaModalOpen && selectedMedia && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] p-4"
+            onClick={() => setMediaModalOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-5xl w-full bg-white rounded-lg overflow-hidden"
+            >
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    {selectedMedia.type} Preview
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {formatFileSize(selectedMedia.fileSize)}
+                    {selectedMedia.width &&
+                      selectedMedia.height &&
+                      ` • ${selectedMedia.width}x${selectedMedia.height}`}
+                    {selectedMedia.duration &&
+                      ` • ${formatDuration(selectedMedia.duration)}`}
+                  </p>
+                  {selectedMedia.description && (
+                    <p className="text-sm text-gray-700 mt-2">
+                      {selectedMedia.description}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setMediaModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="p-4 bg-gray-50">
+                {selectedMedia.type === "IMAGE" ? (
+                  <div
+                    className="relative w-full"
+                    style={{ maxHeight: "70vh" }}
+                  >
+                    <img
+                      src={selectedMedia.url}
+                      alt={selectedMedia.description || "Return media"}
+                      className="w-full h-auto object-contain max-h-[70vh]"
+                    />
+                  </div>
+                ) : (
+                  <video
+                    src={selectedMedia.url}
+                    controls
+                    className="w-full max-h-[70vh] rounded-lg"
+                  >
+                    Your browser does not support video playback.
+                  </video>
+                )}
+              </div>
+
+              <div className="p-4 border-t border-gray-200 flex gap-2">
+                <a
+                  href={selectedMedia.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Open in New Tab
+                </a>
+                <a
+                  href={selectedMedia.url}
+                  download
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Request More Media Modal */}
+        {showRequestMediaModal && selectedReturn && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Request Additional Media
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Return: {selectedReturn.returnNumber}
+                </p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <p className="text-sm text-orange-900">
+                    Send a message to the customer explaining what additional
+                    photos or videos are needed. The customer will be notified
+                    via email.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message to Customer <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={mediaRequestMessage}
+                    onChange={(e) => setMediaRequestMessage(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Example: Please upload clear photos showing the full product from multiple angles, including close-ups of the defect or issue..."
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Be specific about what you need to see (e.g., defect
+                    close-up, product tags, packaging condition)
+                  </p>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setShowRequestMediaModal(false);
+                    setMediaRequestMessage("");
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRequestMoreMedia}
+                  disabled={
+                    requestMediaMutation.isPending ||
+                    !mediaRequestMessage.trim()
+                  }
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {requestMediaMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send Request
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Approve Modal */}
+        {showApproveModal && selectedReturn && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Approve Return
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Return: {selectedReturn.returnNumber}
+                </p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-900">
+                    Approving this return will schedule a pickup and create a
+                    reverse shipment order.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Admin Notes (Optional)
+                  </label>
+                  <textarea
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Add any internal notes..."
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setShowApproveModal(false);
+                    setAdminNotes("");
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApprove}
+                  disabled={approveMutation.isPending}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {approveMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Approve Return
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reject Modal */}
+        {showRejectModal && selectedReturn && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">
+                  Reject Return
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Return: {selectedReturn.returnNumber}
+                </p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-900">
+                    Please provide a clear reason for rejection. This will be
+                    sent to the customer.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rejection Reason <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    placeholder="Explain why this return is being rejected..."
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Internal Notes (Optional)
+                  </label>
+                  <textarea
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    rows={2}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Add any internal notes..."
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectionReason("");
+                    setAdminNotes("");
+                  }}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReject}
+                  disabled={rejectMutation.isPending || !rejectionReason.trim()}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {rejectMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Rejecting...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4" />
+                      Reject Return
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* Return Details Modal */}
-      {showDetailsModal && selectedReturn && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900">
-                Return Details - {selectedReturn.returnNumber}
-              </h2>
-              <button
-                onClick={() => setShowDetailsModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Status & Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">Status</p>
-                  <span
-                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                      selectedReturn.status,
-                    )}`}
-                  >
-                    {getStatusIcon(selectedReturn.status)}
-                    {selectedReturn.status.replace("_", " ")}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">Refund Amount</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    ₹{selectedReturn.refundAmount.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Customer & Order Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <User className="w-5 h-5" />
-                    Customer
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <div>
-                      <p className="text-sm text-gray-600">Name</p>
-                      <p className="text-sm font-medium">
-                        {selectedReturn.user.firstName}{" "}
-                        {selectedReturn.user.lastName}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Email</p>
-                      <p className="text-sm font-medium">
-                        {selectedReturn.user.email}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Phone</p>
-                      <p className="text-sm font-medium">
-                        {selectedReturn.user.phone || "N/A"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Order Info
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <div>
-                      <p className="text-sm text-gray-600">Order Number</p>
-                      <p className="text-sm font-medium">
-                        {selectedReturn.order.orderNumber}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Order Total</p>
-                      <p className="text-sm font-medium">
-                        ₹{selectedReturn.order.total.toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Return Date</p>
-                      <p className="text-sm font-medium">
-                        {format(
-                          new Date(selectedReturn.createdAt),
-                          "dd MMM yyyy HH:mm",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Return Reason */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5" />
-                  Return Reason
-                </h3>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm font-medium text-gray-900 mb-2">
-                    {getReasonLabel(selectedReturn.reason)}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    {selectedReturn.reasonDetails}
-                  </p>
-                </div>
-              </div>
-
-              {/* Return Items */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Package className="w-5 h-5" />
-                  Return Items
-                </h3>
-                <div className="border border-gray-200 rounded-lg divide-y">
-                  {selectedReturn.returnItems.map((item) => (
-                    <div key={item.id} className="p-4 flex gap-4">
-                      {item.product.media[0] && (
-                        <img
-                          src={item.product.media[0].url}
-                          alt={item.product.name}
-                          className="w-16 h-16 object-cover rounded"
-                        />
-                      )}
-                      <div className="flex-1">
-                        <p className="font-medium">{item.product.name}</p>
-                        {item.variant && (
-                          <p className="text-sm text-gray-600">
-                            Variant: {item.variant.name}
-                          </p>
-                        )}
-                        <p className="text-sm text-gray-600">
-                          Quantity: {item.quantity}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">₹{item.price.toFixed(2)}</p>
-                        <p className="text-sm text-gray-600">
-                          Total: ₹{(item.price * item.quantity).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Images */}
-              {selectedReturn.images.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <ImageIcon className="w-5 h-5" />
-                    Product Images ({selectedReturn.images.length})
-                  </h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    {selectedReturn.images.map((image, index) => (
-                      <img
-                        key={index}
-                        src={image}
-                        alt={`Return image ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-75 transition-opacity"
-                        onClick={() => window.open(image, "_blank")}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Refund Details */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />
-                  Refund Details
-                </h3>
-                <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Refund Method</span>
-                    <span className="text-sm font-medium">
-                      {selectedReturn.refundMethod.replace("_", " ")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Refund Amount</span>
-                    <span className="text-sm font-semibold">
-                      ₹{selectedReturn.refundAmount.toFixed(2)}
-                    </span>
-                  </div>
-                  {selectedReturn.razorpayRefundId && (
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Razorpay ID</span>
-                      <span className="text-sm font-mono">
-                        {selectedReturn.razorpayRefundId}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Admin Notes */}
-              {(selectedReturn.adminNotes ||
-                selectedReturn.rejectionReason) && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                    Admin Notes
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    {selectedReturn.rejectionReason && (
-                      <div>
-                        <p className="text-sm font-medium text-red-600">
-                          Rejection Reason:
-                        </p>
-                        <p className="text-sm text-gray-900">
-                          {selectedReturn.rejectionReason}
-                        </p>
-                      </div>
-                    )}
-                    {selectedReturn.adminNotes && (
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          Notes:
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {selectedReturn.adminNotes}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Shipment Tracking */}
-              {selectedReturn.returnShipment && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Truck className="w-5 h-5" />
-                    Return Shipment
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600">AWB Code</p>
-                      <p className="text-sm font-mono font-medium">
-                        {selectedReturn.returnShipment.awb}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Courier</p>
-                      <p className="text-sm font-medium">
-                        {selectedReturn.returnShipment.courierName}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Pickup Date</p>
-                      <p className="text-sm font-medium">
-                        {format(
-                          new Date(selectedReturn.returnShipment.pickupDate),
-                          "dd MMM yyyy",
-                        )}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Status</p>
-                      <p className="text-sm font-medium">
-                        {selectedReturn.returnShipment.status}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Approve Modal */}
-      {showApproveModal && selectedReturn && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">
-                Approve Return
-              </h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Return: {selectedReturn.returnNumber}
-              </p>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-900">
-                  Approving this return will schedule a pickup and create a
-                  reverse shipment order.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Admin Notes (Optional)
-                </label>
-                <textarea
-                  value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Add any internal notes..."
-                />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setShowApproveModal(false);
-                  setAdminNotes("");
-                }}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApprove}
-                disabled={approveMutation.isPending}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {approveMutation.isPending ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Approving...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Approve Return
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reject Modal */}
-      {showRejectModal && selectedReturn && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Reject Return</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Return: {selectedReturn.returnNumber}
-              </p>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-900">
-                  Please provide a clear reason for rejection. This will be sent
-                  to the customer.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rejection Reason <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="Explain why this return is being rejected..."
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Internal Notes (Optional)
-                </label>
-                <textarea
-                  value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
-                  rows={2}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Add any internal notes..."
-                />
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setShowRejectModal(false);
-                  setRejectionReason("");
-                  setAdminNotes("");
-                }}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReject}
-                disabled={rejectMutation.isPending || !rejectionReason.trim()}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {rejectMutation.isPending ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Rejecting...
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4" />
-                    Reject Return
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
     </MainLayout>
   );
 };

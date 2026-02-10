@@ -96,6 +96,31 @@ export const returnApi = {
     return apiCall("GET", `/returns/${id}/track`);
   },
 
+    /**
+   * ✅ NEW: Customer adds more media to existing return
+   * POST /api/returns/:returnId/add-media
+   */
+  addMediaToReturn: async (
+    returnId: string,
+    data: {
+      media: Array<{
+        type: "IMAGE" | "VIDEO";
+        url: string;
+        key: string;
+        thumbnailUrl?: string;
+        mimeType: string;
+        fileSize: number;
+        duration?: number;
+        width?: number;
+        height?: number;
+        order: number;
+        description?: string;
+      }>;
+    }
+  ): Promise<ApiResponse<Return>> => {
+    return apiCall("POST", `/returns/${returnId}/add-media`, data);
+  },
+
   // Admin Endpoints
   getAllReturns: async (
     params?: QueryReturnParams
@@ -128,6 +153,19 @@ export const returnApi = {
     return apiCall("POST", `/admin/returns/${id}/reject`, {
       rejectionReason,
       adminNotes,
+    });
+  },
+
+    /**
+   * ✅ NEW: Admin requests more media from customer
+   * POST /api/admin/returns/:returnId/request-media
+   */
+  requestMoreMedia: async (
+    returnId: string,
+    message: string
+  ): Promise<ApiResponse<Return>> => {
+    return apiCall("POST", `/admin/returns/${returnId}/request-media`, {
+      message,
     });
   },
 

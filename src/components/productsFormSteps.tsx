@@ -1,4 +1,4 @@
-import React, { type JSX, useState } from "react";
+import React, { type JSX, useMemo, useState } from "react";
 import {
   Package,
   Layers,
@@ -30,6 +30,7 @@ import {
   Zap,
   TrendingUp,
   Percent,
+  Lock,
 } from "lucide-react";
 import type { Category } from "@/lib/types/category/category";
 import type { CreateProductFormData } from "@/lib/types/product/schema";
@@ -40,7 +41,7 @@ import {
   isColorAttribute,
 } from "@/lib/utils/colorValidation";
 import { s3Api } from "@/lib/api/s3.api";
-
+import { normalizeVariantAttributes } from "@/pages/admin/products/productsPage";
 
 interface MediaPreviewItem {
   file: File | null;
@@ -126,6 +127,39 @@ const renderCategoryOptions = (
   return options;
 };
 
+// Format bytes to human readable
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+// Calculate total media size across product + all variants
+const calculateTotalMediaSize = (
+  mediaPreviews: MediaPreviewItem[],
+  variantMediaPreviews: Record<number, MediaPreviewItem[]>,
+): number => {
+  // Product media size
+  const productMediaSize = mediaPreviews.reduce((total, item) => {
+    return total + (item.file?.size || 0);
+  }, 0);
+
+  // Variant media size
+  const variantMediaSize = Object.values(variantMediaPreviews).reduce(
+    (total, previews) => {
+      return (
+        total + previews.reduce((sum, item) => sum + (item.file?.size || 0), 0)
+      );
+    },
+    0,
+  );
+
+  return productMediaSize + variantMediaSize;
+};
+
+// Maximum allowed size (50MB)
+const MAX_MEDIA_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+
 const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
   currentStep,
   productType,
@@ -162,6 +196,29 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
     variantIndex: number;
     mediaIndex: number;
   } | null>(null);
+
+  const watchedVariants = watch("variants") || [];
+
+  const globalVariantMode = useMemo<"STANDARD" | "CUSTOM" | null>(() => {
+    for (const v of watchedVariants) {
+      if (!v) continue;
+
+      const hasStandard =
+        !!v.size?.trim() || !!v.color?.trim() || !!v.fabric?.trim();
+
+      const attrs = normalizeVariantAttributes(v);
+      const hasCustom =
+        attrs &&
+        Object.entries(attrs).some(
+          ([k, val]) => k?.trim() && String(val).trim(),
+        );
+
+      if (hasCustom) return "CUSTOM";
+      if (hasStandard) return "STANDARD";
+    }
+
+    return null;
+  }, [watchedVariants]);
 
   // Drag and drop handlers
   const handleDragStart = (index: number) => {
@@ -396,487 +453,504 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
     );
 
     return (
-      <div className="space-y-8">
-        <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-2">
-            <FileText className="h-6 w-6 text-blue-600" />
-            Basic Information
-          </h3>
-          <p className="text-gray-600">Tell us about your product</p>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          <div className="text-center mb-6">
+            <h3 className="text-2xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-2">
+              <FileText className="h-6 w-6 text-blue-600" />
+              Basic Information
+            </h3>
+            <p className="text-gray-600">Tell us about your product</p>
+          </div>
 
-        {/* Product Name & SKU Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2">
+          {/* Product Name & SKU Row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Product Name *
+              </label>
+              <input
+                {...register("name")}
+                type="text"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                placeholder="e.g., Handwoven Cotton Saree"
+              />
+              {errors.name && (
+                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {errors.name.message}
+                </p>
+              )}
+            </div>
+
+            {/* 🆕 SKU Field */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                SKU *
+              </label>
+              <input
+                {...register("sku")}
+                type="text"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-mono"
+                placeholder="KANCH-01"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Product Name *
+              Description *
             </label>
-            <input
-              {...register("name")}
-              type="text"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="e.g., Handwoven Cotton Saree"
+            <textarea
+              {...register("description")}
+              rows={4}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+              placeholder="Detailed product description..."
             />
-            {errors.name && (
+            {errors.description && (
               <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
-                {errors.name.message}
+                {errors.description.message}
               </p>
             )}
           </div>
 
-          {/* 🆕 SKU Field */}
+          {/* Category */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              SKU (Optional)
+              Category *
             </label>
-            <input
-              {...register("sku")}
-              type="text"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all font-mono"
-              placeholder="AUTO-GEN"
-            />
-            <p className="mt-1.5 text-xs text-gray-500 flex items-center gap-1">
-              <Zap className="h-3 w-3" />
-              Auto-generated if empty
-            </p>
-          </div>
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Description *
-          </label>
-          <textarea
-            {...register("description")}
-            rows={4}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
-            placeholder="Detailed product description..."
-          />
-          {errors.description && (
-            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-              <AlertCircle className="h-4 w-4" />
-              {errors.description.message}
-            </p>
-          )}
-        </div>
-
-        {/* Category */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Category *
-          </label>
-          <select
-            {...register("categoryId")}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white font-mono text-sm transition-all"
-          >
-            <option value="">Select a category</option>
-            {categories?.categories &&
-              renderCategoryOptions(
-                categories.categories.filter((cat) => !cat.parentId),
-              )}
-          </select>
-          {errors.categoryId && (
-            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-              <AlertCircle className="h-4 w-4" />
-              {errors.categoryId.message}
-            </p>
-          )}
-        </div>
-
-        {/* Pricing Section - Enhanced */}
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <DollarSign className="h-5 w-5 text-blue-600" />
-            <h4 className="text-lg font-bold text-gray-900">Product Pricing</h4>
+            <select
+              {...register("categoryId")}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white font-mono text-sm transition-all"
+            >
+              <option value="">Select a category</option>
+              {categories?.categories &&
+                renderCategoryOptions(
+                  categories.categories.filter((cat) => !cat.parentId),
+                )}
+            </select>
+            {errors.categoryId && (
+              <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-4 w-4" />
+                {errors.categoryId.message}
+              </p>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Base Price (MRP) *
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-semibold text-lg">
-                  ₹
-                </span>
-                <input
-                  {...register("basePrice")}
-                  type="number"
-                  step="0.01"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-lg font-semibold"
-                  placeholder="0.00"
-                />
-              </div>
-              {errors.basePrice && (
-                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4" />
-                  {errors.basePrice.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Selling Price *
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-semibold text-lg">
-                  ₹
-                </span>
-                <input
-                  {...register("sellingPrice")}
-                  type="number"
-                  step="0.01"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-lg font-semibold"
-                  placeholder="0.00"
-                />
-              </div>
-              {errors.sellingPrice && (
-                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4" />
-                  {errors.sellingPrice.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Discount Display */}
-          {discount > 0 && (
-            <div className="mt-4 p-4 bg-green-100 border border-green-300 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Percent className="h-5 w-5 text-green-600" />
-                <span className="text-sm font-semibold text-green-900">
-                  Discount Applied
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-bold text-green-600">
-                  {discount}% OFF
-                </span>
-                <span className="text-sm text-green-700">
-                  Save ₹
-                  {(formData.basePrice - formData.sellingPrice).toFixed(2)}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* HSN Code */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            HSN Code (Optional)
-          </label>
-          <input
-            {...register("hsnCode")}
-            type="text"
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-            placeholder="e.g., 5208"
-          />
-          <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
-            <Info className="h-3 w-3" />
-            HSN code for GST classification
-          </p>
-        </div>
-
-        {/* Shipping Dimensions - Enhanced */}
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Maximize2 className="h-5 w-5 text-green-600" />
-            <h4 className="text-lg font-bold text-gray-900">
-              Shipping Dimensions
-            </h4>
-            <span className="ml-auto px-3 py-1 bg-green-200 text-green-800 rounded-full text-xs font-bold">
-              REQUIRED FOR SHIPROCKET
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Weight (kg) *
-              </label>
-              <div className="relative">
-                <Weight className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  {...register("weight")}
-                  type="number"
-                  step="0.001"
-                  className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
-                  placeholder="0.500"
-                />
-              </div>
-              {errors.weight && (
-                <p className="mt-1 text-xs text-red-600">
-                  {errors.weight.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Length (cm) *
-              </label>
-              <input
-                {...register("length")}
-                type="number"
-                step="0.01"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
-                placeholder="30"
-              />
-              {errors.length && (
-                <p className="mt-1 text-xs text-red-600">
-                  {errors.length.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Breadth (cm) *
-              </label>
-              <input
-                {...register("breadth")}
-                type="number"
-                step="0.01"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
-                placeholder="20"
-              />
-              {errors.breadth && (
-                <p className="mt-1 text-xs text-red-600">
-                  {errors.breadth.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Height (cm) *
-              </label>
-              <input
-                {...register("height")}
-                type="number"
-                step="0.01"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
-                placeholder="10"
-              />
-              {errors.height && (
-                <p className="mt-1 text-xs text-red-600">
-                  {errors.height.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Volumetric Weight Display */}
-          <div className="bg-white border-2 border-green-300 rounded-xl p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-green-900 mb-1">
-                  Volumetric Weight
-                </p>
-                <p className="text-xs text-green-700">(L × B × H) ÷ 5000</p>
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-bold text-green-600">
-                  {calculateVolumetricWeight()} kg
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Artisan Information - Enhanced */}
-        <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-200 rounded-2xl p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <User className="h-5 w-5 text-amber-600" />
-            <h4 className="text-lg font-bold text-gray-900">
-              Artisan Information
-            </h4>
-            <span className="ml-auto px-3 py-1 bg-amber-200 text-amber-800 rounded-full text-xs font-bold">
-              OPTIONAL
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Artisan Name
-              </label>
-              <input
-                {...register("artisanName")}
-                type="text"
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
-                placeholder="Name of the artisan"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                About Artisan
-              </label>
-              <textarea
-                {...register("artisanAbout")}
-                rows={2}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all resize-none"
-                placeholder="Brief description about the artisan..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Artisan Location
-              </label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  {...register("artisanLocation")}
-                  type="text"
-                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
-                  placeholder="e.g., Varanasi, Uttar Pradesh"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Out-of-Stock & Video Features */}
-        <div className="border-t border-gray-200 pt-4">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">
-            Additional Features
-          </h4>
-
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <input
-                {...register("allowOutOfStockOrders")}
-                type="checkbox"
-                className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Allow orders when stock is low (below threshold but not zero)
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                {...register("hasVideoConsultation")}
-                type="checkbox"
-                className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Enable Video Consultation
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                {...register("videoPurchasingEnabled")}
-                type="checkbox"
-                className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Enable Video Purchasing
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Video Consultation Note
-              </label>
-              <textarea
-                {...register("videoConsultationNote")}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                placeholder="Add instructions for video consultation..."
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Specifications - Enhanced */}
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Tag className="h-5 w-5 text-indigo-600" />
+          {/* Pricing Section - Enhanced */}
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <DollarSign className="h-5 w-5 text-blue-600" />
               <h4 className="text-lg font-bold text-gray-900">
-                Specifications
+                Product Pricing
               </h4>
             </div>
-            <button
-              type="button"
-              onClick={() => appendSpec({ key: "", value: "" })}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-2 font-semibold transition-all shadow-md hover:shadow-lg"
-            >
-              <Plus className="h-4 w-4" />
-              Add Spec
-            </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Base Price (MRP) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-semibold text-lg">
+                    ₹
+                  </span>
+                  <input
+                    {...register("basePrice")}
+                    type="number"
+                    step="0.01"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-lg font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
+                {errors.basePrice && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.basePrice.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Selling Price *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-semibold text-lg">
+                    ₹
+                  </span>
+                  <input
+                    {...register("sellingPrice")}
+                    type="number"
+                    step="0.01"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-lg font-semibold"
+                    placeholder="0.00"
+                  />
+                </div>
+                {errors.sellingPrice && (
+                  <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {errors.sellingPrice.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Discount Display */}
+            {discount > 0 && (
+              <div className="mt-4 p-4 bg-green-100 border border-green-300 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Percent className="h-5 w-5 text-green-600" />
+                  <span className="text-sm font-semibold text-green-900">
+                    Discount Applied
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl font-bold text-green-600">
+                    {discount}% OFF
+                  </span>
+                  <span className="text-sm text-green-700">
+                    Save ₹
+                    {(formData.basePrice - formData.sellingPrice).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {specFields.length > 0 ? (
-            <div className="space-y-3">
-              {specFields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className="flex gap-3 bg-white p-3 rounded-xl border border-indigo-200"
-                >
-                  <input
-                    {...register(`specifications.${index}.key` as const)}
-                    placeholder="Key (e.g., Fabric)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <input
-                    {...register(`specifications.${index}.value` as const)}
-                    placeholder="Value (e.g., Cotton)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeSpec(index)}
-                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-6 bg-white rounded-xl border-2 border-dashed border-indigo-300">
-              <Tag className="h-10 w-10 text-indigo-400 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">
-                No specifications added yet
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Active Status */}
-        <div className="flex items-center justify-center p-6 bg-gray-50 rounded-2xl border-2 border-gray-200">
-          <label className="flex items-center space-x-3 cursor-pointer group">
+          {/* HSN Code */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              HSN Code (Optional)
+            </label>
             <input
-              {...register("isActive")}
-              type="checkbox"
-              className="h-6 w-6 text-blue-600 rounded-lg focus:ring-blue-500 focus:ring-2 transition-all cursor-pointer"
+              {...register("hsnCode")}
+              type="text"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              placeholder="e.g., 5208"
             />
-            <div>
-              <span className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
-                Publish this product immediately
+            <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+              <Info className="h-3 w-3" />
+              HSN code for GST classification
+            </p>
+          </div>
+
+          {/* Shipping Dimensions - Enhanced */}
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Maximize2 className="h-5 w-5 text-green-600" />
+              <h4 className="text-lg font-bold text-gray-900">
+                Shipping Dimensions
+              </h4>
+              <span className="ml-auto px-3 py-1 bg-green-200 text-green-800 rounded-full text-xs font-bold">
+                REQUIRED FOR SHIPROCKET
               </span>
-              <p className="text-sm text-gray-500">
-                Product will be visible on your store right away
-              </p>
             </div>
-          </label>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">
+                  Weight (kg) *
+                </label>
+                <div className="relative">
+                  <Weight className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    {...register("weight")}
+                    type="number"
+                    step="0.001"
+                    className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                    placeholder="0.500"
+                  />
+                </div>
+                {errors.weight && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {errors.weight.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">
+                  Length (cm) *
+                </label>
+                <input
+                  {...register("length")}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                  placeholder="30"
+                />
+                {errors.length && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {errors.length.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">
+                  Breadth (cm) *
+                </label>
+                <input
+                  {...register("breadth")}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                  placeholder="20"
+                />
+                {errors.breadth && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {errors.breadth.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">
+                  Height (cm) *
+                </label>
+                <input
+                  {...register("height")}
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 transition-all"
+                  placeholder="10"
+                />
+                {errors.height && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {errors.height.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Volumetric Weight Display */}
+            <div className="bg-white border-2 border-green-300 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-green-900 mb-1">
+                    Volumetric Weight
+                  </p>
+                  <p className="text-xs text-green-700">(L × B × H) ÷ 5000</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-green-600">
+                    {calculateVolumetricWeight()} kg
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-6">
+          {/* Artisan Information - Enhanced */}
+          <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-200 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <User className="h-5 w-5 text-amber-600" />
+              <h4 className="text-lg font-bold text-gray-900">
+                Artisan Information
+              </h4>
+              <span className="ml-auto px-3 py-1 bg-amber-200 text-amber-800 rounded-full text-xs font-bold">
+                OPTIONAL
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Artisan Name
+                </label>
+                <input
+                  {...register("artisanName")}
+                  type="text"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                  placeholder="Name of the artisan"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  About Artisan
+                </label>
+                <textarea
+                  {...register("artisanAbout")}
+                  rows={2}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all resize-none"
+                  placeholder="Brief description about the artisan..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Artisan Location
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    {...register("artisanLocation")}
+                    type="text"
+                    className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                    placeholder="e.g., Varanasi, Uttar Pradesh"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Out-of-Stock & Video Features */}
+          <div className="border-t border-gray-200 pt-4">
+            <h4 className="text-sm font-semibold text-gray-900 mb-3">
+              Additional Features
+            </h4>
+
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <input
+                  {...register("allowOutOfStockOrders")}
+                  type="checkbox"
+                  className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  Allow orders when stock is low (below threshold but not zero)
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  {...register("hasVideoConsultation")}
+                  type="checkbox"
+                  className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  Enable Video Consultation
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  {...register("videoPurchasingEnabled")}
+                  type="checkbox"
+                  className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  Enable Video Purchasing
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Video Consultation Note
+                </label>
+                <textarea
+                  {...register("videoConsultationNote")}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Add instructions for video consultation..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Specifications - Enhanced */}
+          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Tag className="h-5 w-5 text-indigo-600" />
+                <h4 className="text-lg font-bold text-gray-900">
+                  Specifications
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => appendSpec({ key: "", value: "" })}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-2 font-semibold transition-all shadow-md hover:shadow-lg"
+              >
+                <Plus className="h-4 w-4" />
+                Add Spec
+              </button>
+            </div>
+
+            {specFields.length > 0 ? (
+              <div className="space-y-3">
+                {specFields.map((field, index) => (
+                  <div
+                    key={field.id}
+                    className="flex gap-3 bg-white p-3 rounded-xl border border-indigo-200"
+                  >
+                    <input
+                      {...register(`specifications.${index}.key` as const)}
+                      placeholder="Key (e.g., Fabric)"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <input
+                      {...register(`specifications.${index}.value` as const)}
+                      placeholder="Value (e.g., Cotton)"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSpec(index)}
+                      className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 bg-white rounded-xl border-2 border-dashed border-indigo-300">
+                <Tag className="h-10 w-10 text-indigo-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">
+                  No specifications added yet
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Active Status */}
+          <div className="flex items-center justify-center p-6 bg-gray-50 rounded-2xl border-2 border-gray-200">
+            <label className="flex items-center space-x-3 cursor-pointer group">
+              <input
+                {...register("isActive")}
+                type="checkbox"
+                className="h-6 w-6 text-blue-600 rounded-lg focus:ring-blue-500 focus:ring-2 transition-all cursor-pointer"
+              />
+              <div>
+                <span className="text-base font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                  Publish this product immediately
+                </span>
+                <p className="text-sm text-gray-500">
+                  Product will be visible on your store right away
+                </p>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Continue in next part due to length...
-  // Step 3: Media Upload (Enhanced)
+  // Step 3: Media Upload with Size Tracking
   if (currentStep === 3) {
+    // Calculate sizes
+    const totalMediaSize = calculateTotalMediaSize(
+      mediaPreviews,
+      variantMediaPreviews,
+    );
+    const remainingSize = MAX_MEDIA_SIZE - totalMediaSize;
+    const sizePercentage = (totalMediaSize / MAX_MEDIA_SIZE) * 100;
+    const isOverLimit = totalMediaSize > MAX_MEDIA_SIZE;
+
+    // Count total files
+    const productFileCount = mediaPreviews.length;
+    const variantFileCount = Object.values(variantMediaPreviews).reduce(
+      (sum, previews) => sum + previews.length,
+      0,
+    );
+    const totalFileCount = productFileCount + variantFileCount;
+
     return (
       <div className="space-y-6">
         <div className="text-center mb-6">
@@ -887,41 +961,248 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
           <p className="text-gray-600">Upload high-quality images and videos</p>
         </div>
 
-        {/* Upload Area - Enhanced */}
-        <div className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center hover:border-blue-500 hover:bg-blue-50 transition-all duration-300 cursor-pointer group">
+        {/* SIZE TRACKER - Always Visible */}
+        <div
+          className={`border-2 rounded-2xl p-5 transition-all ${
+            isOverLimit
+              ? "border-red-500 bg-red-50"
+              : sizePercentage > 80
+                ? "border-orange-500 bg-orange-50"
+                : "border-blue-200 bg-blue-50"
+          }`}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  isOverLimit
+                    ? "bg-red-500"
+                    : sizePercentage > 80
+                      ? "bg-orange-500"
+                      : "bg-blue-500"
+                }`}
+              />
+              <span className="text-sm font-bold text-gray-900">
+                Total Media Size
+              </span>
+            </div>
+            <div className="text-right">
+              <div
+                className={`text-2xl font-bold ${
+                  isOverLimit
+                    ? "text-red-600"
+                    : sizePercentage > 80
+                      ? "text-orange-600"
+                      : "text-blue-600"
+                }`}
+              >
+                {formatBytes(totalMediaSize)}
+              </div>
+              <div className="text-xs text-gray-600">
+                of {formatBytes(MAX_MEDIA_SIZE)} used
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`absolute top-0 left-0 h-full transition-all duration-300 ${
+                isOverLimit
+                  ? "bg-gradient-to-r from-red-500 to-red-600"
+                  : sizePercentage > 80
+                    ? "bg-gradient-to-r from-orange-500 to-orange-600"
+                    : "bg-gradient-to-r from-blue-500 to-indigo-600"
+              }`}
+              style={{ width: `${Math.min(sizePercentage, 100)}%` }}
+            />
+          </div>
+
+          {/* Status Messages */}
+          <div className="mt-3 flex items-start gap-2">
+            {isOverLimit ? (
+              <>
+                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-red-900">
+                    Size limit exceeded!
+                  </p>
+                  <p className="text-xs text-red-700">
+                    Remove {formatBytes(totalMediaSize - MAX_MEDIA_SIZE)} to
+                    continue. Images will be optimized to WebP during upload.
+                  </p>
+                </div>
+              </>
+            ) : sizePercentage > 80 ? (
+              <>
+                <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-orange-900">
+                    Almost at limit!
+                  </p>
+                  <p className="text-xs text-orange-700">
+                    {formatBytes(remainingSize)} remaining. Consider optimizing
+                    images before upload.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-blue-900">
+                    Looking good!
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    {formatBytes(remainingSize)} remaining for product & variant
+                    media.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Breakdown */}
+          {totalFileCount > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-300">
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="bg-white rounded-lg p-2 border border-gray-200">
+                  <div className="text-gray-600 mb-1">Product Media</div>
+                  <div className="font-bold text-gray-900">
+                    {formatBytes(
+                      mediaPreviews.reduce(
+                        (sum, item) => sum + (item.file?.size || 0),
+                        0,
+                      ),
+                    )}
+                  </div>
+                  <div className="text-gray-500">{productFileCount} files</div>
+                </div>
+                <div className="bg-white rounded-lg p-2 border border-gray-200">
+                  <div className="text-gray-600 mb-1">Variant Media</div>
+
+                  <div className="font-bold text-gray-900">
+                    {formatBytes(
+                      Object.values(variantMediaPreviews).reduce(
+                        (total, previews) =>
+                          total +
+                          previews.reduce(
+                            (sum, item) => sum + (item.file?.size || 0),
+                            0,
+                          ),
+                        0,
+                      ),
+                    )}
+                  </div>
+                  <div className="text-gray-500">{variantFileCount} files</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* RECOMMENDED SIZES INFO */}
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-5">
+          <div className="flex items-start gap-3">
+            <Info className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-purple-900 mb-2">
+                📐 Recommended Image Sizes
+              </h4>
+              <div className="space-y-2 text-xs text-purple-800">
+                <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-purple-200">
+                  <span className="font-semibold">Product Card (Listing):</span>
+                  <span className="font-mono font-bold">500 × 600 px</span>
+                </div>
+                <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-purple-200">
+                  <span className="font-semibold">Product Detail (Main):</span>
+                  <span className="font-mono font-bold">1200 × 1200 px</span>
+                </div>
+                <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-purple-200">
+                  <span className="font-semibold">Backend Processing:</span>
+                  <span className="font-bold text-green-700">
+                    WebP + Sharp Optimization
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-purple-700 mt-3 flex items-center gap-1">
+                <Zap className="h-3 w-3" />
+                Upload any size - will be auto-optimized to WebP (80% quality,
+                max 1920×1080)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* UPLOAD AREA - Disabled if over limit */}
+        <div
+          className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${
+            isOverLimit
+              ? "border-red-300 bg-red-50 opacity-50 cursor-not-allowed"
+              : "border-gray-300 hover:border-blue-500 hover:bg-blue-50 cursor-pointer group"
+          }`}
+        >
           <input
             type="file"
             id="media-upload"
             multiple
             accept="image/*,video/*"
-            onChange={handleMediaUpload}
+            onChange={(e) => {
+              if (isOverLimit) {
+                e.target.value = ""; // Clear selection
+                alert(
+                  "Please remove some files to free up space before uploading more.",
+                );
+                return;
+              }
+              handleMediaUpload(e);
+            }}
             className="hidden"
+            disabled={isOverLimit}
           />
           <label
             htmlFor="media-upload"
-            className="cursor-pointer flex flex-col items-center"
+            className={`${
+              isOverLimit ? "cursor-not-allowed" : "cursor-pointer"
+            } flex flex-col items-center`}
           >
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Upload className="h-10 w-10 text-blue-600" />
+            <div
+              className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-4 transition-transform ${
+                isOverLimit
+                  ? "bg-red-100"
+                  : "bg-gradient-to-br from-blue-100 to-blue-200 group-hover:scale-110"
+              }`}
+            >
+              <Upload
+                className={`h-10 w-10 ${isOverLimit ? "text-red-400" : "text-blue-600"}`}
+              />
             </div>
-            <p className="text-xl font-bold text-gray-900 mb-2">
-              Click to upload media
+            <p
+              className={`text-xl font-bold mb-2 ${
+                isOverLimit ? "text-red-600" : "text-gray-900"
+              }`}
+            >
+              {isOverLimit ? "Storage Full" : "Click to upload media"}
             </p>
             <p className="text-sm text-gray-500">
-              Images (PNG, JPG) or Videos (MP4, WebM) • Max 50MB each
+              {isOverLimit
+                ? "Remove files to upload more"
+                : "Images (PNG, JPG) or Videos (MP4) • Will be optimized"}
             </p>
-            <div className="flex items-center gap-2 mt-4">
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
-                Drag & Drop
-              </span>
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold">
-                Multi-Upload
-              </span>
-            </div>
+            {!isOverLimit && (
+              <div className="flex items-center gap-2 mt-4">
+                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                  Auto WebP Conversion
+                </span>
+                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                  Sharp Optimization
+                </span>
+              </div>
+            )}
           </label>
         </div>
 
-        {/* Media Preview Grid */}
+        {/* EXISTING MEDIA PREVIEW CODE - Keep as is */}
         {mediaPreviews.length > 0 && (
           <div className="space-y-4">
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-4 flex items-center gap-3">
@@ -988,6 +1269,13 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                     </div>
                   )}
 
+                  {/* File Size Badge */}
+                  {item.file && (
+                    <div className="absolute bottom-2 right-2 px-2 py-1 bg-black bg-opacity-70 backdrop-blur-sm text-white text-xs font-bold rounded-lg">
+                      {formatBytes(item.file.size)}
+                    </div>
+                  )}
+
                   {/* Actions Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all flex items-end justify-center gap-2 p-3">
                     {!item.isPrimary && (
@@ -1039,11 +1327,23 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
     );
   }
 
-  // ProductFormSteps.tsx - Part 2 (Steps 4 & 5)
-  // Continue from Part 1...
-
   // Step 4: Stock Management or Variants
   if (currentStep === 4) {
+    const totalMediaSize = calculateTotalMediaSize(
+      mediaPreviews,
+      variantMediaPreviews,
+    );
+    const remainingSize = MAX_MEDIA_SIZE - totalMediaSize;
+    const sizePercentage = (totalMediaSize / MAX_MEDIA_SIZE) * 100;
+    const isOverLimit = totalMediaSize > MAX_MEDIA_SIZE;
+
+    // Count total files
+    const productFileCount = mediaPreviews.length;
+    const variantFileCount = Object.values(variantMediaPreviews).reduce(
+      (sum, previews) => sum + previews.length,
+      0,
+    );
+    const totalFileCount = productFileCount + variantFileCount;
     // Simple Product - Stock Management
     if (productType === "simple") {
       return (
@@ -1138,6 +1438,22 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
           <p className="text-gray-600">
             Configure variants with custom attributes
           </p>
+          {/* 🔒 Attribute Mode Lock Banner */}
+          {globalVariantMode && (
+            <div
+              className="mb-6 mx-auto max-w-3xl px-4 py-3 rounded-xl
+    bg-indigo-50 text-indigo-800 border border-indigo-200
+    flex items-center gap-2 justify-center text-sm font-semibold"
+            >
+              <Lock className="h-4 w-4 text-indigo-600" />
+              Attribute mode locked:{" "}
+              <span className="font-bold">
+                {globalVariantMode === "CUSTOM"
+                  ? "Custom Attributes"
+                  : "Standard Attributes"}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Add Variant Button */}
@@ -1153,9 +1469,9 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
             type="button"
             onClick={() => {
               appendVariant({
-                size: "",
-                color: "",
-                fabric: "",
+                size: globalVariantMode === "CUSTOM" ? "" : "",
+                color: globalVariantMode === "CUSTOM" ? "" : "",
+                fabric: globalVariantMode === "CUSTOM" ? "" : "",
                 price: "",
                 basePrice: "",
                 sellingPrice: "",
@@ -1205,6 +1521,24 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                             Configure attributes and details
                           </p>
                         </div>
+                        {/* 🔒 Attribute Mode Lock Banner */}
+                        <div>
+                        {globalVariantMode && (
+                          <div
+                            className="mb-6 mx-auto max-w-3xl px-4 py-3 rounded-xl
+    bg-indigo-50 text-indigo-800 border border-indigo-200
+    flex items-center gap-2 justify-center text-sm font-semibold"
+                          >
+                            <Lock className="h-4 w-4 text-indigo-600" />
+                            Attribute mode locked:{" "}
+                            <span className="font-bold">
+                              {globalVariantMode === "CUSTOM"
+                                ? "Custom Attributes"
+                                : "Standard Attributes"}
+                            </span>
+                          </div>
+                        )}
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -1230,8 +1564,17 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                         </div>
                         <button
                           type="button"
-                          onClick={() => appendVariantAttribute(variantIndex)}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1 text-sm font-semibold transition-colors"
+                          disabled={globalVariantMode === "STANDARD"}
+                          onClick={() => {
+                            if (globalVariantMode === "STANDARD") return;
+                            appendVariantAttribute(variantIndex);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg flex items-center gap-1 text-sm font-semibold
+    ${
+      globalVariantMode === "STANDARD"
+        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+        : "bg-indigo-600 hover:bg-indigo-700 text-white"
+    }`}
                         >
                           <Plus className="h-4 w-4" />
                           Add
@@ -1505,11 +1848,12 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                             Size
                           </label>
                           <input
+                            disabled={globalVariantMode === "CUSTOM"}
                             {...register(
                               `variants.${variantIndex}.size` as const,
                             )}
                             type="text"
-                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
                             placeholder="e.g., M, L, XL"
                           />
                         </div>
@@ -1536,11 +1880,12 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                                 <>
                                   <div className="flex gap-2">
                                     <input
+                                      disabled={globalVariantMode === "CUSTOM"}
                                       {...register(
                                         `variants.${variantIndex}.color` as const,
                                       )}
                                       type="text"
-                                      className={`flex-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                                      className={`flex-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all disabled:bg-gray-200 disabled:cursor-not-allowed ${
                                         colorValue && !isValidColor
                                           ? "border-red-500 focus:ring-red-500"
                                           : colorValue && isValidColor
@@ -1666,11 +2011,12 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                             Fabric
                           </label>
                           <input
+                            disabled={globalVariantMode === "CUSTOM"}
                             {...register(
                               `variants.${variantIndex}.fabric` as const,
                             )}
                             type="text"
-                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
                             placeholder="e.g., Cotton"
                           />
                         </div>
@@ -1869,7 +2215,157 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                         <Info className="h-3 w-3" />
                         Falls back to product media if not provided
                       </p>
+                      <div
+                        className={`border-2 rounded-2xl p-5 transition-all ${
+                          isOverLimit
+                            ? "border-red-500 bg-red-50"
+                            : sizePercentage > 80
+                              ? "border-orange-500 bg-orange-50"
+                              : "border-blue-200 bg-blue-50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-3 h-3 rounded-full ${
+                                isOverLimit
+                                  ? "bg-red-500"
+                                  : sizePercentage > 80
+                                    ? "bg-orange-500"
+                                    : "bg-blue-500"
+                              }`}
+                            />
+                            <span className="text-sm font-bold text-gray-900">
+                              Total Media Size
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <div
+                              className={`text-2xl font-bold ${
+                                isOverLimit
+                                  ? "text-red-600"
+                                  : sizePercentage > 80
+                                    ? "text-orange-600"
+                                    : "text-blue-600"
+                              }`}
+                            >
+                              {formatBytes(totalMediaSize)}
+                            </div>
+                            <div className="text-xs text-gray-600">
+                              of {formatBytes(MAX_MEDIA_SIZE)} used
+                            </div>
+                          </div>
+                        </div>
 
+                        {/* Progress Bar */}
+                        <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`absolute top-0 left-0 h-full transition-all duration-300 ${
+                              isOverLimit
+                                ? "bg-gradient-to-r from-red-500 to-red-600"
+                                : sizePercentage > 80
+                                  ? "bg-gradient-to-r from-orange-500 to-orange-600"
+                                  : "bg-gradient-to-r from-blue-500 to-indigo-600"
+                            }`}
+                            style={{
+                              width: `${Math.min(sizePercentage, 100)}%`,
+                            }}
+                          />
+                        </div>
+
+                        {/* Status Messages */}
+                        <div className="mt-3 flex items-start gap-2">
+                          {isOverLimit ? (
+                            <>
+                              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-bold text-red-900">
+                                  Size limit exceeded!
+                                </p>
+                                <p className="text-xs text-red-700">
+                                  Remove{" "}
+                                  {formatBytes(totalMediaSize - MAX_MEDIA_SIZE)}{" "}
+                                  to continue. Images will be optimized to WebP
+                                  during upload.
+                                </p>
+                              </div>
+                            </>
+                          ) : sizePercentage > 80 ? (
+                            <>
+                              <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-bold text-orange-900">
+                                  Almost at limit!
+                                </p>
+                                <p className="text-xs text-orange-700">
+                                  {formatBytes(remainingSize)} remaining.
+                                  Consider optimizing images before upload.
+                                </p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-bold text-blue-900">
+                                  Looking good!
+                                </p>
+                                <p className="text-xs text-blue-700">
+                                  {formatBytes(remainingSize)} remaining for
+                                  product & variant media.
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Breakdown */}
+                        {totalFileCount > 0 && (
+                          <div className="mt-4 pt-4 border-t border-gray-300">
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div className="bg-white rounded-lg p-2 border border-gray-200">
+                                <div className="text-gray-600 mb-1">
+                                  Product Media
+                                </div>
+                                <div className="font-bold text-gray-900">
+                                  {formatBytes(
+                                    mediaPreviews.reduce(
+                                      (sum, item) =>
+                                        sum + (item.file?.size || 0),
+                                      0,
+                                    ),
+                                  )}
+                                </div>
+                                <div className="text-gray-500">
+                                  {productFileCount} files
+                                </div>
+                              </div>
+                              <div className="bg-white rounded-lg p-2 border border-gray-200">
+                                <div className="text-gray-600 mb-1">
+                                  Variant Media
+                                </div>
+                                <div className="font-bold text-gray-900">
+                                  {formatBytes(
+                                    Object.values(variantMediaPreviews).reduce(
+                                      (total, previews) =>
+                                        total +
+                                        previews.reduce(
+                                          (sum, item) =>
+                                            sum + (item.file?.size || 0),
+                                          0,
+                                        ),
+                                      0,
+                                    ),
+                                  )}
+                                </div>
+                                <div className="text-gray-500">
+                                  {variantFileCount} files
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center hover:border-purple-500 hover:bg-purple-50 transition-all cursor-pointer">
                         <input
                           type="file"
@@ -2691,4 +3187,4 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
   return null;
 };
 
-export default ProductFormSteps
+export default ProductFormSteps;

@@ -7,7 +7,7 @@ import { RegisterPage } from "./pages/auth/registerPage";
 import { UnauthorizedPage } from "./components/unAuthorized";
 import { ProtectedRoute } from "./routes/protectedRoutes";
 import { AdminDashboard } from "./pages/admin/adminDashboard";
-import ProductsPage from "./pages/admin/productsPage";
+import ProductsPage from "./pages/admin/products/productsPage";
 import ReviewsPage from "./pages/admin/reviewsPage";
 import WarehousesPage from "./pages/admin/warehousesPage";
 import ReturnsPage from "./pages/admin/returnsPage";

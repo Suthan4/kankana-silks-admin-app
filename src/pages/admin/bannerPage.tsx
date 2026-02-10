@@ -10,7 +10,6 @@ import {
   Plus,
   Edit,
   Trash2,
-  Upload,
   X,
   Image as ImageIcon,
   Video,
@@ -25,20 +24,16 @@ import {
   Pause,
   Loader2,
   ExternalLink,
-  GripVertical,
   Sparkles,
 } from "lucide-react";
-import {
-  bannerApi,
-  type Banner,
-  type QueryBannerParams,
-} from "@/lib/api/banner.api";
+import { bannerApi, type Banner } from "@/lib/api/banner.api";
 import { s3Api } from "@/lib/api/s3.api";
 import {
   createBannerSchema,
   type CreateBannerFormData,
 } from "@/lib/types/banner/schema";
-// Banner Card Component
+import MediaUploadManager from "@/components/Mediauploadmanager"; // Import the new component
+
 const BannerCard: React.FC<{
   banner: Banner;
   onEdit: (banner: Banner) => void;
@@ -216,10 +211,9 @@ const BannersPage: React.FC = () => {
   const { hasPermission } = usePermissions();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
-  const [mediaPreview, setMediaPreview] = useState<string>("");
   const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string>("");
   const [mediaType, setMediaType] = useState<"IMAGE" | "VIDEO">("IMAGE");
-  const [isDragging, setIsDragging] = useState(false);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [filterType, setFilterType] = useState<"ALL" | "IMAGE" | "VIDEO">(
     "ALL",
@@ -309,100 +303,13 @@ const BannersPage: React.FC = () => {
     },
   });
 
-  const watchedType = watch("type");
-
-  // Handle file drop
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      handleMediaFile(file);
-    }
-  };
-
-  // Handle file selection
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleMediaFile(file);
-    }
-    e.target.value = "";
-  };
-
-  const validateImageSize = (file: File) => {
-    return new Promise<void>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        if (img.width !== 1920 || img.height !== 600) {
-          reject(
-            new Error("Invalid image size. Only 1920×600 images are allowed."),
-          );
-          return;
-        }
-        resolve();
-      };
-      img.onerror = () => reject(new Error("Invalid image file"));
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
-  // Process media file with validation
-  const handleMediaFile = async (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    const isVideo = file.type.startsWith("video/");
-
-    if (!isImage && !isVideo) {
-      toast.error("Please select a valid image or video file");
-      return;
-    }
-
-    if (isImage) {
-      try {
-        await validateImageSize(file);
-      } catch (err: any) {
-        toast.error(err.message);
-        return;
-      }
-    }
-
-    // Validate file size (10MB for images, 50MB for videos)
-    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      toast.error(
-        `File size must be less than ${
-          isVideo ? "40MB" : "10MB"
-        }. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`,
-      );
-      return;
-    }
-    console.log("errors", errors);
-
-    setMediaFile(file);
-    setMediaType(isImage ? "IMAGE" : "VIDEO");
-    setValue("type", isImage ? "IMAGE" : "VIDEO");
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      setMediaPreview(result);
-      // 🔑 THIS IS THE MISSING LINE
-      setValue("url", result, {
-        shouldValidate: true,
-        shouldDirty: true,
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
   // Upload media to S3
   const uploadMediaToS3 = async (): Promise<string | null> => {
     if (!mediaFile) return null;
 
     setIsUploadingMedia(true);
     const uploadToast = toast.loading(
-      `Uploading ${mediaType.toLowerCase()} ...`,
+      `Uploading ${mediaType.toLowerCase()}...`,
     );
 
     try {
@@ -480,6 +387,16 @@ const BannersPage: React.FC = () => {
     if (window.confirm("Are you sure you want to delete this banner?")) {
       deleteMutation.mutate(id);
     }
+  };
+
+  // Handle media selection from MediaUploadManager
+  const handleMediaSelect = (file: File, preview: string) => {
+    setMediaFile(file);
+    setMediaPreview(preview);
+    setValue("url", preview, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
   };
 
   const totalBanners = bannersData?.banners?.length || 0;
@@ -674,7 +591,7 @@ const BannersPage: React.FC = () => {
         {/* Create/Edit Modal */}
         {showCreateModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-gradient-to-br from-blue-500 to-indigo-600 text-white px-6 py-4 flex items-center justify-between z-10 rounded-t-xl">
                 <h2 className="text-xl font-bold">
                   {editingBanner ? "Edit Banner" : "Create Banner"}
@@ -698,7 +615,7 @@ const BannersPage: React.FC = () => {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+              <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
                 {/* Title */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -728,6 +645,8 @@ const BannersPage: React.FC = () => {
                       onClick={() => {
                         setMediaType("IMAGE");
                         setValue("type", "IMAGE");
+                        setMediaPreview("");
+                        setMediaFile(null);
                       }}
                       className={`p-4 border-2 rounded-lg transition-all ${
                         mediaType === "IMAGE"
@@ -744,6 +663,8 @@ const BannersPage: React.FC = () => {
                       onClick={() => {
                         setMediaType("VIDEO");
                         setValue("type", "VIDEO");
+                        setMediaPreview("");
+                        setMediaFile(null);
                       }}
                       className={`p-4 border-2 rounded-lg transition-all ${
                         mediaType === "VIDEO"
@@ -757,80 +678,18 @@ const BannersPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Media Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {mediaType === "VIDEO" ? "Video" : "Image"} *
-                  </label>
-                  <div
-                    onDrop={handleDrop}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setIsDragging(true);
-                    }}
-                    onDragLeave={() => setIsDragging(false)}
-                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                      isDragging
-                        ? "border-purple-500 bg-purple-50"
-                        : "border-gray-300 hover:border-gray-400"
-                    }`}
-                  >
-                    {mediaPreview ? (
-                      <div className="relative inline-block">
-                        {mediaType === "VIDEO" ? (
-                          <video
-                            src={mediaPreview}
-                            className="h-40 w-auto rounded-lg"
-                            controls
-                          />
-                        ) : (
-                          <img
-                            src={mediaPreview}
-                            alt="Preview"
-                            className="h-40 w-auto object-cover rounded-lg"
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMediaPreview("");
-                            setMediaFile(null);
-                            setValue("url", "");
-                          }}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600 mb-2">
-                          Drag & drop {mediaType.toLowerCase()} here, or click
-                          to select
-                        </p>
-                        <p className="text-xs text-gray-500 mb-2">
-                          {mediaType === "VIDEO"
-                            ? "MP4, WEBM up to 50MB"
-                            : "PNG, JPG, WEBP up to 10MB"}
-                        </p>
-                        <input
-                          type="file"
-                          accept={mediaType === "VIDEO" ? "video/*" : "image/*"}
-                          onChange={handleFileSelect}
-                          className="hidden"
-                          id="media-upload"
-                        />
-                        <label
-                          htmlFor="media-upload"
-                          className="cursor-pointer text-purple-600 hover:text-purple-700 font-medium"
-                        >
-                          Browse files
-                        </label>
-                      </>
-                    )}
-                  </div>
-                </div>
+                {/* Media Upload Manager */}
+                <MediaUploadManager
+                  mediaType={mediaType}
+                  onMediaSelect={handleMediaSelect}
+                  currentPreview={mediaPreview}
+                  targetWidth={1920}
+                  targetHeight={600}
+                  maxSizeMB={mediaType === "IMAGE" ? 10 : 50}
+                />
+                {errors.url && (
+                  <p className="text-sm text-red-600">{errors.url.message}</p>
+                )}
 
                 {/* Link */}
                 <div>
