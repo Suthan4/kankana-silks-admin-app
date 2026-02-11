@@ -41,7 +41,6 @@ import {
 import { homeSectionApi } from "@/lib/api/homesection.api";
 import { productApi } from "@/lib/api/product.api";
 import { categoryApi } from "@/lib/api/category.api";
-
 import type {
   HomeSection,
   SectionMedia,
@@ -61,7 +60,11 @@ import { s3Api } from "@/lib/api/s3.api";
 import toast from "react-hot-toast";
 import { CategoryProductSelector } from "@/components/Categoryproductselector";
 
-// Section Type Configuration
+// ─── Shared compact input class ───────────────────────────────────────────────
+const inp =
+  "w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-colors";
+
+// ─── Section type config ──────────────────────────────────────────────────────
 const getSectionConfig = (type: SectionType) => {
   const configs = {
     HERO_SLIDER: {
@@ -138,31 +141,42 @@ const getSectionConfig = (type: SectionType) => {
   return configs[type] || configs.FEATURED;
 };
 
-// Stats Card Component
+const LAYOUT_OPTIONS = [
+  { value: "grid", label: "Grid", description: "Responsive grid" },
+  { value: "carousel", label: "Carousel", description: "Scrollable items" },
+  { value: "list", label: "List", description: "Vertical list" },
+  { value: "banner", label: "Banner", description: "Full-width" },
+  {
+    value: "aesthetic-fullscreen",
+    label: "Aesthetic FS",
+    description: "✨ Immersive",
+  },
+];
+
+// ─── Stats Card ───────────────────────────────────────────────────────────────
 const StatsCard: React.FC<{
   icon: React.ReactNode;
   label: string;
   value: string | number;
   color: string;
 }> = ({ icon, label, value, color }) => {
-  const colorClasses = {
+  const colorClasses: Record<string, string> = {
     purple: "bg-purple-100 text-purple-600",
     blue: "bg-blue-100 text-blue-600",
     green: "bg-green-100 text-green-600",
     orange: "bg-orange-100 text-orange-600",
   };
-
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-600">{label}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            {label}
+          </p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
         </div>
         <div
-          className={`h-12 w-12 rounded-full flex items-center justify-center ${
-            colorClasses[color as keyof typeof colorClasses]
-          }`}
+          className={`h-10 w-10 rounded-lg flex items-center justify-center ${colorClasses[color]}`}
         >
           {icon}
         </div>
@@ -171,45 +185,40 @@ const StatsCard: React.FC<{
   );
 };
 
-// Enhanced Section Card with Media Preview
+// ─── Section Card ─────────────────────────────────────────────────────────────
 const SectionCard: React.FC<{
   section: HomeSection;
-  onEdit: (section: HomeSection) => void;
+  onEdit: (s: HomeSection) => void;
   onDelete: (id: string) => void;
   canUpdate: boolean;
   canDelete: boolean;
 }> = ({ section, onEdit, onDelete, canUpdate, canDelete }) => {
   const config = getSectionConfig(section.type);
-
   return (
-    <div className="bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-200 hover:border-blue-400">
-      {/* Header */}
+    <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-200 hover:border-purple-300">
       <div
-        className={`${config.bgColor} p-4 flex items-center justify-between`}
+        className={`${config.bgColor} px-3 py-2.5 flex items-center justify-between`}
       >
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">{config.icon}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{config.icon}</span>
           <div>
-            <h3 className="text-lg font-bold text-gray-900">{section.title}</h3>
+            <h3 className="text-sm font-bold text-gray-900 leading-tight">
+              {section.title}
+            </h3>
             <p className={`text-xs font-medium ${config.textColor}`}>
               {section.customTypeName || config.label}
             </p>
           </div>
         </div>
         <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            section.isActive
-              ? "bg-green-500 text-white"
-              : "bg-red-500 text-white"
-          }`}
+          className={`px-2 py-0.5 rounded-full text-xs font-semibold ${section.isActive ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}
         >
           {section.isActive ? "Active" : "Inactive"}
         </span>
       </div>
 
-      {/* Media Preview */}
       {section.media && section.media.length > 0 && (
-        <div className="relative h-48 bg-gray-100">
+        <div className="relative h-36 bg-gray-100">
           {section.media[0].type === "IMAGE" ? (
             <img
               src={section.media[0].url}
@@ -218,81 +227,78 @@ const SectionCard: React.FC<{
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-900">
-              <PlayCircle className="h-16 w-16 text-white opacity-70" />
+              <PlayCircle className="h-12 w-12 text-white opacity-70" />
             </div>
           )}
           {section.media.length > 1 && (
-            <div className="absolute top-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-xs font-semibold">
+            <div className="absolute top-1.5 right-1.5 bg-black/70 text-white px-1.5 py-0.5 rounded text-xs font-semibold">
               +{section.media.length - 1} more
             </div>
           )}
         </div>
       )}
 
-      {/* Body */}
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-2">
         {section.subtitle && (
-          <p className="text-sm text-gray-600 italic">{section.subtitle}</p>
+          <p className="text-xs text-gray-500 italic truncate">
+            {section.subtitle}
+          </p>
         )}
-
-        {/* Layout Info */}
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <LayoutIcon className="h-4 w-4" />
+        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <LayoutIcon className="h-3.5 w-3.5" />
           <span className="capitalize">{section.layout || "grid"}</span>
           {section.layout === "grid" && (
-            <span className="text-xs text-gray-500">
+            <span className="text-gray-400">
               • {section.columns || 4} columns
             </span>
           )}
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-4 gap-2 pt-3 border-t border-gray-200">
-          <div className="text-center">
-            <ImageIcon className="h-4 w-4 text-blue-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-600">Media</p>
-            <p className="text-sm font-bold text-gray-900">
-              {section.media?.length || 0}
-            </p>
-          </div>
-          <div className="text-center">
-            <LinkIcon className="h-4 w-4 text-purple-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-600">CTAs</p>
-            <p className="text-sm font-bold text-gray-900">
-              {section.ctaButtons?.length || 0}
-            </p>
-          </div>
-          <div className="text-center">
-            <Package className="h-4 w-4 text-green-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-600">Products</p>
-            <p className="text-sm font-bold text-gray-900">
-              {section.products?.length || 0}
-            </p>
-          </div>
-          <div className="text-center">
-            <Tag className="h-4 w-4 text-orange-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-600">Categories</p>
-            <p className="text-sm font-bold text-gray-900">
-              {section.categories?.length || 0}
-            </p>
-          </div>
+        <div className="grid grid-cols-4 gap-1 pt-2 border-t border-gray-100">
+          {[
+            {
+              icon: <ImageIcon className="h-3.5 w-3.5 text-blue-500" />,
+              label: "Media",
+              val: section.media?.length || 0,
+            },
+            {
+              icon: <LinkIcon className="h-3.5 w-3.5 text-purple-500" />,
+              label: "CTAs",
+              val: section.ctaButtons?.length || 0,
+            },
+            {
+              icon: <Package className="h-3.5 w-3.5 text-green-500" />,
+              label: "Products",
+              val: section.products?.length || 0,
+            },
+            {
+              icon: <Tag className="h-3.5 w-3.5 text-orange-500" />,
+              label: "Categories",
+              val: section.categories?.length || 0,
+            },
+          ].map(({ icon, label, val }) => (
+            <div key={label} className="text-center">
+              <div className="flex justify-center mb-0.5">{icon}</div>
+              <p className="text-[10px] text-gray-400">{label}</p>
+              <p className="text-xs font-bold text-gray-800">{val}</p>
+            </div>
+          ))}
         </div>
 
-        {/* CTA Buttons Preview */}
         {section.ctaButtons && section.ctaButtons.length > 0 && (
-          <div className="pt-3 border-t border-gray-200">
-            <p className="text-xs text-gray-600 mb-2">CTA Buttons:</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="pt-1.5 border-t border-gray-100">
+            <p className="text-[10px] text-gray-400 mb-1">CTA Buttons:</p>
+            <div className="flex flex-wrap gap-1">
               {section.ctaButtons.slice(0, 2).map((cta, idx) => (
                 <span
                   key={idx}
-                  className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded"
+                  className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded"
                 >
                   {cta.text}
                 </span>
               ))}
               {section.ctaButtons.length > 2 && (
-                <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
                   +{section.ctaButtons.length - 2} more
                 </span>
               )}
@@ -300,24 +306,23 @@ const SectionCard: React.FC<{
           </div>
         )}
 
-        {/* Actions */}
         {(canUpdate || canDelete) && (
-          <div className="flex gap-2 pt-3 border-t border-gray-200">
+          <div className="flex gap-1.5 pt-2 border-t border-gray-100">
             {canUpdate && (
               <button
                 onClick={() => onEdit(section)}
-                className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+                className="flex-1 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center justify-center gap-1 transition-colors"
               >
-                <Edit className="h-4 w-4" />
+                <Edit className="h-3 w-3" />
                 Edit
               </button>
             )}
             {canDelete && (
               <button
                 onClick={() => onDelete(section.id)}
-                className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+                className="flex-1 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center gap-1 transition-colors"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3 w-3" />
                 Delete
               </button>
             )}
@@ -328,32 +333,29 @@ const SectionCard: React.FC<{
   );
 };
 
-// Main Component
+// ─── Main Component ───────────────────────────────────────────────────────────
 export const HomeSectionsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
 
-  // Permissions
   const canCreate = hasPermission("home-sections", "canCreate");
   const canUpdate = hasPermission("home-sections", "canUpdate");
   const canDelete = hasPermission("home-sections", "canDelete");
 
-  // UI State
   const [showModal, setShowModal] = useState(false);
   const [editingSection, setEditingSection] = useState<HomeSection | null>(
-    null
+    null,
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActive, setFilterActive] = useState<boolean | undefined>(
-    undefined
+    undefined,
   );
   const [filterType, setFilterType] = useState<SectionType | undefined>(
-    undefined
+    undefined,
   );
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  // Form State
   const [media, setMedia] = useState<SectionMediaForm[]>([]);
   const [ctaButtons, setCtaButtons] = useState<SectionCTA[]>([]);
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
@@ -361,10 +363,9 @@ export const HomeSectionsPage: React.FC = () => {
   const [layout, setLayout] = useState("grid");
   const [columns, setColumns] = useState(4);
 
-  // Media Modal State
   const [showMediaModal, setShowMediaModal] = useState(false);
   const [editingMediaIndex, setEditingMediaIndex] = useState<number | null>(
-    null
+    null,
   );
   const [currentMedia, setCurrentMedia] = useState<Partial<SectionMediaForm>>({
     type: "IMAGE",
@@ -373,7 +374,6 @@ export const HomeSectionsPage: React.FC = () => {
     overlayPosition: "center",
   });
 
-  // CTA Modal State
   const [showCTAModal, setShowCTAModal] = useState(false);
   const [editingCTAIndex, setEditingCTAIndex] = useState<number | null>(null);
   const [currentCTA, setCurrentCTA] = useState<Partial<SectionCTA>>({
@@ -383,50 +383,33 @@ export const HomeSectionsPage: React.FC = () => {
     order: 0,
     openNewTab: false,
   });
-const LAYOUT_OPTIONS = [
-  { value: "grid", label: "Grid" },
-  { value: "carousel", label: "Carousel" },
-  { value: "list", label: "List" },
-  { value: "banner", label: "Banner" },
-  { 
-    value: "aesthetic-fullscreen", 
-    label: "Aesthetic Fullscreen",
-    icon: <Maximize2 />,
-    description: "✨ Immersive full-screen layout with elegant overlays"
-  }
-];
-  // Fetch sections
+
   const { data: sectionsData, isLoading } = useQuery({
     queryKey: ["home-sections", filterActive, filterType],
     queryFn: async () => {
-      const response = await homeSectionApi.getHomeSections({
+      const r = await homeSectionApi.getHomeSections({
         limit: 100,
         isActive: filterActive,
         type: filterType,
       });
-      return response.data;
+      return r.data;
     },
   });
-
-  // Fetch products
   const { data: productsData } = useQuery({
     queryKey: ["products-all"],
     queryFn: async () => {
-      const response = await productApi.getProducts({ limit: 100 });
-      return response.data;
+      const r = await productApi.getProducts({ limit: 100 });
+      return r.data;
     },
   });
-
-  // Fetch categories
   const { data: categoriesData } = useQuery({
     queryKey: ["categories-all"],
     queryFn: async () => {
-      const response = await categoryApi.getCategories({ limit: 100 });
-      return response.data;
+      const r = await categoryApi.getCategories({ limit: 100 });
+      return r.data;
     },
   });
 
-  // Mutations
   const createMutation = useMutation({
     mutationFn: homeSectionApi.createHomeSection,
     onSuccess: () => {
@@ -435,13 +418,12 @@ const LAYOUT_OPTIONS = [
       resetForm();
       toast.success("Home section created successfully!");
     },
-    onError: (error: any) => {
+    onError: (e: any) => {
       toast.error(
-        error?.response?.data?.message || "Failed to create home seciton"
+        e?.response?.data?.message || "Failed to create home section",
       );
     },
   });
-
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) =>
       homeSectionApi.updateHomeSection(id, data),
@@ -452,13 +434,12 @@ const LAYOUT_OPTIONS = [
       resetForm();
       toast.success("Home section updated successfully!");
     },
-    onError: (error: any) => {
+    onError: (e: any) => {
       toast.error(
-        error?.response?.data?.message || "Failed to update home section"
+        e?.response?.data?.message || "Failed to update home section",
       );
     },
   });
-
   const deleteMutation = useMutation({
     mutationFn: homeSectionApi.deleteHomeSection,
     onSuccess: () => {
@@ -476,26 +457,22 @@ const LAYOUT_OPTIONS = [
     formState: { errors },
   } = useForm<CreateHomeSectionFormData>({
     resolver: zodResolver(
-      createHomeSectionSchema
+      createHomeSectionSchema,
     ) as Resolver<CreateHomeSectionFormData>,
   });
-
-  // Watch form values
   const selectedType = watch("type");
 
-  // Reset form
   const resetForm = () => {
     reset();
     setMedia([]);
     setCtaButtons([]);
-    setValue("customTypeName", "");
+    setValue("customTypeName", undefined);
     setBackgroundColor("#ffffff");
     setTextColor("#000000");
     setLayout("grid");
     setColumns(4);
   };
 
-  // Handle Edit Section
   const handleEdit = (section: HomeSection) => {
     setEditingSection(section);
     setValue("type", section.type as any);
@@ -510,42 +487,37 @@ const LAYOUT_OPTIONS = [
     setValue("productIds", section.products?.map((p) => p.id.toString()) || []);
     setValue(
       "categoryIds",
-      section.categories?.map((c) => c.id.toString()) || []
+      section.categories?.map((c) => c.id.toString()) || [],
     );
-
-    setValue("customTypeName", section.type === "CUSTOM" ? section.customTypeName || "": undefined);
+    setValue(
+      "customTypeName",
+      section.type === "CUSTOM" ? section.customTypeName || "" : undefined,
+    );
     setBackgroundColor(section.backgroundColor || "#ffffff");
     setTextColor(section.textColor || "#000000");
     setLayout(section.layout || "grid");
     setColumns(section.columns || 4);
     setMedia(section.media || []);
     setCtaButtons(section.ctaButtons || []);
-
     setShowModal(true);
   };
 
-  // Handle Delete
   const handleDelete = (id: string) => {
-    if (window.confirm("Delete this section? This cannot be undone.")) {
+    if (window.confirm("Delete this section? This cannot be undone."))
       deleteMutation.mutate(id);
-    }
   };
 
-  // Submit Form
   const onSubmit = async (data: CreateHomeSectionFormData) => {
     setIsUploadingImage(true);
     const uploadToast = toast.loading("Uploading image...");
-
     try {
       const uploadedMedia = await Promise.all(
         media.map(async (m, idx) => {
           let url = m.url ?? "";
-
           if (m.file) {
             const res = await s3Api.uploadSingle(m.file, "home-sections");
             url = res.url;
           }
-
           return {
             type: m.type,
             url,
@@ -554,9 +526,8 @@ const LAYOUT_OPTIONS = [
             overlayTitle: m.overlayTitle ?? "",
             overlaySubtitle: m.overlaySubtitle ?? "",
           };
-        })
+        }),
       );
-
       const payload = {
         ...data,
         customTypeName:
@@ -566,56 +537,43 @@ const LAYOUT_OPTIONS = [
         layout,
         columns: layout === "grid" ? columns : undefined,
         media: uploadedMedia,
-        ctaButtons: ctaButtons.map((c, idx) => ({
-          ...c,
-          order: idx,
-        })),
+        ctaButtons: ctaButtons.map((c, idx) => ({ ...c, order: idx })),
       };
-
       if (editingSection) {
         updateMutation.mutate(
           { id: editingSection.id, data: payload },
           {
-            onSuccess: () => {
+            onSuccess: () =>
               toast.success("Section updated successfully", {
                 id: uploadToast,
-              });
-            },
-          }
+              }),
+          },
         );
       } else {
         createMutation.mutate(payload, {
-          onSuccess: () => {
-            toast.success("Section created successfully", {
-              id: uploadToast,
-            });
-          },
+          onSuccess: () =>
+            toast.success("Section created successfully", { id: uploadToast }),
         });
       }
     } catch (error) {
       console.error(error);
-      toast.error("Image upload failed", {
-        id: uploadToast,
-      });
+      toast.error("Image upload failed", { id: uploadToast });
     } finally {
       setIsUploadingImage(false);
-      toast.dismiss(uploadToast)
+      toast.dismiss(uploadToast);
     }
   };
 
-
-  // Media Handlers
   const handleAddMedia = () => {
     if (editingMediaIndex !== null) {
-      const updated = [...media];
-      updated[editingMediaIndex] = currentMedia as SectionMedia;
-      setMedia(updated);
-    } else {
+      const u = [...media];
+      u[editingMediaIndex] = currentMedia as SectionMedia;
+      setMedia(u);
+    } else
       setMedia([
         ...media,
         { ...currentMedia, order: media.length } as SectionMedia,
       ]);
-    }
     setShowMediaModal(false);
     setCurrentMedia({
       type: "IMAGE",
@@ -625,38 +583,31 @@ const LAYOUT_OPTIONS = [
     });
     setEditingMediaIndex(null);
   };
-
-  const handleEditMedia = (index: number) => {
-    setCurrentMedia(media[index]);
-    setEditingMediaIndex(index);
+  const handleEditMedia = (i: number) => {
+    setCurrentMedia(media[i]);
+    setEditingMediaIndex(i);
     setShowMediaModal(true);
   };
-
-  const handleDeleteMedia = (index: number) => {
-    setMedia(media.filter((_, i) => i !== index));
+  const handleDeleteMedia = (i: number) =>
+    setMedia(media.filter((_, x) => x !== i));
+  const handleMoveMedia = (i: number, dir: "up" | "down") => {
+    const ni = dir === "up" ? i - 1 : i + 1;
+    if (ni < 0 || ni >= media.length) return;
+    const u = [...media];
+    [u[i], u[ni]] = [u[ni], u[i]];
+    setMedia(u);
   };
 
-  const handleMoveMedia = (index: number, direction: "up" | "down") => {
-    const newIndex = direction === "up" ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= media.length) return;
-
-    const updated = [...media];
-    [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
-    setMedia(updated);
-  };
-
-  // CTA Handlers
   const handleAddCTA = () => {
     if (editingCTAIndex !== null) {
-      const updated = [...ctaButtons];
-      updated[editingCTAIndex] = currentCTA as SectionCTA;
-      setCtaButtons(updated);
-    } else {
+      const u = [...ctaButtons];
+      u[editingCTAIndex] = currentCTA as SectionCTA;
+      setCtaButtons(u);
+    } else
       setCtaButtons([
         ...ctaButtons,
         { ...currentCTA, order: ctaButtons.length } as SectionCTA,
       ]);
-    }
     setShowCTAModal(false);
     setCurrentCTA({
       text: "",
@@ -667,38 +618,29 @@ const LAYOUT_OPTIONS = [
     });
     setEditingCTAIndex(null);
   };
-
-  const handleEditCTA = (index: number) => {
-    setCurrentCTA(ctaButtons[index]);
-    setEditingCTAIndex(index);
+  const handleEditCTA = (i: number) => {
+    setCurrentCTA(ctaButtons[i]);
+    setEditingCTAIndex(i);
     setShowCTAModal(true);
   };
-
-  const handleDeleteCTA = (index: number) => {
-    setCtaButtons(ctaButtons.filter((_, i) => i !== index));
+  const handleDeleteCTA = (i: number) =>
+    setCtaButtons(ctaButtons.filter((_, x) => x !== i));
+  const handleMoveCTA = (i: number, dir: "up" | "down") => {
+    const ni = dir === "up" ? i - 1 : i + 1;
+    if (ni < 0 || ni >= ctaButtons.length) return;
+    const u = [...ctaButtons];
+    [u[i], u[ni]] = [u[ni], u[i]];
+    setCtaButtons(u);
   };
 
-  const handleMoveCTA = (index: number, direction: "up" | "down") => {
-    const newIndex = direction === "up" ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= ctaButtons.length) return;
-
-    const updated = [...ctaButtons];
-    [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
-    setCtaButtons(updated);
-  };
-
-  // Calculate stats
   const totalSections = sectionsData?.sections?.length || 0;
   const activeSections =
     sectionsData?.sections?.filter((s) => s.isActive).length || 0;
-  const inactiveSections = totalSections - activeSections;
-
-  // Filter sections
   const filteredSections =
     sectionsData?.sections?.filter(
-      (section) =>
-        section.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        section.subtitle?.toLowerCase().includes(searchQuery.toLowerCase())
+      (s) =>
+        s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.subtitle?.toLowerCase().includes(searchQuery.toLowerCase()),
     ) || [];
 
   console.log("media", media);
@@ -709,21 +651,20 @@ const LAYOUT_OPTIONS = [
 
   return (
     <MainLayout>
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                <Home className="h-7 w-7 text-white" />
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <div className="p-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                <Home className="h-5 w-5 text-white" />
               </div>
               Home Sections
             </h1>
-            <p className="text-sm text-gray-600 mt-2">
+            <p className="text-xs text-gray-500 mt-0.5">
               Manage homepage sections with media, CTAs, and styling
             </p>
           </div>
-
           {canCreate && (
             <button
               onClick={() => {
@@ -731,7 +672,7 @@ const LAYOUT_OPTIONS = [
                 resetForm();
                 setShowModal(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium"
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-sm font-medium shadow-md transition-all"
             >
               <Plus className="h-4 w-4" />
               Add Section
@@ -740,27 +681,27 @@ const LAYOUT_OPTIONS = [
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatsCard
-            icon={<Home className="h-6 w-6" />}
+            icon={<Home className="h-5 w-5" />}
             label="Total Sections"
             value={totalSections}
             color="purple"
           />
           <StatsCard
-            icon={<CheckCircle className="h-6 w-6" />}
+            icon={<CheckCircle className="h-5 w-5" />}
             label="Active"
             value={activeSections}
             color="green"
           />
           <StatsCard
-            icon={<XCircle className="h-6 w-6" />}
+            icon={<XCircle className="h-5 w-5" />}
             label="Inactive"
-            value={inactiveSections}
+            value={totalSections - activeSections}
             color="orange"
           />
           <StatsCard
-            icon={<Star className="h-6 w-6" />}
+            icon={<Star className="h-5 w-5" />}
             label="Featured"
             value={
               sectionsData?.sections?.filter((s) => s.type === "FEATURED")
@@ -771,39 +712,43 @@ const LAYOUT_OPTIONS = [
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex flex-col lg:flex-row gap-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
+          <div className="flex flex-col lg:flex-row gap-2">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search sections..."
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className={`${inp} pl-8`}
               />
             </div>
-
             <select
               value={filterType || ""}
               onChange={(e) =>
                 setFilterType((e.target.value as SectionType) || undefined)
               }
-              className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+              className={`${inp} bg-white`}
             >
               <option value="">All Types</option>
-              <option value="HERO_SLIDER">Hero Slider</option>
-              <option value="FEATURED">Featured</option>
-              <option value="NEW_ARRIVALS">New Arrivals</option>
-              <option value="COLLECTIONS">Collections</option>
-              <option value="CATEGORIES">Categories</option>
-              <option value="BEST_SELLERS">Best Sellers</option>
-              <option value="TRENDING">Trending</option>
-              <option value="SEASONAL">Seasonal</option>
-              <option value="CATEGORY_SPOTLIGHT">Category Spotlight</option>
-              <option value="CUSTOM">Custom</option>
+              {[
+                "HERO_SLIDER",
+                "FEATURED",
+                "NEW_ARRIVALS",
+                "COLLECTIONS",
+                "CATEGORIES",
+                "BEST_SELLERS",
+                "TRENDING",
+                "SEASONAL",
+                "CATEGORY_SPOTLIGHT",
+                "CUSTOM",
+              ].map((t) => (
+                <option key={t} value={t}>
+                  {t.replace(/_/g, " ")}
+                </option>
+              ))}
             </select>
-
             <select
               value={
                 filterActive === undefined
@@ -812,60 +757,52 @@ const LAYOUT_OPTIONS = [
                     ? "active"
                     : "inactive"
               }
-              onChange={(e) => {
-                const value = e.target.value;
+              onChange={(e) =>
                 setFilterActive(
-                  value === "all" ? undefined : value === "active",
-                );
-              }}
-              className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                  e.target.value === "all"
+                    ? undefined
+                    : e.target.value === "active",
+                )
+              }
+              className={`${inp} bg-white`}
             >
               <option value="all">All Status</option>
               <option value="active">Active Only</option>
               <option value="inactive">Inactive Only</option>
             </select>
-
-            <div className="flex items-center bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-2 rounded-md transition-colors ${
-                  viewMode === "grid"
-                    ? "bg-white text-purple-600 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                <Grid3x3 className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("table")}
-                className={`p-2 rounded-md transition-colors ${
-                  viewMode === "table"
-                    ? "bg-white text-purple-600 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                <List className="h-4 w-4" />
-              </button>
+            <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+              {(["grid", "table"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setViewMode(m)}
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === m ? "bg-white text-purple-600 shadow-sm" : "text-gray-500 hover:text-gray-800"}`}
+                >
+                  {m === "grid" ? (
+                    <Grid3x3 className="h-4 w-4" />
+                  ) : (
+                    <List className="h-4 w-4" />
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Sections Display */}
+        {/* Sections Grid */}
         {isLoading ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-            <p className="mt-4 text-gray-500">Loading sections...</p>
+          <div className="bg-white rounded-lg p-10 text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600 mx-auto" />
+            <p className="mt-3 text-sm text-gray-500">Loading sections...</p>
           </div>
         ) : filteredSections.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Home className="h-10 w-10  text-indigo-600" />
+          <div className="bg-white rounded-lg p-10 text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Home className="h-8 w-8 text-indigo-600" />
             </div>
-
-            <p className="text-gray-700 text-lg font-semibold">
+            <p className="text-sm font-semibold text-gray-700">
               No sections found
             </p>
-            <p className="text-gray-500 text-sm mt-2">
+            <p className="text-xs text-gray-400 mt-1">
               {searchQuery
                 ? "Try adjusting your filters"
                 : "Create your first home section"}
@@ -876,21 +813,18 @@ const LAYOUT_OPTIONS = [
                   resetForm();
                   setShowModal(true);
                 }}
-                bg-gradient-to-br
-                from-blue-500
-                to-indigo-600
-                className="mt-4 px-6 py-2 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium"
+                className="mt-3 px-4 py-2 text-sm bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-medium"
               >
                 Create First Section
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSections.map((section) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredSections.map((s) => (
               <SectionCard
-                key={section.id}
-                section={section}
+                key={s.id}
+                section={s}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 canUpdate={canUpdate}
@@ -900,14 +834,17 @@ const LAYOUT_OPTIONS = [
           </div>
         )}
 
-        {/* CREATE/EDIT MODAL - PART 2 BELOW */}
+        {/* ════ CREATE / EDIT MODAL ════════════════════════════════════════════ */}
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full my-8">
-              {/* Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Home className="h-6 w-6" />
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div
+              className="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col"
+              style={{ maxHeight: "95vh" }}
+            >
+              {/* Fixed Header */}
+              <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-t-xl flex-shrink-0">
+                <h2 className="text-sm font-bold flex items-center gap-2">
+                  <Home className="h-4 w-4" />
                   {editingSection ? "Edit Home Section" : "Create Home Section"}
                 </h2>
                 <button
@@ -916,391 +853,345 @@ const LAYOUT_OPTIONS = [
                     setEditingSection(null);
                     resetForm();
                   }}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors"
+                  className="h-7 w-7 flex items-center justify-center hover:bg-white/20 rounded-lg transition-colors"
                 >
-                  <X className="h-6 w-6" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
 
-              {/* FORM CONTINUES IN NEXT MESSAGE DUE TO LENGTH */}
               <form
                 onSubmit={handleSubmit(onSubmit)}
-                className="p-6 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto"
+                className="flex flex-col flex-1 min-h-0"
               >
-                {/* 1. BASIC INFO SECTION */}
-                <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Info className="h-5 w-5" />
-                    Basic Information
-                  </h3>
-
-                  {/* Section Type Selector */}
-                  <SectionTypeSelector
-                    value={watch("type")}
-                    onChange={(type, customName) => {
-                      setValue("type", type as SectionType, {
-                        shouldValidate: true,
-                        shouldDirty: true,
-                        shouldTouch: true,
-                      });
-                      setValue(
-                        "customTypeName",
-                        type === "CUSTOM" ? customName || "" : undefined,
-                        {
+                {/* Scrollable body */}
+                <div className="overflow-y-auto flex-1 px-5 py-3 space-y-3">
+                  {/* 1 · Basic Info */}
+                  <div className="bg-gray-50 rounded-lg p-3 space-y-2.5">
+                    <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      <Info className="h-3.5 w-3.5" />
+                      Basic Information
+                    </h3>
+                    <SectionTypeSelector
+                      value={watch("type")}
+                      onChange={(type, customName) => {
+                        setValue("type", type as SectionType, {
                           shouldValidate: true,
                           shouldDirty: true,
-                        },
-                      );
-                    }}
-                    customTypeName={watch("customTypeName")}
-                    error={errors.customTypeName?.message}
-                  />
-
-                  {/* Title */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Title *
-                    </label>
-                    <input
-                      {...register("title")}
-                      type="text"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="e.g., Featured Products"
-                    />
-                    {errors.title && (
-                      <p className="mt-1.5 text-sm text-red-600">
-                        {errors.title.message}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Subtitle */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Subtitle (Optional)
-                    </label>
-                    <input
-                      {...register("subtitle")}
-                      type="text"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="Add a descriptive subtitle..."
-                    />
-                  </div>
-
-                  {/* Description */}
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Description (Optional)
-                    </label>
-                    <textarea
-                      {...register("description")}
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="Add a longer description..."
-                    />
-                  </div>
-                </div>
-
-                {/* 2. MEDIA MANAGEMENT SECTION */}
-                <div className="space-y-4 bg-blue-50 p-4 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                      <ImageIcon className="h-5 w-5" />
-                      Media ({media.length})
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentMedia({
-                          type: "IMAGE",
-                          url: "",
-                          order: media.length,
-                          overlayPosition: "center",
+                          shouldTouch: true,
                         });
-                        setEditingMediaIndex(null);
-                        setShowMediaModal(true);
+                        setValue(
+                          "customTypeName",
+                          type === "CUSTOM" ? customName : undefined,
+                          { shouldValidate: true, shouldDirty: true },
+                        );
                       }}
-                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Media
-                    </button>
+                      customTypeName={watch("customTypeName")}
+                      error={errors.customTypeName?.message}
+                    />
+                    {/* Title + Subtitle side by side */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">
+                          Title <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          {...register("title")}
+                          type="text"
+                          className={inp}
+                          placeholder="e.g., Featured Products"
+                        />
+                        {errors.title && (
+                          <p className="mt-0.5 text-xs text-red-500">
+                            {errors.title.message}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">
+                          Subtitle (Optional)
+                        </label>
+                        <input
+                          {...register("subtitle")}
+                          type="text"
+                          className={inp}
+                          placeholder="Add a descriptive subtitle..."
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">
+                        Description (Optional)
+                      </label>
+                      <textarea
+                        {...register("description")}
+                        rows={2}
+                        className={`${inp} resize-none`}
+                        placeholder="Add a longer description..."
+                      />
+                    </div>
                   </div>
 
-                  {/* Media List */}
-                  <div className="space-y-2">
+                  {/* 2 · Media */}
+                  <div className="bg-blue-50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                        <ImageIcon className="h-3.5 w-3.5 text-blue-600" />
+                        Media ({media.length})
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentMedia({
+                            type: "IMAGE",
+                            url: "",
+                            order: media.length,
+                            overlayPosition: "center",
+                          });
+                          setEditingMediaIndex(null);
+                          setShowMediaModal(true);
+                        }}
+                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add Media
+                      </button>
+                    </div>
                     {media.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">
-                        <ImageIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No media added yet</p>
-                        <p className="text-xs">
+                      <div className="text-center py-5 border-2 border-dashed border-blue-200 rounded-lg bg-white">
+                        <ImageIcon className="h-8 w-8 mx-auto mb-1 text-blue-300 opacity-50" />
+                        <p className="text-xs text-gray-500">
+                          No media added yet
+                        </p>
+                        <p className="text-[10px] text-gray-400">
                           Click "Add Media" to upload images or videos
                         </p>
                       </div>
                     ) : (
-                      media.map((item, index) => (
-                        <div
-                          key={index}
-                          className="bg-white p-3 rounded-lg border-2 border-gray-200 flex items-center gap-3"
-                        >
-                          {/* Thumbnail */}
-                          <div className="w-20 h-20 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
-                            {item.type === "IMAGE" ? (
-                              <img
-                                src={
-                                  item.file
-                                    ? URL.createObjectURL(item.file)
-                                    : item.url
-                                }
-                                alt={item.altText || "Media"}
-                                className="w-full h-full object-cover rounded"
-                              />
-                            ) : (
-                              <Video className="h-8 w-8 text-gray-400" />
-                            )}
-                          </div>
-
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-gray-900">
-                                {item.type === "IMAGE"
-                                  ? "📷 Image"
-                                  : "🎥 Video"}{" "}
-                                #{index + 1}
-                              </span>
-                              {item.overlayTitle && (
-                                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
-                                  Has Overlay
-                                </span>
+                      <div className="space-y-1.5">
+                        {media.map((item, i) => (
+                          <div
+                            key={i}
+                            className="bg-white px-3 py-2 rounded-lg border border-blue-100 flex items-center gap-2"
+                          >
+                            <div className="w-10 h-10 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                              {item.type === "IMAGE" ? (
+                                <img
+                                  src={
+                                    item.file
+                                      ? URL.createObjectURL(item.file)
+                                      : item.url
+                                  }
+                                  alt={item.altText || "Media"}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Video className="h-5 w-5 text-gray-400" />
+                                </div>
                               )}
                             </div>
-                            {item.title && (
-                              <p className="text-xs text-gray-600 truncate">
-                                {item.title}
-                              </p>
-                            )}
-                            {item.overlayTitle && (
-                              <p className="text-xs text-gray-500 truncate">
-                                "{item.overlayTitle}"
-                              </p>
-                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-medium text-gray-800">
+                                  {item.type === "IMAGE"
+                                    ? "📷 Image"
+                                    : "🎥 Video"}{" "}
+                                  #{i + 1}
+                                </span>
+                                {item.overlayTitle && (
+                                  <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                    Has Overlay
+                                  </span>
+                                )}
+                              </div>
+                              {item.title && (
+                                <p className="text-xs text-gray-500 truncate">
+                                  {item.title}
+                                </p>
+                              )}
+                              {item.overlayTitle && (
+                                <p className="text-xs text-gray-400 truncate">
+                                  "{item.overlayTitle}"
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveMedia(i, "up")}
+                                disabled={i === 0}
+                                className="p-1 text-gray-300 hover:text-gray-600 disabled:opacity-20"
+                              >
+                                <ArrowUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveMedia(i, "down")}
+                                disabled={i === media.length - 1}
+                                className="p-1 text-gray-300 hover:text-gray-600 disabled:opacity-20"
+                              >
+                                <ArrowDown className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleEditMedia(i)}
+                                className="p-1 text-blue-500 hover:text-blue-700"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMedia(i)}
+                                className="p-1 text-red-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleMoveMedia(index, "up")}
-                              disabled={index === 0}
-                              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleMoveMedia(index, "down")}
-                              disabled={index === media.length - 1}
-                              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                            >
-                              <ArrowDown className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleEditMedia(index)}
-                              className="p-1 text-blue-600 hover:text-blue-700"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteMedia(index)}
-                              className="p-1 text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* 3. CTA BUTTONS SECTION */}
-                <div className="space-y-4 bg-purple-50 p-4 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                      <LinkIcon className="h-5 w-5" />
-                      CTA Buttons ({ctaButtons.length})
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentCTA({
-                          text: "",
-                          url: "",
-                          style: "PRIMARY",
-                          order: ctaButtons.length,
-                          openNewTab: false,
-                        });
-                        setEditingCTAIndex(null);
-                        setShowCTAModal(true);
-                      }}
-                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700text-white rounded-lg text-sm font-medium flex items-center gap-1"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Button
-                    </button>
-                  </div>
-
-                  {/* CTA List */}
-                  <div className="space-y-2">
+                  {/* 3 · CTA Buttons */}
+                  <div className="bg-purple-50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                        <LinkIcon className="h-3.5 w-3.5 text-purple-600" />
+                        CTA Buttons ({ctaButtons.length})
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentCTA({
+                            text: "",
+                            url: "",
+                            style: "PRIMARY",
+                            order: ctaButtons.length,
+                            openNewTab: false,
+                          });
+                          setEditingCTAIndex(null);
+                          setShowCTAModal(true);
+                        }}
+                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add Button
+                      </button>
+                    </div>
                     {ctaButtons.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">
-                        <LinkIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No CTA buttons added yet</p>
-                        <p className="text-xs">
+                      <div className="text-center py-5 border-2 border-dashed border-purple-200 rounded-lg bg-white">
+                        <LinkIcon className="h-8 w-8 mx-auto mb-1 text-purple-300 opacity-50" />
+                        <p className="text-xs text-gray-500">
+                          No CTA buttons added yet
+                        </p>
+                        <p className="text-[10px] text-gray-400">
                           Click "Add Button" to create call-to-action buttons
                         </p>
                       </div>
                     ) : (
-                      ctaButtons.map((cta, index) => (
-                        <div
-                          key={index}
-                          className="bg-white p-3 rounded-lg border-2 border-gray-200 flex items-center gap-3"
-                        >
-                          {/* Style Badge */}
+                      <div className="space-y-1.5">
+                        {ctaButtons.map((cta, i) => (
                           <div
-                            className={`px-3 py-2 rounded text-xs font-semibold flex-shrink-0 ${
-                              cta.style === "PRIMARY"
-                                ? "bg-blue-600 text-white"
-                                : cta.style === "SECONDARY"
-                                  ? "bg-gray-600 text-white"
-                                  : cta.style === "OUTLINE"
-                                    ? "border-2 border-blue-600 text-blue-600"
-                                    : "text-blue-600"
-                            }`}
+                            key={i}
+                            className="bg-white px-3 py-2 rounded-lg border border-purple-100 flex items-center gap-2"
                           >
-                            {cta.style}
+                            <div
+                              className={`px-2 py-1 rounded text-xs font-semibold flex-shrink-0 ${cta.style === "PRIMARY" ? "bg-blue-600 text-white" : cta.style === "SECONDARY" ? "bg-gray-600 text-white" : cta.style === "OUTLINE" ? "border border-blue-600 text-blue-600" : "text-blue-600"}`}
+                            >
+                              {cta.style}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-gray-800 truncate">
+                                {cta.text}
+                              </p>
+                              <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                                {cta.url}
+                                {cta.openNewTab && (
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveCTA(i, "up")}
+                                disabled={i === 0}
+                                className="p-1 text-gray-300 hover:text-gray-600 disabled:opacity-20"
+                              >
+                                <ArrowUp className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveCTA(i, "down")}
+                                disabled={i === ctaButtons.length - 1}
+                                className="p-1 text-gray-300 hover:text-gray-600 disabled:opacity-20"
+                              >
+                                <ArrowDown className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleEditCTA(i)}
+                                className="p-1 text-blue-500 hover:text-blue-700"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCTA(i)}
+                                className="p-1 text-red-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </div>
-
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {cta.text}
-                            </p>
-                            <p className="text-xs text-gray-600 truncate flex items-center gap-1">
-                              {cta.url}
-                              {cta.openNewTab && (
-                                <ExternalLink className="h-3 w-3" />
-                              )}
-                            </p>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleMoveCTA(index, "up")}
-                              disabled={index === 0}
-                              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleMoveCTA(index, "down")}
-                              disabled={index === ctaButtons.length - 1}
-                              className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
-                            >
-                              <ArrowDown className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleEditCTA(index)}
-                              className="p-1 text-blue-600 hover:text-blue-700"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCTA(index)}
-                              className="p-1 text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* UPDATED LAYOUT & STYLING SECTION */}
-                <div className="space-y-4 bg-green-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Palette className="h-5 w-5" />
-                    Layout & Styling
-                  </h3>
+                  {/* 4 · Layout & Styling */}
+                  <div className="bg-green-50 rounded-lg p-3 space-y-2.5">
+                    <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      <Palette className="h-3.5 w-3.5 text-green-600" />
+                      Layout & Styling
+                    </h3>
 
-                  <div className="grid grid-cols-1 gap-4">
-                    {/* Layout Selector with Visual Cards */}
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                         Layout Style
                       </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {LAYOUT_OPTIONS.map((option) => (
+                      <div className="grid grid-cols-3 md:grid-cols-5 gap-1.5">
+                        {LAYOUT_OPTIONS.map((opt) => (
                           <button
-                            key={option.value}
+                            key={opt.value}
                             type="button"
                             onClick={() => {
-                              setLayout(option.value);
-                              setValue("layout" as any, option.value);
+                              setLayout(opt.value);
+                              setValue("layout" as any, opt.value);
                             }}
-                            className={`
-                              relative p-4 rounded-lg border-2 transition-all
-                              ${
-                                layout === option.value
-                                  ? "border-purple-500 bg-purple-50 shadow-md"
-                                  : "border-gray-200 hover:border-gray-300 bg-white"
-                              }
-                            `}
+                            className={`relative p-2.5 rounded-lg border transition-all text-center ${layout === opt.value ? "border-purple-500 bg-purple-50 shadow-sm" : "border-gray-200 hover:border-gray-300 bg-white"}`}
                           >
-                            <div className="flex flex-col items-center gap-2 text-center">
-                              <div
-                                className={`
-                                p-2 rounded-full
-                                ${layout === option.value ? "bg-purple-100" : "bg-gray-100"}
-                              `}
-                              >
-                                {option.icon}
-                              </div>
-                              <span
-                                className={`
-                                text-sm font-medium
-                                ${layout === option.value ? "text-purple-700" : "text-gray-700"}
-                              `}
-                              >
-                                {option.label}
-                              </span>
-                              {layout === option.value && (
-                                <CheckCircle className="absolute top-2 right-2 h-5 w-5 text-purple-500" />
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                              {option.description}
+                            <span
+                              className={`block text-xs font-medium leading-tight ${layout === opt.value ? "text-purple-700" : "text-gray-700"}`}
+                            >
+                              {opt.label}
+                            </span>
+                            {layout === opt.value && (
+                              <CheckCircle className="absolute top-1 right-1 h-3 w-3 text-purple-500" />
+                            )}
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {opt.description}
                             </p>
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {/* Columns (only for grid layout) */}
-                    {layout === "grid" && (
-                      <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      {layout === "grid" && (
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">
                             Grid Columns
                           </label>
                           <input
@@ -1315,20 +1206,15 @@ const LAYOUT_OPTIONS = [
                                 Number(e.target.value),
                               );
                             }}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className={inp}
                           />
                         </div>
-                      </div>
-                    )}
-
-                    {/* Color pickers */}
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                      {/* Background Color */}
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      )}
+                      <div className={layout !== "grid" ? "col-span-1" : ""}>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">
                           Background Color
                         </label>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1.5">
                           <input
                             type="color"
                             value={backgroundColor}
@@ -1339,7 +1225,7 @@ const LAYOUT_OPTIONS = [
                                 e.target.value,
                               );
                             }}
-                            className="h-12 w-20 rounded border border-gray-300 cursor-pointer"
+                            className="h-[30px] w-9 rounded border border-gray-200 cursor-pointer flex-shrink-0"
                           />
                           <input
                             type="text"
@@ -1351,18 +1237,16 @@ const LAYOUT_OPTIONS = [
                                 e.target.value,
                               );
                             }}
-                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className={`${inp} font-mono`}
                             placeholder="#ffffff"
                           />
                         </div>
                       </div>
-
-                      {/* Text Color */}
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">
                           Text Color
                         </label>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1.5">
                           <input
                             type="color"
                             value={textColor}
@@ -1370,7 +1254,7 @@ const LAYOUT_OPTIONS = [
                               setTextColor(e.target.value);
                               setValue("textColor" as any, e.target.value);
                             }}
-                            className="h-12 w-20 rounded border border-gray-300 cursor-pointer"
+                            className="h-[30px] w-9 rounded border border-gray-200 cursor-pointer flex-shrink-0"
                           />
                           <input
                             type="text"
@@ -1379,181 +1263,158 @@ const LAYOUT_OPTIONS = [
                               setTextColor(e.target.value);
                               setValue("textColor" as any, e.target.value);
                             }}
-                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className={`${inp} font-mono`}
                             placeholder="#000000"
                           />
                         </div>
                       </div>
                     </div>
 
-                    {/* Info alert for aesthetic-fullscreen */}
                     {layout === "aesthetic-fullscreen" && (
-                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4">
-                        <div className="flex gap-3">
-                          <Maximize2 className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                          <div className="space-y-2">
-                            <h4 className="font-semibold text-purple-900">
-                              Aesthetic Fullscreen Mode
-                            </h4>
-                            <p className="text-sm text-purple-700">
-                              This layout creates an immersive full-screen
-                              experience with:
-                            </p>
-                            <ul className="text-sm text-purple-600 space-y-1 ml-4">
-                              <li>• Elegant typography with letter-spacing</li>
-                              <li>• Smooth transitions between slides</li>
-                              <li>
-                                • Overlay text support for each media item
-                              </li>
-                              <li>• Sophisticated button styling</li>
-                              <li>• Perfect for luxury/fashion brands</li>
-                            </ul>
-                            <p className="text-xs text-purple-500 italic">
-                              💡 Tip: Add overlay titles to your media for the
-                              best effect
-                            </p>
-                          </div>
+                      <div className="bg-white border border-purple-200 rounded-lg p-2.5 flex gap-2">
+                        <Maximize2 className="h-4 w-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold text-purple-900">
+                            Aesthetic Fullscreen Mode
+                          </p>
+                          <p className="text-xs text-purple-700 mt-0.5">
+                            Immersive full-screen experience: elegant typography
+                            · smooth transitions · overlay text support ·
+                            sophisticated buttons
+                          </p>
+                          <p className="text-[10px] text-purple-400 mt-0.5 italic">
+                            💡 Tip: Add overlay titles to your media for the
+                            best effect
+                          </p>
                         </div>
                       </div>
                     )}
                   </div>
-                </div>
 
-                {/* 5. CONTENT SELECTION */}
-                <div className="space-y-4 bg-purple-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Package className="h-5 w-5" />
-                    Content Selection
-                  </h3>
-
-                  <CategoryProductSelector
-                    products={
-                      productsData?.products?.map((p) => ({
-                        id: p.id.toString(),
-                        name: p.name,
-                        sellingPrice: p.sellingPrice,
-                        media: p.media,
-                        category: p.category
-                          ? {
-                              id: p.category.id.toString(),
-                              name: p.category.name,
-                            }
-                          : undefined,
-                      })) || []
-                    }
-                    categories={
-                      categoriesData?.categories?.map((c) => ({
-                        id: c.id.toString(),
-                        name: c.name,
-                        children: c.children?.map((child) => ({
-                          id: child.id.toString(),
-                          name: child.name,
-                        })),
-                      })) || []
-                    }
-                    selectedProductIds={watch("productIds") || []}
-                    selectedCategoryIds={watch("categoryIds") || []}
-                    onProductsChange={(ids) => setValue("productIds", ids)}
-                    onCategoriesChange={(ids) => setValue("categoryIds", ids)}
-                    isLoading={false}
-                  />
-                </div>
-
-                {/* 6. DISPLAY SETTINGS */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <Eye className="h-5 w-5" />
-                    Display Settings
-                  </h3>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Display Order
-                      </label>
-                      <input
-                        {...register("order")}
-                        type="number"
-                        min="0"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        placeholder="0"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Lower = appears first
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Item Limit
-                      </label>
-                      <input
-                        {...register("limit")}
-                        type="number"
-                        min="1"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        placeholder="8"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Max items to show
-                      </p>
-                    </div>
+                  {/* 5 · Content Selection */}
+                  <div className="bg-purple-50 rounded-lg p-3 space-y-2">
+                    <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      <Package className="h-3.5 w-3.5 text-purple-600" />
+                      Content Selection
+                    </h3>
+                    <CategoryProductSelector
+                      products={
+                        productsData?.products?.map((p) => ({
+                          id: p.id.toString(),
+                          name: p.name,
+                          sellingPrice: p.sellingPrice,
+                          media: p.media,
+                          category: p.category
+                            ? {
+                                id: p.category.id.toString(),
+                                name: p.category.name,
+                              }
+                            : undefined,
+                        })) || []
+                      }
+                      categories={
+                        categoriesData?.categories?.map((c) => ({
+                          id: c.id.toString(),
+                          name: c.name,
+                          children: c.children?.map((ch) => ({
+                            id: ch.id.toString(),
+                            name: ch.name,
+                          })),
+                        })) || []
+                      }
+                      selectedProductIds={watch("productIds") || []}
+                      selectedCategoryIds={watch("categoryIds") || []}
+                      onProductsChange={(ids) => setValue("productIds", ids)}
+                      onCategoriesChange={(ids) => setValue("categoryIds", ids)}
+                      isLoading={false}
+                    />
                   </div>
 
-                  {/* Toggle Switches */}
-                  <div className="space-y-3 border-t border-gray-200 pt-4">
-                    <label className="flex items-center space-x-3 cursor-pointer">
-                      <input
-                        {...register("showTitle")}
-                        type="checkbox"
-                        className="h-5 w-5 text-purple-600 rounded focus:ring-purple-500"
-                      />
-                      <div>
-                        <span className="text-sm font-semibold text-gray-900">
-                          Show Title
-                        </span>
-                        <p className="text-xs text-gray-500">
-                          Display section title on homepage
-                        </p>
+                  {/* 6 · Display Settings */}
+                  <div className="rounded-lg border border-gray-100 p-3 space-y-2.5">
+                    <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      <Eye className="h-3.5 w-3.5" />
+                      Display Settings
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Numeric fields */}
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">
+                            Display Order
+                          </label>
+                          <input
+                            {...register("order")}
+                            type="number"
+                            min="0"
+                            className={inp}
+                            placeholder="0"
+                          />
+                          <p className="mt-0.5 text-[10px] text-gray-400">
+                            Lower = appears first
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">
+                            Item Limit
+                          </label>
+                          <input
+                            {...register("limit")}
+                            type="number"
+                            min="1"
+                            className={inp}
+                            placeholder="8"
+                          />
+                          <p className="mt-0.5 text-[10px] text-gray-400">
+                            Max items to show
+                          </p>
+                        </div>
                       </div>
-                    </label>
-
-                    <label className="flex items-center space-x-3 cursor-pointer">
-                      <input
-                        {...register("showSubtitle")}
-                        type="checkbox"
-                        className="h-5 w-5 text-purple-600 rounded focus:ring-purple-500"
-                      />
-                      <div>
-                        <span className="text-sm font-semibold text-gray-900">
-                          Show Subtitle
-                        </span>
-                        <p className="text-xs text-gray-500">
-                          Display section subtitle on homepage
-                        </p>
+                      {/* Toggles */}
+                      <div className="space-y-2.5 pt-0.5">
+                        {[
+                          {
+                            field: "showTitle",
+                            label: "Show Title",
+                            desc: "Display section title on homepage",
+                          },
+                          {
+                            field: "showSubtitle",
+                            label: "Show Subtitle",
+                            desc: "Display section subtitle on homepage",
+                          },
+                          {
+                            field: "isActive",
+                            label: "Active",
+                            desc: "Section visible to visitors",
+                          },
+                        ].map(({ field, label, desc }) => (
+                          <label
+                            key={field}
+                            className="flex items-start gap-2 cursor-pointer group"
+                          >
+                            <input
+                              {...register(field as any)}
+                              type="checkbox"
+                              className="h-3.5 w-3.5 mt-0.5 text-purple-600 rounded flex-shrink-0 focus:ring-purple-500"
+                            />
+                            <div>
+                              <span className="text-xs font-semibold text-gray-900 group-hover:text-purple-700 transition-colors">
+                                {label}
+                              </span>
+                              <p className="text-[10px] text-gray-400">
+                                {desc}
+                              </p>
+                            </div>
+                          </label>
+                        ))}
                       </div>
-                    </label>
-
-                    <label className="flex items-center space-x-3 cursor-pointer">
-                      <input
-                        {...register("isActive")}
-                        type="checkbox"
-                        className="h-5 w-5 text-purple-600 rounded focus:ring-purple-500"
-                      />
-                      <div>
-                        <span className="text-sm font-semibold text-gray-900">
-                          Active
-                        </span>
-                        <p className="text-xs text-gray-500">
-                          Section visible to visitors
-                        </p>
-                      </div>
-                    </label>
+                    </div>
                   </div>
                 </div>
 
-                {/* Submit Buttons */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 sticky bottom-0 bg-white">
+                {/* Fixed Footer */}
+                <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-white rounded-b-xl flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -1561,7 +1422,7 @@ const LAYOUT_OPTIONS = [
                       setEditingSection(null);
                       resetForm();
                     }}
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                    className="px-4 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
                   >
                     Cancel
                   </button>
@@ -1570,16 +1431,16 @@ const LAYOUT_OPTIONS = [
                     disabled={
                       createMutation.isPending || updateMutation.isPending
                     }
-                    className="px-6 py-3 bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg flex items-center gap-2 disabled:opacity-50 font-medium"
+                    className="px-4 py-1.5 text-sm bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg flex items-center gap-1.5 font-medium disabled:opacity-50 transition-all"
                   >
                     {createMutation.isPending || updateMutation.isPending ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
                         Saving...
                       </>
                     ) : (
                       <>
-                        <Save className="h-4 w-4" />
+                        <Save className="h-3.5 w-3.5" />
                         {editingSection ? "Update" : "Create"} Section
                       </>
                     )}
@@ -1590,12 +1451,15 @@ const LAYOUT_OPTIONS = [
           </div>
         )}
 
-        {/* MEDIA MODAL */}
+        {/* ════ MEDIA MODAL ════════════════════════════════════════════════════ */}
         {showMediaModal && (
-          <div className="fixed inset-0 bg-black/65 bg-opacity-50 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
-              <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
-                <h3 className="text-lg font-bold">
+          <div className="fixed inset-0 bg-black/65 flex items-center justify-center z-[60] p-4">
+            <div
+              className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col"
+              style={{ maxHeight: "90vh" }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 bg-blue-600 text-white rounded-t-xl flex-shrink-0">
+                <h3 className="text-sm font-bold">
                   {editingMediaIndex !== null ? "Edit Media" : "Add Media"}
                 </h3>
                 <button
@@ -1609,48 +1473,41 @@ const LAYOUT_OPTIONS = [
                     });
                     setEditingMediaIndex(null);
                   }}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2"
+                  className="h-7 w-7 flex items-center justify-center hover:bg-white/20 rounded-lg transition-colors"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="p-6 space-y-4 h-[70vh] overflow-y-auto">
-                {/* Media Type */}
+              <div className="overflow-y-auto flex-1 p-4 space-y-3">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                     Media Type
                   </label>
                   <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        checked={currentMedia.type === "IMAGE"}
-                        onChange={() =>
-                          setCurrentMedia({ ...currentMedia, type: "IMAGE" })
-                        }
-                        className="h-4 w-4"
-                      />
-                      <span className="text-sm">Image</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        checked={currentMedia.type === "VIDEO"}
-                        onChange={() =>
-                          setCurrentMedia({ ...currentMedia, type: "VIDEO" })
-                        }
-                        className="h-4 w-4"
-                      />
-                      <span className="text-sm">Video</span>
-                    </label>
+                    {(["IMAGE", "VIDEO"] as const).map((t) => (
+                      <label
+                        key={t}
+                        className="flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          checked={currentMedia.type === t}
+                          onChange={() =>
+                            setCurrentMedia({ ...currentMedia, type: t })
+                          }
+                          className="h-3.5 w-3.5 text-blue-600"
+                        />
+                        <span className="text-xs font-medium">{t}</span>
+                      </label>
+                    ))}
                   </div>
                 </div>
 
-                {/* Upload */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    {currentMedia.type === "IMAGE" ? "Image" : "Video"} *
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                    {currentMedia.type === "IMAGE" ? "Image" : "Video"}{" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <ImageUpload
                     value={currentMedia.file || currentMedia.url}
@@ -1664,10 +1521,9 @@ const LAYOUT_OPTIONS = [
                   />
                 </div>
 
-                {/* Thumbnail (for videos) */}
                 {currentMedia.type === "VIDEO" && (
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                       Thumbnail (Optional)
                     </label>
                     <ImageUpload
@@ -1681,153 +1537,150 @@ const LAYOUT_OPTIONS = [
                   </div>
                 )}
 
-                {/* Alt Text */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Alt Text (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={currentMedia.altText || ""}
-                    onChange={(e) =>
-                      setCurrentMedia({
-                        ...currentMedia,
-                        altText: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Describe the media for accessibility"
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Alt Text (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentMedia.altText || ""}
+                      onChange={(e) =>
+                        setCurrentMedia({
+                          ...currentMedia,
+                          altText: e.target.value,
+                        })
+                      }
+                      className={inp}
+                      placeholder="Describe for accessibility"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Title (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={currentMedia.title || ""}
+                      onChange={(e) =>
+                        setCurrentMedia({
+                          ...currentMedia,
+                          title: e.target.value,
+                        })
+                      }
+                      className={inp}
+                      placeholder="Media title"
+                    />
+                  </div>
                 </div>
 
-                {/* Title */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Title (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={currentMedia.title || ""}
-                    onChange={(e) =>
-                      setCurrentMedia({
-                        ...currentMedia,
-                        title: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Media title"
-                  />
-                </div>
-
-                {/* Overlay Text (for Hero Sliders) */}
                 {selectedType === "HERO_SLIDER" && (
-                  <>
-                    <div className="border-t border-gray-200 pt-4">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3">
-                        Overlay Text (Optional)
-                      </h4>
-
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
-                            Overlay Title
-                          </label>
-                          <input
-                            type="text"
-                            value={currentMedia.overlayTitle || ""}
-                            onChange={(e) =>
-                              setCurrentMedia({
-                                ...currentMedia,
-                                overlayTitle: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="e.g., Summer Sale"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
-                            Overlay Subtitle
-                          </label>
-                          <input
-                            type="text"
-                            value={currentMedia.overlaySubtitle || ""}
-                            onChange={(e) =>
-                              setCurrentMedia({
-                                ...currentMedia,
-                                overlaySubtitle: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="e.g., Up to 50% off"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
-                            Overlay Position
-                          </label>
-                          <select
-                            value={currentMedia.overlayPosition || "center"}
-                            onChange={(e) =>
-                              setCurrentMedia({
-                                ...currentMedia,
-                                overlayPosition: e.target.value as any,
-                              })
-                            }
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                          >
-                            <option value="center">Center</option>
-                            <option value="left">Left</option>
-                            <option value="right">Right</option>
-                            <option value="top">Top</option>
-                            <option value="bottom">Bottom</option>
-                          </select>
-                        </div>
+                  <div className="border-t border-gray-100 pt-3 space-y-2">
+                    <h4 className="text-xs font-semibold text-gray-700">
+                      Overlay Text (Optional)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">
+                          Overlay Title
+                        </label>
+                        <input
+                          type="text"
+                          value={currentMedia.overlayTitle || ""}
+                          onChange={(e) =>
+                            setCurrentMedia({
+                              ...currentMedia,
+                              overlayTitle: e.target.value,
+                            })
+                          }
+                          className={inp}
+                          placeholder="e.g., Summer Sale"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">
+                          Overlay Subtitle
+                        </label>
+                        <input
+                          type="text"
+                          value={currentMedia.overlaySubtitle || ""}
+                          onChange={(e) =>
+                            setCurrentMedia({
+                              ...currentMedia,
+                              overlaySubtitle: e.target.value,
+                            })
+                          }
+                          className={inp}
+                          placeholder="e.g., Up to 50% off"
+                        />
                       </div>
                     </div>
-                  </>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Overlay Position
+                      </label>
+                      <select
+                        value={currentMedia.overlayPosition || "center"}
+                        onChange={(e) =>
+                          setCurrentMedia({
+                            ...currentMedia,
+                            overlayPosition: e.target.value as any,
+                          })
+                        }
+                        className={`${inp} bg-white`}
+                      >
+                        {["center", "left", "right", "top", "bottom"].map(
+                          (p) => (
+                            <option key={p} value={p}>
+                              {p.charAt(0).toUpperCase() + p.slice(1)}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+                  </div>
                 )}
+              </div>
 
-                {/* Actions */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMediaModal(false);
-                      setCurrentMedia({
-                        type: "IMAGE",
-                        url: "",
-                        order: 0,
-                        overlayPosition: "center",
-                      });
-                      setEditingMediaIndex(null);
-                    }}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAddMedia}
-                    disabled={!currentMedia.file?.name}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
-                  >
-                    {editingMediaIndex !== null ? "Update" : "Add"} Media
-                  </button>
-                </div>
+              <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 bg-white rounded-b-xl flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMediaModal(false);
+                    setCurrentMedia({
+                      type: "IMAGE",
+                      url: "",
+                      order: 0,
+                      overlayPosition: "center",
+                    });
+                    setEditingMediaIndex(null);
+                  }}
+                  className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddMedia}
+                  disabled={!currentMedia.file?.name}
+                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 font-medium transition-colors"
+                >
+                  {editingMediaIndex !== null ? "Update" : "Add"} Media
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* CTA MODAL */}
+        {/* ════ CTA MODAL ══════════════════════════════════════════════════════ */}
         {showCTAModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
-              <div className="bg-purple-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
-                <h3 className="text-lg font-bold">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+            <div
+              className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col"
+              style={{ maxHeight: "90vh" }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 bg-purple-600 text-white rounded-t-xl flex-shrink-0">
+                <h3 className="text-sm font-bold">
                   {editingCTAIndex !== null
                     ? "Edit CTA Button"
                     : "Add CTA Button"}
@@ -1844,52 +1697,50 @@ const LAYOUT_OPTIONS = [
                     });
                     setEditingCTAIndex(null);
                   }}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2"
+                  className="h-7 w-7 flex items-center justify-center hover:bg-white/20 rounded-lg transition-colors"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="p-6 space-y-4">
-                {/* Button Text */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Button Text *
-                  </label>
-                  <input
-                    type="text"
-                    value={currentCTA.text || ""}
-                    onChange={(e) =>
-                      setCurrentCTA({ ...currentCTA, text: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="e.g., Shop Now"
-                    maxLength={50}
-                  />
+              <div className="overflow-y-auto flex-1 p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      Button Text <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={currentCTA.text || ""}
+                      onChange={(e) =>
+                        setCurrentCTA({ ...currentCTA, text: e.target.value })
+                      }
+                      className={inp}
+                      placeholder="e.g., Shop Now"
+                      maxLength={50}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      URL <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={currentCTA.url || ""}
+                      onChange={(e) =>
+                        setCurrentCTA({ ...currentCTA, url: e.target.value })
+                      }
+                      className={inp}
+                      placeholder="/shop or https://example.com"
+                    />
+                  </div>
                 </div>
 
-                {/* URL */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    URL *
-                  </label>
-                  <input
-                    type="text"
-                    value={currentCTA.url || ""}
-                    onChange={(e) =>
-                      setCurrentCTA({ ...currentCTA, url: e.target.value })
-                    }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder="/shop or https://example.com"
-                  />
-                </div>
-
-                {/* Style */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                     Style
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-4 gap-1.5">
                     {(
                       ["PRIMARY", "SECONDARY", "OUTLINE", "TEXT"] as CTAStyle[]
                     ).map((style) => (
@@ -1897,14 +1748,14 @@ const LAYOUT_OPTIONS = [
                         key={style}
                         type="button"
                         onClick={() => setCurrentCTA({ ...currentCTA, style })}
-                        className={`px-4 py-3 rounded-lg border-2 font-medium text-sm ${
+                        className={`py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                           currentCTA.style === style
                             ? style === "PRIMARY"
                               ? "bg-blue-600 text-white border-blue-600"
                               : style === "SECONDARY"
                                 ? "bg-gray-600 text-white border-gray-600"
                                 : style === "OUTLINE"
-                                  ? "border-blue-600 text-blue-600"
+                                  ? "border-2 border-blue-600 text-blue-600"
                                   : "border-gray-300 text-blue-600"
                             : "border-gray-300 text-gray-600 hover:border-gray-400"
                         }`}
@@ -1915,9 +1766,8 @@ const LAYOUT_OPTIONS = [
                   </div>
                 </div>
 
-                {/* Icon (optional) */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
                     Icon (Optional)
                   </label>
                   <input
@@ -1926,68 +1776,64 @@ const LAYOUT_OPTIONS = [
                     onChange={(e) =>
                       setCurrentCTA({ ...currentCTA, icon: e.target.value })
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className={inp}
                     placeholder="e.g., shopping-cart, arrow-right"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-0.5 text-[10px] text-gray-400">
                     Use lucide-react icon names (e.g., shopping-cart,
                     arrow-right)
                   </p>
                 </div>
 
-                {/* Open in New Tab */}
-                <div>
-                  <label className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={currentCTA.openNewTab || false}
-                      onChange={(e) =>
-                        setCurrentCTA({
-                          ...currentCTA,
-                          openNewTab: e.target.checked,
-                        })
-                      }
-                      className="h-5 w-5 text-purple-600 rounded focus:ring-purple-500"
-                    />
-                    <div>
-                      <span className="text-sm font-semibold text-gray-900">
-                        Open in New Tab
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        Link opens in a new browser tab
-                      </p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCTAModal(false);
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={currentCTA.openNewTab || false}
+                    onChange={(e) =>
                       setCurrentCTA({
-                        text: "",
-                        url: "",
-                        style: "PRIMARY",
-                        order: 0,
-                        openNewTab: false,
-                      });
-                      setEditingCTAIndex(null);
-                    }}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAddCTA}
-                    disabled={!currentCTA.text || !currentCTA.url}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg disabled:opacity-50"
-                  >
-                    {editingCTAIndex !== null ? "Update" : "Add"} Button
-                  </button>
-                </div>
+                        ...currentCTA,
+                        openNewTab: e.target.checked,
+                      })
+                    }
+                    className="h-3.5 w-3.5 mt-0.5 text-purple-600 rounded flex-shrink-0 focus:ring-purple-500"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-gray-900">
+                      Open in New Tab
+                    </span>
+                    <p className="text-[10px] text-gray-400">
+                      Link opens in a new browser tab
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 bg-white rounded-b-xl flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCTAModal(false);
+                    setCurrentCTA({
+                      text: "",
+                      url: "",
+                      style: "PRIMARY",
+                      order: 0,
+                      openNewTab: false,
+                    });
+                    setEditingCTAIndex(null);
+                  }}
+                  className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddCTA}
+                  disabled={!currentCTA.text || !currentCTA.url}
+                  className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg disabled:opacity-50 font-medium transition-colors"
+                >
+                  {editingCTAIndex !== null ? "Update" : "Add"} Button
+                </button>
               </div>
             </div>
           </div>
@@ -1995,8 +1841,8 @@ const LAYOUT_OPTIONS = [
 
         {/* No Permissions Warning */}
         {!canCreate && !canUpdate && !canDelete && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-sm text-yellow-800">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p className="text-xs text-yellow-800">
               You have read-only access. Contact your administrator for
               permissions.
             </p>

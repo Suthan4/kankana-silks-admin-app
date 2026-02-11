@@ -2684,7 +2684,8 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
       formData.basePrice,
       formData.sellingPrice,
     );
-
+ console.log("formData",formData);
+ 
     return (
       <div className="space-y-6">
         <div className="text-center mb-6">
@@ -2994,7 +2995,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                   Stock Quantity:
                 </span>
                 <span className="text-lg font-bold text-green-600">
-                  {formData.stockQuantity || 0} units
+                  {formData.stock?.quantity || 0} units
                 </span>
               </div>
             </div>
@@ -3014,7 +3015,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                     variantAttrs.length > 0 &&
                     variantAttrs.some((a) => a.key && a.value);
                   const hasMedia = variantMediaPreviews[index]?.length > 0;
-
+                  console.log("variant-reveiw", variant);
                   return (
                     <div
                       key={index}
@@ -3048,7 +3049,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                             ₹{variant.price || variant.sellingPrice || "0.00"}
                           </div>
                           <div className="text-xs text-gray-500">
-                            Stock: {variant.stockQuantity || 0}
+                            Stock: {variant.stock.quantity || 0}
                           </div>
                         </div>
                       </div>

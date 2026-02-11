@@ -2132,7 +2132,7 @@ const ProductsPage: React.FC = () => {
 
               {/* <div className="p-6 h-[50vh] overflow-y-auto"> */}
               <div className="flex-1 overflow-y-auto p-6">
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                <form className="space-y-6">
                   <ProductFormSteps
                     currentStep={currentStep}
                     productType={productType}
@@ -2182,23 +2182,10 @@ const ProductsPage: React.FC = () => {
                         Previous
                       </button>
                     )}
-                    {currentStep < 5 ? (
+                    {currentStep === 5 ? (
                       <button
                         type="button"
-                        onClick={nextStep}
-                        disabled={
-                          isUploadingMedia ||
-                          createMutation.isPending ||
-                          updateMutation.isPending
-                        }
-                        className="ml-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <button
-                        type="submit"
+                        onClick={handleSubmit(onSubmit)}
                         disabled={
                           isUploadingMedia ||
                           createMutation.isPending ||
@@ -2225,6 +2212,20 @@ const ProductsPage: React.FC = () => {
                               : "Create Product"}
                           </>
                         )}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={nextStep}
+                        disabled={
+                          isUploadingMedia ||
+                          createMutation.isPending ||
+                          updateMutation.isPending
+                        }
+                        className="ml-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
                       </button>
                     )}
                   </div>
