@@ -92,19 +92,6 @@ export const createHomeSectionSchema = z
       path: ["customTypeName"],
     }
   )
-  .refine(
-    (data) => {
-      // If type is HERO_SLIDER, at least one media is required
-      if (data.type === "HERO_SLIDER") {
-        return data.media && data.media.length > 0;
-      }
-      return true;
-    },
-    {
-      message: "At least one media item is required for Hero Slider",
-      path: ["media"],
-    }
-  );
 
 // Update HomeSection Schema
 export const updateHomeSectionSchema = z

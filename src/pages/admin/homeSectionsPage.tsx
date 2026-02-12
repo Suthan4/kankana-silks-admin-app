@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import React, { useEffect, useState } from "react";
+import { Controller, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layouts/mainLayout";
@@ -41,14 +41,14 @@ import {
 import { homeSectionApi } from "@/lib/api/homesection.api";
 import { productApi } from "@/lib/api/product.api";
 import { categoryApi } from "@/lib/api/category.api";
-import type {
-  HomeSection,
-  SectionMedia,
-  SectionCTA,
+import {
+  type HomeSection,
+  type SectionMedia,
+  type SectionCTA,
   SectionType,
-  MediaType,
-  CTAStyle,
-  SectionMediaForm,
+  type MediaType,
+  type CTAStyle,
+  type SectionMediaForm,
 } from "@/lib/types/heroSection/herosection";
 import {
   createHomeSectionSchema,
@@ -454,13 +454,22 @@ export const HomeSectionsPage: React.FC = () => {
     setValue,
     watch,
     getValues,
+    control,
     formState: { errors },
   } = useForm<CreateHomeSectionFormData>({
     resolver: zodResolver(
       createHomeSectionSchema,
     ) as Resolver<CreateHomeSectionFormData>,
+    defaultValues: {
+      type: SectionType.FEATURED,
+    },
   });
-  const selectedType = watch("type");
+  const selectedType = watch("type") ?? "FEATURED";
+  useEffect(() => {
+    if (!getValues("type")) {
+      setValue("type", "FEATURED", { shouldValidate: true });
+    }
+  }, []);
 
   const resetForm = () => {
     reset();
@@ -731,7 +740,7 @@ export const HomeSectionsPage: React.FC = () => {
               }
               className={`${inp} bg-white`}
             >
-              <option value="">All Types</option>
+              <option value={watch("type")}>All Types</option>
               {[
                 "HERO_SLIDER",
                 "FEATURED",
@@ -871,23 +880,30 @@ export const HomeSectionsPage: React.FC = () => {
                       <Info className="h-3.5 w-3.5" />
                       Basic Information
                     </h3>
-                    <SectionTypeSelector
-                      value={watch("type")}
-                      onChange={(type, customName) => {
-                        setValue("type", type as SectionType, {
-                          shouldValidate: true,
-                          shouldDirty: true,
-                          shouldTouch: true,
-                        });
-                        setValue(
-                          "customTypeName",
-                          type === "CUSTOM" ? customName : undefined,
-                          { shouldValidate: true, shouldDirty: true },
-                        );
-                      }}
-                      customTypeName={watch("customTypeName")}
-                      error={errors.customTypeName?.message}
+                    <Controller
+                      control={control}
+                      name="type"
+                      render={({ field }) => (
+                        <SectionTypeSelector
+                          value={field.value}
+                          customTypeName={watch("customTypeName")}
+                          error={
+                            errors.type?.message ||
+                            errors.customTypeName?.message
+                          }
+                          onChange={(type, customName) => {
+                            field.onChange(type);
+
+                            setValue(
+                              "customTypeName",
+                              type === "CUSTOM" ? customName : undefined,
+                              { shouldValidate: true },
+                            );
+                          }}
+                        />
+                      )}
                     />
+
                     {/* Title + Subtitle side by side */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -936,7 +952,8 @@ export const HomeSectionsPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
                         <ImageIcon className="h-3.5 w-3.5 text-blue-600" />
-                        Media ({media.length})
+                        Media ({media.length}) 
+                        {errors.media?.message}
                       </h3>
                       <button
                         type="button"
