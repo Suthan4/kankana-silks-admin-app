@@ -772,6 +772,7 @@ const ProductsPage: React.FC = () => {
   const [filterHasVariants, setFilterHasVariants] = useState<
     boolean | undefined
   >(undefined);
+  const [isEditProd,setIsEditProd]=useState(false);
 
   // Multi-step form state
   const [currentStep, setCurrentStep] = useState(1);
@@ -1546,12 +1547,14 @@ const ProductsPage: React.FC = () => {
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    setIsEditProd(true);
     setShowCreateModal(true);
     setCurrentStep(1);
   };
 
   const handleCloseModal = () => {
     setShowCreateModal(false);
+    setIsEditProd(false);
     setCurrentStep(1);
     reset();
     setMediaPreviews([]);
@@ -2164,6 +2167,7 @@ const ProductsPage: React.FC = () => {
                     appendVariantAttribute={appendVariantAttribute}
                     removeVariantAttribute={removeVariantAttribute}
                     updateVariantAttribute={updateVariantAttribute}
+                    isEditProd={isEditProd}
                   />
 
                   <div className="sticky bottom-0 flex justify-between pt-6 bg-gradient-to-t from-white via-white to-transparent pb-4">

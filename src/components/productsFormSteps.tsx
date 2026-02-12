@@ -98,6 +98,7 @@ interface ProductFormStepsProps {
     field: "key" | "value",
     value: string,
   ) => void;
+  isEditProd: boolean;
 }
 
 // Helper function to render category options with hierarchy
@@ -190,6 +191,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
   appendVariantAttribute,
   removeVariantAttribute,
   updateVariantAttribute,
+  isEditProd,
 }) => {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [draggedVariantIndex, setDraggedVariantIndex] = useState<{
@@ -198,6 +200,10 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
   } | null>(null);
 
   const watchedVariants = watch("variants") || [];
+  const isTypeDisabled = (type: "simple" | "variable") => {
+    return isEditProd && productType !== type;
+  };
+console.log("isEditProd",isEditProd);
 
   const globalVariantMode = useMemo<"STANDARD" | "CUSTOM" | null>(() => {
     for (const v of watchedVariants) {
@@ -337,12 +343,22 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           <button
             type="button"
-            onClick={() => setProductType("simple")}
+            disabled={isTypeDisabled("simple")}
+            onClick={() => {
+              if (isTypeDisabled("simple")) return;
+              setProductType("simple");
+            }}
             className={`group relative p-8 border-2 rounded-2xl transition-all duration-300 ${
               productType === "simple"
                 ? "border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-xl scale-105"
                 : "border-gray-200 hover:border-blue-300 hover:shadow-lg"
-            }`}
+            }
+           ${
+             isTypeDisabled("simple")
+               ? "opacity-50 cursor-not-allowed"
+               : ""
+           }
+          `}
           >
             <div
               className={`absolute top-4 right-4 transition-opacity ${
@@ -380,12 +396,22 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
 
           <button
             type="button"
-            onClick={() => setProductType("variable")}
+            disabled={isTypeDisabled("variable")}
+            onClick={() => {
+              if (isTypeDisabled("variable")) return;
+              setProductType("variable");
+            }}
             className={`group relative p-8 border-2 rounded-2xl transition-all duration-300 ${
               productType === "variable"
                 ? "border-purple-500 bg-gradient-to-br from-purple-50 to-pink-50 shadow-xl scale-105"
                 : "border-gray-200 hover:border-purple-300 hover:shadow-lg"
-            }`}
+            }
+            
+             ${
+               isTypeDisabled("variable")
+                 ? "opacity-50 cursor-not-allowed"
+                 : ""
+             }`}
           >
             <div
               className={`absolute top-4 right-4 transition-opacity ${
@@ -1523,21 +1549,21 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                         </div>
                         {/* 🔒 Attribute Mode Lock Banner */}
                         <div>
-                        {globalVariantMode && (
-                          <div
-                            className="mb-6 mx-auto max-w-3xl px-4 py-3 rounded-xl
+                          {globalVariantMode && (
+                            <div
+                              className="mb-6 mx-auto max-w-3xl px-4 py-3 rounded-xl
     bg-indigo-50 text-indigo-800 border border-indigo-200
     flex items-center gap-2 justify-center text-sm font-semibold"
-                          >
-                            <Lock className="h-4 w-4 text-indigo-600" />
-                            Attribute mode locked:{" "}
-                            <span className="font-bold">
-                              {globalVariantMode === "CUSTOM"
-                                ? "Custom Attributes"
-                                : "Standard Attributes"}
-                            </span>
-                          </div>
-                        )}
+                            >
+                              <Lock className="h-4 w-4 text-indigo-600" />
+                              Attribute mode locked:{" "}
+                              <span className="font-bold">
+                                {globalVariantMode === "CUSTOM"
+                                  ? "Custom Attributes"
+                                  : "Standard Attributes"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <button
@@ -2684,8 +2710,8 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
       formData.basePrice,
       formData.sellingPrice,
     );
- console.log("formData",formData);
- 
+    console.log("formData", formData);
+
     return (
       <div className="space-y-6">
         <div className="text-center mb-6">
