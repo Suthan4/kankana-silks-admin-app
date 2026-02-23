@@ -66,8 +66,9 @@ import {
   isValidCSSColor,
   validateColorWithSuggestions,
 } from "@/lib/utils/colorValidation";
+import { useNavigate } from "react-router";
 
-interface MediaPreviewItem {
+export interface MediaPreviewItem {
   file: File | null;
   preview: string;
   isPrimary: boolean;
@@ -305,8 +306,8 @@ const StepIndicator: React.FC<{
   stepLabels: string[];
 }> = ({ currentStep, totalSteps, stepLabels }) => {
   return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between">
+    <div className="w-full py-3 border-b bg-white/60 backdrop-blur">
+      <div className="flex items-center justify-between max-w-4xl mx-auto px-4">
         {stepLabels.map((label, index) => {
           const stepNum = index + 1;
           const isActive = stepNum === currentStep;
@@ -314,31 +315,39 @@ const StepIndicator: React.FC<{
 
           return (
             <React.Fragment key={stepNum}>
-              <div className="flex flex-col items-center">
+              {/* STEP */}
+              <div className="flex items-center gap-2 min-w-0">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-all
+                  ${
                     isCompleted
                       ? "bg-green-500 text-white"
                       : isActive
-                        ? "bg-blue-600 text-white ring-4 ring-blue-100"
+                        ? "bg-blue-600 text-white"
                         : "bg-gray-200 text-gray-500"
                   }`}
                 >
-                  {isCompleted ? <CheckCircle className="h-5 w-5" /> : stepNum}
+                  {isCompleted ? (
+                    <CheckCircle className="h-3.5 w-3.5" />
+                  ) : (
+                    stepNum
+                  )}
                 </div>
-                <p
-                  className={`text-xs mt-2 font-medium ${
-                    isActive ? "text-blue-600" : "text-gray-500"
-                  }`}
+
+                {/* LABEL (Hidden mobile) */}
+                <span
+                  className={`hidden sm:block text-xs font-medium truncate
+                  ${isActive ? "text-blue-600" : "text-gray-500"}`}
                 >
                   {label}
-                </p>
+                </span>
               </div>
+
+              {/* CONNECTOR */}
               {stepNum < totalSteps && (
                 <div
-                  className={`flex-1 h-1 mx-2 rounded ${
-                    isCompleted ? "bg-green-500" : "bg-gray-200"
-                  }`}
+                  className={`flex-1 h-[2px] mx-2 rounded
+                  ${isCompleted ? "bg-green-500" : "bg-gray-200"}`}
                 />
               )}
             </React.Fragment>
@@ -711,8 +720,42 @@ const ViewProductModal: React.FC<{
   );
 };
 
+// Format bytes to human readable
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+// Calculate total media size across product + all variants
+const calculateTotalMediaSize = (
+  mediaPreviews: MediaPreviewItem[],
+  variantMediaPreviews: Record<number, MediaPreviewItem[]>,
+): number => {
+  // Product media size
+  const productMediaSize = mediaPreviews.reduce((total, item) => {
+    return total + (item.file?.size || 0);
+  }, 0);
+
+  // Variant media size
+  const variantMediaSize = Object.values(variantMediaPreviews).reduce(
+    (total, previews) => {
+      return (
+        total + previews.reduce((sum, item) => sum + (item.file?.size || 0), 0)
+      );
+    },
+    0,
+  );
+
+  return productMediaSize + variantMediaSize;
+};
+
+// Maximum allowed size (50MB)
+const MAX_MEDIA_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+
 const ProductsPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { hasPermission } = usePermissions();
 
   // UI State
@@ -729,6 +772,7 @@ const ProductsPage: React.FC = () => {
   const [filterHasVariants, setFilterHasVariants] = useState<
     boolean | undefined
   >(undefined);
+  const [isEditProd,setIsEditProd]=useState(false);
 
   // Multi-step form state
   const [currentStep, setCurrentStep] = useState(1);
@@ -861,11 +905,29 @@ const ProductsPage: React.FC = () => {
     const files = e.target.files;
     if (!files) return;
 
-    const items: MediaPreviewItem[] = Array.from(files).map((file) => {
+    // ✅ NEW — Size validation
+    const fileArray = Array.from(files);
+    const currentTotal = calculateTotalMediaSize(
+      mediaPreviews,
+      variantMediaPreviews,
+    );
+    const newFilesSize = fileArray.reduce((sum, file) => sum + file.size, 0);
+
+    if (currentTotal + newFilesSize > MAX_MEDIA_SIZE) {
+      const excess = currentTotal + newFilesSize - MAX_MEDIA_SIZE;
+      alert(
+        `Cannot upload variant media: Would exceed limit by ${formatBytes(excess)}`,
+      );
+      e.target.value = "";
+      return;
+    }
+
+    // ✅ KEEP YOUR ORIGINAL LOGIC
+    const items: MediaPreviewItem[] = fileArray.map((file) => {
       const isVideo = file.type.startsWith("video/");
       return {
         file,
-        preview: URL.createObjectURL(file), // ✅ BEST PREVIEW
+        preview: URL.createObjectURL(file),
         isPrimary: false,
         id: `${Date.now()}-${variantIndex}-${crypto.randomUUID()}`,
         type: isVideo ? "VIDEO" : "IMAGE",
@@ -876,7 +938,6 @@ const ProductsPage: React.FC = () => {
       const existing = prev?.[variantIndex] ?? [];
       const merged = [...existing, ...items];
 
-      // ✅ ensure first item is primary
       const fixed = merged.map((m, i) => ({
         ...m,
         isPrimary: i === 0,
@@ -921,13 +982,14 @@ const ProductsPage: React.FC = () => {
     },
   });
 
-  const { data: warehousesData } = useQuery({
+  const { data: warehousesData, isLoading: isLoadingWarehouses } = useQuery({
     queryKey: ["warehouses-active"],
     queryFn: async () => {
       const response = await warehouseApi.getActiveWarehouses();
       return response.data;
     },
   });
+  const hasWarehouses = warehousesData && warehousesData.length > 0;
 
   // Mutations
   const createMutation = useMutation({
@@ -1194,12 +1256,27 @@ const ProductsPage: React.FC = () => {
     setTimeout(() => setIsHydratingEdit(false), 0);
   }, [productDetailsData, reset, replaceSpecs, replaceMedia, replaceVariants]);
 
-  // Media Upload Handler
   const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    const items: MediaPreviewItem[] = Array.from(files).map((file) => {
+    // ✅ NEW — Size validation
+    const fileArray = Array.from(files);
+    const currentTotal = calculateTotalMediaSize(
+      mediaPreviews,
+      variantMediaPreviews,
+    );
+    const newFilesSize = fileArray.reduce((sum, file) => sum + file.size, 0);
+
+    if (currentTotal + newFilesSize > MAX_MEDIA_SIZE) {
+      const excess = currentTotal + newFilesSize - MAX_MEDIA_SIZE;
+      alert(`Cannot upload: Would exceed 50MB limit by ${formatBytes(excess)}`);
+      e.target.value = "";
+      return;
+    }
+
+    // ✅ KEEP YOUR ORIGINAL LOGIC
+    const items: MediaPreviewItem[] = fileArray.map((file) => {
       const isVideo = file.type.startsWith("video/");
       return {
         file,
@@ -1470,12 +1547,14 @@ const ProductsPage: React.FC = () => {
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    setIsEditProd(true);
     setShowCreateModal(true);
     setCurrentStep(1);
   };
 
   const handleCloseModal = () => {
     setShowCreateModal(false);
+    setIsEditProd(false);
     setCurrentStep(1);
     reset();
     setMediaPreviews([]);
@@ -1566,38 +1645,58 @@ const ProductsPage: React.FC = () => {
               toast.error("Please add at least one variant");
               return false;
             }
-
+            let globalMode: "STANDARD" | "CUSTOM" | null = null;
             for (let i = 0; i < formValues.variants.length; i++) {
               const variant = formValues.variants[i];
 
               // ✅ standard attributes
               const hasStandardAttr =
-                !!variant.size || !!variant.color || !!variant.fabric;
+                !!variant.size?.trim() ||
+                !!variant.color?.trim() ||
+                !!variant.fabric?.trim();
 
               // ✅ custom attributes (variant.attributes)
-              const attrs = normalizeVariantAttributes(variant);
+                const attrs = normalizeVariantAttributes(variant);
 
-              const hasCustomAttr =
-                attrs &&
-                typeof attrs === "object" &&
-                Object.entries(attrs).some(([k, v]) => {
-                  return (
-                    String(k).trim().length > 0 && String(v).trim().length > 0
+                const hasCustomAttr =
+                  attrs &&
+                  Object.entries(attrs).some(
+                    ([k, v]) => String(k).trim() && String(v).trim(),
                   );
-                });
 
-              const customLabel = attrs
-                ? Object.entries(attrs)
-                    .map(([k, v]) => `${k}:${v}`)
-                    .join(" / ")
-                : "";
+                const variantLabel =
+                  [variant.size, variant.color, variant.fabric]
+                    .filter(Boolean)
+                    .join(" / ") || `Variant ${i + 1}`;
 
-              const variantLabel =
-                [variant.size, variant.color, variant.fabric]
-                  .filter(Boolean)
-                  .join(" / ") ||
-                customLabel ||
-                `Variant ${i + 1}`;
+                // ❌ RULE 1 — Cannot have both
+                if (hasStandardAttr && hasCustomAttr) {
+                  toast.error(
+                    `${variantLabel}: Use either Standard Attributes OR Custom Attributes, not both.`,
+                  );
+                  return false;
+                }
+
+                // ❌ Must have at least one
+                if (!hasStandardAttr && !hasCustomAttr) {
+                  toast.error(
+                    `${variantLabel}: Please add Standard or Custom attributes.`,
+                  );
+                  return false;
+                }
+
+                // ✅ Determine current mode
+                const currentMode = hasCustomAttr ? "CUSTOM" : "STANDARD";
+
+                // ✅ RULE 2 — Global mode consistency
+                if (!globalMode) {
+                  globalMode = currentMode;
+                } else if (globalMode !== currentMode) {
+                  toast.error(
+                    `${variantLabel}: All variants must use ${globalMode} attributes because Variant 1 uses ${globalMode}.`,
+                  );
+                  return false;
+                }
 
               // ✅ main rule: either standard OR custom must exist
               if (!hasStandardAttr && !hasCustomAttr) {
@@ -1786,6 +1885,42 @@ const ProductsPage: React.FC = () => {
           )}
         </div>
 
+        {/* Warehouse Warning */}
+        {!isLoadingWarehouses && !hasWarehouses && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl shadow-lg p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                  <WarehouseIcon className="h-6 w-6 text-amber-600" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-600" />
+                  Warehouse Required
+                </h3>
+                <p className="text-gray-700 mb-4">
+                  You need to create at least one warehouse before you can add
+                  products. Warehouses are required to manage inventory and
+                  track stock levels.
+                </p>
+                <button
+                  onClick={() => {
+                    // Navigate to warehouse page - adjust based on your routing setup
+                    // For react-router: navigate('/admin/warehouses')
+                    // For Next.js: router.push('/admin/warehouses')
+                    window.location.href = "/admin/warehouses"; // Fallback option
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg transition-all shadow-md hover:shadow-lg font-medium"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Warehouse
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatsCard
@@ -1960,9 +2095,10 @@ const ProductsPage: React.FC = () => {
 
         {/* Create/Edit Product Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full my-8">
-              {/* Header */}
+          // <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 z-50">
+            {/* <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-8"> */}
+            <div className="bg-white w-full h-full flex flex-col">
               <div className="sticky top-0">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
                   <div className="flex items-center gap-3">
@@ -1988,7 +2124,7 @@ const ProductsPage: React.FC = () => {
                     <X className="h-6 w-6" />
                   </button>
                 </div>
-                <div className="p-6">
+                <div className="p-0">
                   <StepIndicator
                     currentStep={currentStep}
                     totalSteps={5}
@@ -1997,9 +2133,9 @@ const ProductsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Form Content */}
-              <div className="p-6 h-[60vh] overflow-y-auto">
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* <div className="p-6 h-[50vh] overflow-y-auto"> */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <form className="space-y-6">
                   <ProductFormSteps
                     currentStep={currentStep}
                     productType={productType}
@@ -2031,9 +2167,9 @@ const ProductsPage: React.FC = () => {
                     appendVariantAttribute={appendVariantAttribute}
                     removeVariantAttribute={removeVariantAttribute}
                     updateVariantAttribute={updateVariantAttribute}
+                    isEditProd={isEditProd}
                   />
 
-                  {/* Navigation Buttons */}
                   <div className="sticky bottom-0 flex justify-between pt-6 bg-gradient-to-t from-white via-white to-transparent pb-4">
                     {currentStep > 1 && (
                       <button
@@ -2050,23 +2186,10 @@ const ProductsPage: React.FC = () => {
                         Previous
                       </button>
                     )}
-                    {currentStep < 5 ? (
+                    {currentStep === 5 ? (
                       <button
                         type="button"
-                        onClick={nextStep}
-                        disabled={
-                          isUploadingMedia ||
-                          createMutation.isPending ||
-                          updateMutation.isPending
-                        }
-                        className="ml-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <button
-                        type="submit"
+                        onClick={handleSubmit(onSubmit)}
                         disabled={
                           isUploadingMedia ||
                           createMutation.isPending ||
@@ -2093,6 +2216,20 @@ const ProductsPage: React.FC = () => {
                               : "Create Product"}
                           </>
                         )}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={nextStep}
+                        disabled={
+                          isUploadingMedia ||
+                          createMutation.isPending ||
+                          updateMutation.isPending
+                        }
+                        className="ml-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
                       </button>
                     )}
                   </div>
@@ -2129,7 +2266,8 @@ const ProductsPage: React.FC = () => {
 };
 
 export default ProductsPage;
-const normalizeVariantAttributes = (variant: any) => {
+
+export const normalizeVariantAttributes = (variant: any) => {
   // if already proper record -> return
   if (
     variant?.attributes &&

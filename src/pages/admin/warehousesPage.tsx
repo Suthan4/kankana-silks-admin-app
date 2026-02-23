@@ -35,6 +35,7 @@ import {
   type CreateWarehouseFormData,
 } from "@/lib/types/warehouse/schema";
 import { useNavigate } from "react-router";
+import toast from "react-hot-toast";
 
 // Stats Card Component
 const StatsCard: React.FC<{
@@ -45,22 +46,26 @@ const StatsCard: React.FC<{
   subtitle?: string;
 }> = ({ icon, label, value, color, subtitle }) => {
   const colorClasses = {
-    blue: "bg-blue-100 text-blue-600",
-    green: "bg-green-100 text-green-600",
-    orange: "bg-orange-100 text-orange-600",
-    purple: "bg-purple-100 text-purple-600",
+    blue: "bg-blue-50 text-blue-600",
+    green: "bg-green-50 text-green-600",
+    orange: "bg-orange-50 text-orange-600",
+    purple: "bg-purple-50 text-purple-600",
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+    <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-600">{label}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
-          {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            {label}
+          </p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && (
+            <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+          )}
         </div>
         <div
-          className={`h-12 w-12 rounded-full flex items-center justify-center ${
+          className={`h-10 w-10 rounded-lg flex items-center justify-center ${
             colorClasses[color as keyof typeof colorClasses]
           }`}
         >
@@ -80,71 +85,70 @@ const WarehouseCard: React.FC<{
   handleViewStock: (id: string) => void;
   canUpdate: boolean;
   canDelete: boolean;
-}> = ({ warehouse, onEdit, onDelete, onViewStock,handleViewStock, canUpdate, canDelete }) => {
+}> = ({
+  warehouse,
+  onEdit,
+  onDelete,
+  onViewStock,
+  handleViewStock,
+  canUpdate,
+  canDelete,
+}) => {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 border border-gray-200 hover:border-blue-300 relative">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
+    <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200 hover:border-blue-300 relative">
+      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-3 rounded-t-lg text-white">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-              <Warehouse className="h-6 w-6" />
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 bg-white/20 rounded-lg flex items-center justify-center">
+              <Warehouse className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold">{warehouse.name}</h3>
-              <p className="text-blue-100 text-sm">Code: {warehouse.code}</p>
+              <h3 className="text-sm font-bold leading-tight">
+                {warehouse.name}
+              </h3>
+              <p className="text-blue-100 text-xs">Code: {warehouse.code}</p>
             </div>
           </div>
           <span
-            className={`px-3 py-1 rounded-full text-xs font-semibold ${
-              warehouse.isActive
-                ? "bg-green-400 text-green-900"
-                : "bg-red-400 text-red-900"
-            }`}
+            className={`px-2 py-0.5 rounded-full text-xs font-semibold ${warehouse.isActive ? "bg-green-400 text-green-900" : "bg-red-400 text-red-900"}`}
           >
             {warehouse.isActive ? "Active" : "Inactive"}
           </span>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="p-4 space-y-3">
-        {/* Location */}
-        <div className="flex items-start gap-2 text-gray-700">
-          <MapPin className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium">{warehouse.address}</p>
+      <div className="p-3 space-y-2">
+        <div className="flex items-start gap-1.5 text-gray-700">
+          <MapPin className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="font-medium truncate">{warehouse.address}</p>
             <p className="text-gray-500">
               {warehouse.city}, {warehouse.state} - {warehouse.pincode}
             </p>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
-          <div className="text-center p-2 bg-blue-50 rounded-lg">
-            <Package className="h-5 w-5 text-blue-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-600">Total Stock</p>
-            <p className="text-lg font-bold text-gray-900">--</p>
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+          <div className="text-center p-1.5 bg-blue-50 rounded-lg">
+            <Package className="h-4 w-4 text-blue-600 mx-auto mb-0.5" />
+            <p className="text-xs text-gray-500">Stock</p>
+            <p className="text-sm font-bold text-gray-900">--</p>
           </div>
-          <div className="text-center p-2 bg-green-50 rounded-lg">
-            <Box className="h-5 w-5 text-green-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-600">Products</p>
-            <p className="text-lg font-bold text-gray-900">--</p>
+          <div className="text-center p-1.5 bg-green-50 rounded-lg">
+            <Box className="h-4 w-4 text-green-600 mx-auto mb-0.5" />
+            <p className="text-xs text-gray-500">Products</p>
+            <p className="text-sm font-bold text-gray-900">--</p>
           </div>
         </div>
 
-        {/* Actions */}
-        {/* Actions */}
-        <div className="flex gap-2 pt-3">
-          {/* View Details */}
+        <div className="flex gap-2 pt-1">
           <button
             onClick={() => handleViewStock(warehouse.id)}
-            className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+            className="flex-1 px-2 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1"
           >
-            <Eye className="h-4 w-4" />
+            <Eye className="h-3.5 w-3.5" />
             View Stocks
           </button>
 
@@ -153,38 +157,37 @@ const WarehouseCard: React.FC<{
               <button
                 onClick={() =>
                   setOpenMenuId(
-                    openMenuId === warehouse.id ? null : warehouse.id
+                    openMenuId === warehouse.id ? null : warehouse.id,
                   )
                 }
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <MoreVertical className="h-5 w-5" />
+                <MoreVertical className="h-4 w-4" />
               </button>
 
               {openMenuId === warehouse.id && (
-                <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
                   {canUpdate && (
                     <button
                       onClick={() => {
                         onViewStock(warehouse.id);
                         setOpenMenuId(null);
                       }}
-                      className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-gray-50 flex items-center gap-2"
                     >
-                      <Edit className="h-4 w-4" />
+                      <Edit className="h-3.5 w-3.5" />
                       Edit
                     </button>
                   )}
-
                   {canDelete && (
                     <button
                       onClick={() => {
                         onDelete(warehouse.id);
                         setOpenMenuId(null);
                       }}
-                      className="w-full px-4 py-2 text-sm text-left text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      className="w-full px-3 py-2 text-xs text-left text-red-600 hover:bg-red-50 flex items-center gap-2"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                       Delete
                     </button>
                   )}
@@ -197,12 +200,38 @@ const WarehouseCard: React.FC<{
     </div>
   );
 };
+
 const Detail = ({ label, value }: { label: string; value?: string }) => (
   <div>
-    <p className="text-gray-500">{label}</p>
-    <p className="font-medium">{value}</p>
+    <p className="text-gray-500 text-xs">{label}</p>
+    <p className="font-medium text-sm">{value}</p>
   </div>
 );
+
+// Compact Form Field
+const Field = ({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) => (
+  <div>
+    <label className="block text-xs font-medium text-gray-600 mb-0.5">
+      {label}
+      {required && <span className="text-red-500 ml-0.5">*</span>}
+    </label>
+    {children}
+    {error && <p className="mt-0.5 text-xs text-red-500">{error}</p>}
+  </div>
+);
+
+const inputCls =
+  "w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
 
 const WarehousesPage = () => {
   const queryClient = useQueryClient();
@@ -212,7 +241,7 @@ const WarehousesPage = () => {
     useState<WarehouseType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActive, setFilterActive] = useState<boolean | undefined>(
-    undefined
+    undefined,
   );
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [viewingWarehouse, setViewingWarehouse] =
@@ -222,10 +251,8 @@ const WarehousesPage = () => {
   const canCreate = hasPermission("warehouses", "canCreate");
   const canUpdate = hasPermission("warehouses", "canUpdate");
   const canDelete = hasPermission("warehouses", "canDelete");
-
   const navigate = useNavigate();
 
-  // Fetch warehouses
   const { data: warehousesData, isLoading } = useQuery({
     queryKey: ["warehouses", searchQuery, filterActive],
     queryFn: async () => {
@@ -238,8 +265,6 @@ const WarehousesPage = () => {
     },
   });
 
-
-  // Create warehouse mutation
   const createMutation = useMutation({
     mutationFn: warehouseApi.createWarehouse,
     onSuccess: () => {
@@ -249,7 +274,6 @@ const WarehousesPage = () => {
     },
   });
 
-  // Update warehouse mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateWarehouseData }) =>
       warehouseApi.updateWarehouse(id, data),
@@ -260,11 +284,13 @@ const WarehousesPage = () => {
     },
   });
 
-  // Delete warehouse mutation
   const deleteMutation = useMutation({
     mutationFn: warehouseApi.deleteWarehouse,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["warehouses"] });
+    },
+    onError: (error) => {
+      toast.error(error?.message);
     },
   });
 
@@ -275,76 +301,63 @@ const WarehousesPage = () => {
     setValue,
     formState: { errors },
   } = useForm<CreateWarehouseFormData>({
+    mode: "all",
     resolver: zodResolver(
-      createWarehouseSchema
+      createWarehouseSchema,
     ) as Resolver<CreateWarehouseFormData>,
   });
 
   const onSubmit = (data: CreateWarehouseFormData) => {
     if (editingWarehouse) {
-      const updateData: UpdateWarehouseData = {
-        name: data.name,
-        address: data.address,
-        addressLine2: data.addressLine2,
-        city: data.city,
-        state: data.state,
-        pincode: data.pincode,
-        country: data.country,
-        contactPerson: data.contactPerson,
-        phone: data.phone,
-        email: data.email,
-        isDefaultPickup: data.isDefaultPickup,
-        isActive: data.isActive,
-      };
-
       updateMutation.mutate({
         id: editingWarehouse.id,
-        data: updateData,
+        data: {
+          name: data.name,
+          address: data.address,
+          addressLine2: data.addressLine2,
+          city: data.city,
+          state: data.state,
+          pincode: data.pincode,
+          country: data.country,
+          contactPerson: data.contactPerson,
+          phone: data.phone,
+          email: data.email,
+          isDefaultPickup: data.isDefaultPickup,
+          isActive: data.isActive,
+        },
       });
     } else {
-      const createData = {
+      createMutation.mutate({
         ...data,
         code: data.code.toUpperCase(),
         country: data.country ?? "India",
         isDefaultPickup: data.isDefaultPickup ?? false,
         isActive: data.isActive ?? true,
-      };
-
-      createMutation.mutate(createData);
+      });
     }
   };
 
   const handleEdit = (warehouse: WarehouseType) => {
     setEditingWarehouse(warehouse);
-
     setValue("name", warehouse.name);
     setValue("code", warehouse.code);
-
     setValue("address", warehouse.address);
     setValue("addressLine2", warehouse.addressLine2);
     setValue("city", warehouse.city);
     setValue("state", warehouse.state);
     setValue("pincode", warehouse.pincode);
     setValue("country", warehouse.country);
-
     setValue("contactPerson", warehouse.contactPerson);
     setValue("phone", warehouse.phone);
     setValue("email", warehouse.email);
-
     setValue("isDefaultPickup", warehouse.isDefaultPickup);
     setValue("isActive", warehouse.isActive);
-
     setShowCreateModal(true);
   };
 
   const handleDelete = (id: string) => {
-    if (
-      window.confirm(
-        "Are you sure you want to delete this warehouse? This action cannot be undone."
-      )
-    ) {
+    if (window.confirm("Delete this warehouse? This cannot be undone."))
       deleteMutation.mutate(id);
-    }
   };
 
   const handleViewStock = (id: string) => {
@@ -352,30 +365,25 @@ const WarehousesPage = () => {
     navigate(`/admin/warehouses/${id}`);
   };
 
-  // Calculate stats
   const totalWarehouses = warehousesData?.warehouses?.length || 0;
   const activeWarehouses =
     warehousesData?.warehouses?.filter((w) => w.isActive).length || 0;
-  const inactiveWarehouses = totalWarehouses - activeWarehouses;
-
-  // Filter warehouses
   const filteredWarehouses = warehousesData?.warehouses || [];
 
   return (
     <MainLayout>
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Warehouse className="h-7 w-7 text-blue-600" />
+            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Warehouse className="h-6 w-6 text-blue-600" />
               Warehouses
             </h1>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-xs text-gray-500 mt-0.5">
               Manage warehouse locations and inventory
             </p>
           </div>
-
           {canCreate && (
             <button
               onClick={() => {
@@ -395,10 +403,9 @@ const WarehousesPage = () => {
                   isDefaultPickup: false,
                   isActive: true,
                 });
-
                 setShowCreateModal(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap shadow-md hover:shadow-lg"
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm shadow-sm whitespace-nowrap"
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add Warehouse</span>
@@ -408,30 +415,30 @@ const WarehousesPage = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatsCard
-            icon={<Warehouse className="h-6 w-6" />}
-            label="Total Warehouses"
+            icon={<Warehouse className="h-5 w-5" />}
+            label="Total"
             value={totalWarehouses}
             color="blue"
             subtitle="All locations"
           />
           <StatsCard
-            icon={<CheckCircle className="h-6 w-6" />}
+            icon={<CheckCircle className="h-5 w-5" />}
             label="Active"
             value={activeWarehouses}
             color="green"
             subtitle="Operational"
           />
           <StatsCard
-            icon={<XCircle className="h-6 w-6" />}
+            icon={<XCircle className="h-5 w-5" />}
             label="Inactive"
-            value={inactiveWarehouses}
+            value={totalWarehouses - activeWarehouses}
             color="orange"
             subtitle="Not operational"
           />
           <StatsCard
-            icon={<TrendingUp className="h-6 w-6" />}
+            icon={<TrendingUp className="h-5 w-5" />}
             label="Capacity"
             value="85%"
             color="purple"
@@ -439,114 +446,98 @@ const WarehousesPage = () => {
           />
         </div>
 
-        {/* Filters and Search */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
+        {/* Filters */}
+        <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, code, or city..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
-
-            {/* Filter */}
             <div className="flex items-center gap-2">
-              <Filter className="h-5 w-5 text-gray-400" />
+              <Filter className="h-4 w-4 text-gray-400 flex-shrink-0" />
               <select
                 value={
                   filterActive === undefined
                     ? "all"
                     : filterActive
-                    ? "active"
-                    : "inactive"
+                      ? "active"
+                      : "inactive"
                 }
                 onChange={(e) => {
-                  const value = e.target.value;
-                  setFilterActive(
-                    value === "all" ? undefined : value === "active"
-                  );
+                  const v = e.target.value;
+                  setFilterActive(v === "all" ? undefined : v === "active");
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="text-sm px-2.5 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="all">All Status</option>
-                <option value="active">Active Only</option>
-                <option value="inactive">Inactive Only</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
               </select>
-
-              {/* View Toggle */}
-              <div className="flex items-center bg-gray-100 rounded-lg p-1 ml-2">
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5 ml-1">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === "grid"
-                      ? "bg-white text-blue-600 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                  title="Grid View"
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-900"}`}
+                  title="Grid"
                 >
-                  <Grid3x3 className="h-4 w-4" />
+                  <Grid3x3 className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => setViewMode("table")}
-                  className={`p-2 rounded-md transition-colors ${
-                    viewMode === "table"
-                      ? "bg-white text-blue-600 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                  title="Table View"
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === "table" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-900"}`}
+                  title="Table"
                 >
-                  <List className="h-4 w-4" />
+                  <List className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Warehouses Display */}
+        {/* Content */}
         {isLoading ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-500">Loading warehouses...</p>
+          <div className="bg-white rounded-lg border border-gray-100 p-10 text-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-3 text-sm text-gray-500">Loading warehouses...</p>
           </div>
         ) : filteredWarehouses.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <Warehouse className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg font-medium">
-              No warehouses found
+          <div className="bg-white rounded-lg border border-gray-100 p-10 text-center">
+            <Warehouse className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 font-medium">
+              {searchQuery ? "No results found" : "No warehouses yet"}
             </p>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-gray-400 text-xs mt-1">
               {searchQuery
-                ? "Try adjusting your search or filters"
+                ? "Try adjusting your search"
                 : "Get started by adding your first warehouse"}
             </p>
             {canCreate && !searchQuery && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
+                className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
-                Create your first warehouse
+                Create warehouse →
               </button>
             )}
           </div>
         ) : (
           <>
-            {/* Grid View */}
             {viewMode === "grid" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredWarehouses.map((warehouse) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredWarehouses.map((w) => (
                   <WarehouseCard
-                    key={warehouse.id}
-                    warehouse={warehouse}
+                    key={w.id}
+                    warehouse={w}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onViewStock={(id) =>
                       setViewingWarehouse(
-                        filteredWarehouses.find((w) => w.id === id) || null
+                        filteredWarehouses.find((x) => x.id === id) || null,
                       )
                     }
                     handleViewStock={handleViewStock}
@@ -556,73 +547,67 @@ const WarehousesPage = () => {
                 ))}
               </div>
             )}
-
-            {/* Table View */}
             {viewMode === "table" && (
-              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
+                  <table className="min-w-full divide-y divide-gray-100">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                           Warehouse
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                           Location
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden lg:table-cell">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">
                           Code
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                           Status
                         </th>
                         {(canUpdate || canDelete) && (
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">
                             Actions
                           </th>
                         )}
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredWarehouses.map((warehouse) => (
-                        <tr key={warehouse.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                                <Warehouse className="h-5 w-5 text-blue-600" />
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredWarehouses.map((w) => (
+                        <tr key={w.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Warehouse className="h-4 w-4 text-blue-600" />
                               </div>
                               <div>
                                 <div className="text-sm font-medium text-gray-900">
-                                  {warehouse.name}
+                                  {w.name}
                                 </div>
-                                <div className="text-sm text-gray-500 lg:hidden">
-                                  {warehouse.code}
+                                <div className="text-xs text-gray-400 lg:hidden">
+                                  {w.code}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900">
-                              {warehouse.city}, {warehouse.state}
+                          <td className="px-4 py-3">
+                            <div className="text-sm text-gray-700">
+                              {w.city}, {w.state}
                             </div>
-                            <div className="text-sm text-gray-500">
-                              {warehouse.pincode}
+                            <div className="text-xs text-gray-400">
+                              {w.pincode}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 hidden lg:table-cell">
-                            <span className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">
-                              {warehouse.code}
+                          <td className="px-4 py-3 hidden lg:table-cell">
+                            <span className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">
+                              {w.code}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-3">
                             <span
-                              className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
-                                warehouse.isActive
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
+                              className={`px-2 py-0.5 inline-flex items-center text-xs font-semibold rounded-full ${w.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
                             >
-                              {warehouse.isActive ? (
+                              {w.isActive ? (
                                 <>
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                   Active
@@ -636,31 +621,30 @@ const WarehousesPage = () => {
                             </span>
                           </td>
                           {(canUpdate || canDelete) && (
-                            <td className="px-6 py-4 text-right text-sm font-medium">
+                            <td className="px-4 py-3 text-right">
                               <button
-                                onClick={() => handleViewStock(warehouse.id)}
-                                className="text-blue-600 hover:text-blue-900 mr-3"
-                                title="View Details"
+                                onClick={() => handleViewStock(w.id)}
+                                className="text-xs text-blue-600 hover:text-blue-800 mr-3 inline-flex items-center gap-1"
                               >
-                                <Eye className="h-4 w-4" />
-                                View Details
+                                <Eye className="h-3.5 w-3.5" />
+                                View
                               </button>
                               {canUpdate && (
                                 <button
-                                  onClick={() => handleEdit(warehouse)}
-                                  className="text-blue-600 hover:text-blue-900 mr-3"
+                                  onClick={() => handleEdit(w)}
+                                  className="text-blue-600 hover:text-blue-800 mr-2"
                                   title="Edit"
                                 >
-                                  <Edit className="h-4 w-4 inline" />
+                                  <Edit className="h-3.5 w-3.5 inline" />
                                 </button>
                               )}
                               {canDelete && (
                                 <button
-                                  onClick={() => handleDelete(warehouse.id)}
-                                  className="text-red-600 hover:text-red-900"
+                                  onClick={() => handleDelete(w.id)}
+                                  className="text-red-500 hover:text-red-700"
                                   title="Delete"
                                 >
-                                  <Trash2 className="h-4 w-4 inline" />
+                                  <Trash2 className="h-3.5 w-3.5 inline" />
                                 </button>
                               )}
                             </td>
@@ -675,17 +659,20 @@ const WarehousesPage = () => {
           </>
         )}
 
+        {/* View Details Drawer */}
         {viewingWarehouse && (
           <div className="fixed inset-0 bg-black/40 z-50 flex justify-end">
-            <div className="bg-white w-full max-w-md h-full shadow-xl overflow-y-auto">
-              <div className="p-6 border-b flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Warehouse Details</h3>
-                <button onClick={() => setViewingWarehouse(null)}>
-                  <X />
+            <div className="bg-white w-full max-w-sm h-full shadow-xl overflow-y-auto">
+              <div className="p-4 border-b flex justify-between items-center">
+                <h3 className="text-base font-semibold">Warehouse Details</h3>
+                <button
+                  onClick={() => setViewingWarehouse(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
                 </button>
               </div>
-
-              <div className="p-6 space-y-4 text-sm">
+              <div className="p-4 space-y-3 text-sm">
                 <Detail label="Name" value={viewingWarehouse.name} />
                 <Detail label="Code" value={viewingWarehouse.code} />
                 <Detail label="Address" value={viewingWarehouse.address} />
@@ -700,27 +687,25 @@ const WarehousesPage = () => {
                 />
                 <Detail label="Phone" value={viewingWarehouse.phone} />
                 <Detail label="Email" value={viewingWarehouse.email ?? "—"} />
-
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-1">
                   {viewingWarehouse.isActive && (
-                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                    <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
                       Active
                     </span>
                   )}
                   {viewingWarehouse.isDefaultPickup && (
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
                       Default Pickup
                     </span>
                   )}
                 </div>
-
                 {canUpdate && (
                   <button
                     onClick={() => {
                       setViewingWarehouse(null);
                       handleEdit(viewingWarehouse);
                     }}
-                    className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg"
+                    className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white py-2 text-sm rounded-lg"
                   >
                     Edit Warehouse
                   </button>
@@ -730,14 +715,20 @@ const WarehousesPage = () => {
           </div>
         )}
 
-        {/* Create/Edit Modal */}
+        {/* ── COMPACT ADD/EDIT MODAL ── */}
         {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <Warehouse className="h-5 w-5 text-blue-600" />
-                  {editingWarehouse ? "Edit Warehouse" : "Add Warehouse"}
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div
+              className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col"
+              style={{ maxHeight: "95vh" }}
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 flex-shrink-0">
+                <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <div className="h-7 w-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Warehouse className="h-4 w-4 text-blue-600" />
+                  </div>
+                  {editingWarehouse ? "Edit Warehouse" : "Add New Warehouse"}
                 </h2>
                 <button
                   onClick={() => {
@@ -745,238 +736,192 @@ const WarehousesPage = () => {
                     setEditingWarehouse(null);
                     reset();
                   }}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  <X className="h-6 w-6" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-                {/* Error/Success Messages */}
-                {(createMutation.isError || updateMutation.isError) && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    {(createMutation.error as any)?.message ||
-                      (updateMutation.error as any)?.message ||
-                      "Failed to save warehouse"}
-                  </div>
-                )}
-
-                {/* Basic Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Warehouse Name *
-                    </label>
-                    <input
-                      {...register("name")}
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Main Warehouse"
-                    />
-                    {errors.name && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.name.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Warehouse Code *
-                    </label>
-                    <input
-                      {...register("code")}
-                      type="text"
-                      disabled={!!editingWarehouse}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono"
-                      placeholder="WH-01"
-                      maxLength={20}
-                    />
-                    {errors.code && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.code.message}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs text-gray-500">
-                      Unique code (uppercase, alphanumeric)
-                    </p>
-                  </div>
-                </div>
-
-                {/* Address */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address *
-                  </label>
-                  <textarea
-                    {...register("address")}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="123 Main Street, Building A"
-                  />
-                  {errors.address && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {errors.address.message}
-                    </p>
+              {/* Form — scrolls only if content truly overflows */}
+              <form
+                onSubmit={handleSubmit(onSubmit)}
+                className="flex flex-col flex-1 min-h-0"
+              >
+                <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+                  {/* Error banner */}
+                  {(createMutation.isError || updateMutation.isError) && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      {(createMutation.error as any)?.message ||
+                        (updateMutation.error as any)?.message ||
+                        "Failed to save warehouse"}
+                    </div>
                   )}
+
+                  {/* Row 1: Name + Code */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field
+                      label="Warehouse Name"
+                      required
+                      error={errors.name?.message}
+                    >
+                      <input
+                        {...register("name")}
+                        type="text"
+                        className={inputCls}
+                        placeholder="Main Warehouse"
+                      />
+                    </Field>
+                    <Field
+                      label="Warehouse Code"
+                      required
+                      error={errors.code?.message}
+                    >
+                      <input
+                        {...register("code")}
+                        type="text"
+                        disabled={!!editingWarehouse}
+                        className={`${inputCls} uppercase font-mono disabled:bg-gray-50 disabled:text-gray-400`}
+                        placeholder="WH-01"
+                        maxLength={20}
+                      />
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        Unique (alphanumeric)
+                      </p>
+                    </Field>
+                  </div>
+
+                  {/* Row 2: Address + Address Line 2 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field
+                      label="Address"
+                      required
+                      error={errors.address?.message}
+                    >
+                      <textarea
+                        {...register("address")}
+                        rows={2}
+                        className={inputCls}
+                        placeholder="123 Main Street, Building A"
+                        style={{ resize: "none" }}
+                      />
+                    </Field>
+                    <Field
+                      label="Address Line 2"
+                      error={errors.addressLine2?.message}
+                    >
+                      <input
+                        {...register("addressLine2")}
+                        className={inputCls}
+                        placeholder="Apartment, Floor (optional)"
+                      />
+                    </Field>
+                  </div>
+
+                  {/* Row 3: City + State + Pincode */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="City" required error={errors.city?.message}>
+                      <input
+                        {...register("city")}
+                        type="text"
+                        className={inputCls}
+                        placeholder="Mumbai"
+                      />
+                    </Field>
+                    <Field label="State" required error={errors.state?.message}>
+                      <input
+                        {...register("state")}
+                        type="text"
+                        className={inputCls}
+                        placeholder="Maharashtra"
+                      />
+                    </Field>
+                    <Field
+                      label="Pincode"
+                      required
+                      error={errors.pincode?.message}
+                    >
+                      <input
+                        {...register("pincode")}
+                        type="text"
+                        className={`${inputCls} font-mono`}
+                        placeholder="400001"
+                        maxLength={6}
+                      />
+                    </Field>
+                  </div>
+
+                  {/* Row 4: Country (disabled) */}
+                  <Field
+                    label="Country"
+                    required
+                    error={errors.country?.message}
+                  >
+                    <input
+                      {...register("country")}
+                      defaultValue="India"
+                      disabled
+                      className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed`}
+                    />
+                  </Field>
+
+                  {/* Row 5: Contact + Phone + Email */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field
+                      label="Contact Person"
+                      required
+                      error={errors.contactPerson?.message}
+                    >
+                      <input
+                        {...register("contactPerson")}
+                        className={inputCls}
+                        placeholder="Person Name"
+                      />
+                    </Field>
+                    <Field label="Phone" required error={errors.phone?.message}>
+                      <input
+                        {...register("phone")}
+                        className={`${inputCls} font-mono`}
+                        placeholder="9876543210"
+                      />
+                    </Field>
+                    <Field label="Email" required error={errors.email?.message}>
+                      <input
+                        {...register("email")}
+                        type="email"
+                        className={inputCls}
+                        placeholder="email@example.com"
+                      />
+                    </Field>
+                  </div>
+
+                  {/* Row 6: Toggles */}
+                  <div className="flex items-center gap-6 py-1">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        {...register("isActive")}
+                        type="checkbox"
+                        className="h-3.5 w-3.5 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-xs text-gray-600 font-medium">
+                        Active & Operational
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        {...register("isDefaultPickup")}
+                        type="checkbox"
+                        className="h-3.5 w-3.5 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-xs text-gray-600 font-medium">
+                        Default Pickup Warehouse
+                      </span>
+                    </label>
+                  </div>
                 </div>
-                {/* Address Line 2 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address Line 2
-                  </label>
-                  <input
-                    {...register("addressLine2")}
-                    placeholder="Apartment, Floor (optional)"
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                  {errors.addressLine2 && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {errors.addressLine2.message}
-                    </p>
-                  )}
-                </div>
-                {/* Country */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Country *
-                  </label>
-                  <input
-                    {...register("country")}
-                    defaultValue="India"
-                    disabled={true}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
 
-                  {errors.country && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {errors.country.message}
-                    </p>
-                  )}
-                </div>
-
-                {/* Location Details */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      City *
-                    </label>
-                    <input
-                      {...register("city")}
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Mumbai"
-                    />
-                    {errors.city && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.city.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State *
-                    </label>
-                    <input
-                      {...register("state")}
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Maharashtra"
-                    />
-                    {errors.state && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.state.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Pincode *
-                    </label>
-                    <input
-                      {...register("pincode")}
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                      placeholder="400001"
-                      maxLength={6}
-                    />
-                    {errors.pincode && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.pincode.message}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Contact Person *
-                    </label>
-                    <input
-                      {...register("contactPerson")}
-                      className="w-full px-3 py-2 border rounded-lg"
-                      placeholder="Contact Person Name"
-                    />
-
-                    {errors.contactPerson && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.contactPerson.message}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Phone *
-                    </label>
-                    <input
-                      {...register("phone")}
-                      className="w-full px-3 py-2 border rounded-lg font-mono"
-                      placeholder="9876543210"
-                    />
-
-                    {errors.phone && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.phone.message}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email *
-                    </label>
-                    <input
-                      {...register("email")}
-                      type="email"
-                      className="w-full px-3 py-2 border rounded-lg"
-                      placeholder="email@example.com"
-                    />
-
-                    {errors.email && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.email.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Status */}
-                <div>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      {...register("isDefaultPickup")}
-                      type="checkbox"
-                      className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">
-                      Warehouse is active and operational and Default Pickup
-                      Warehouse
-                    </span>
-                  </label>
-                </div>
-
-                {/* Submit Buttons */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                {/* Footer */}
+                <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 flex-shrink-0 bg-gray-50 rounded-b-xl">
                   <button
                     type="button"
                     onClick={() => {
@@ -984,7 +929,7 @@ const WarehousesPage = () => {
                       setEditingWarehouse(null);
                       reset();
                     }}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                    className="px-4 py-1.5 text-sm bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
@@ -993,16 +938,16 @@ const WarehousesPage = () => {
                     disabled={
                       createMutation.isPending || updateMutation.isPending
                     }
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                    className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {createMutation.isPending || updateMutation.isPending ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
                         Saving...
                       </>
                     ) : (
                       <>
-                        <CheckCircle className="h-4 w-4" />
+                        <CheckCircle className="h-3.5 w-3.5" />
                         {editingWarehouse
                           ? "Update Warehouse"
                           : "Create Warehouse"}
@@ -1015,12 +960,11 @@ const WarehousesPage = () => {
           </div>
         )}
 
-        {/* Read-Only Notice */}
         {!canCreate && !canUpdate && !canDelete && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-sm text-yellow-800">
-              You have read-only access to warehouses. Contact your
-              administrator for additional permissions.
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p className="text-xs text-yellow-700">
+              You have read-only access. Contact your administrator for
+              additional permissions.
             </p>
           </div>
         )}
@@ -1028,4 +972,5 @@ const WarehousesPage = () => {
     </MainLayout>
   );
 };
+
 export default WarehousesPage;
