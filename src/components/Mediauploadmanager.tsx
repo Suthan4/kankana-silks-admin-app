@@ -240,12 +240,15 @@ const MediaUploadManager: React.FC<MediaUploadManagerProps> = ({
               reject(new Error("Failed to create blob"));
               return;
             }
-            resolve(
-              new File([blob], file.name, {
-                type: file.type,
-                lastModified: Date.now(),
-              }),
-            );
+
+            const extension = file.type.split("/")[1] || "jpg";
+
+            const newFile = new File([blob], `banner.${extension}`, {
+              type: file.type,
+              lastModified: Date.now(),
+            });
+
+            resolve(newFile);
           },
           file.type,
           0.95,
@@ -260,10 +263,15 @@ const MediaUploadManager: React.FC<MediaUploadManagerProps> = ({
 
   const compressImage = async (file: File): Promise<File> => {
     try {
-      return await imageCompression(file, {
+      const compressed = await imageCompression(file, {
         maxSizeMB,
         maxWidthOrHeight: Math.max(targetWidth, targetHeight),
         useWebWorker: true,
+      });
+      // 🔥 Convert Blob → File
+      return new File([compressed], file.name, {
+        type: compressed.type || file.type,
+        lastModified: Date.now(),
       });
     } catch (error) {
       return file;
