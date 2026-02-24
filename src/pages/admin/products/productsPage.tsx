@@ -1876,7 +1876,8 @@ const ProductsPage: React.FC = () => {
                 setEditingProduct(null);
                 setShowCreateModal(true);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium"
+              disabled={!isLoadingWarehouses && !hasWarehouses}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium disabled:opacity-65 disabled:cursor-not-allowed"
             >
               <Sparkles className="h-4 w-4" />
               <span className="hidden sm:inline">Create Product</span>
@@ -2071,7 +2072,8 @@ const ProductsPage: React.FC = () => {
             {canCreate && !searchQuery && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                disabled={!isLoadingWarehouses && !hasWarehouses}
+                className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-65 disabled:cursor-not-allowed"
               >
                 Create First Product
               </button>
