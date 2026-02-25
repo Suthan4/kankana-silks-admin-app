@@ -42,6 +42,9 @@ import {
 } from "@/lib/utils/colorValidation";
 import { s3Api } from "@/lib/api/s3.api";
 import { normalizeVariantAttributes } from "@/pages/admin/products/productsPage";
+import RichTextEditor from "@/components/ui/RichTextEditor";
+import DOMPurify from "dompurify";
+
 
 interface MediaPreviewItem {
   file: File | null;
@@ -528,11 +531,20 @@ console.log("isEditProd",isEditProd);
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Description *
             </label>
-            <textarea
+            {/* <textarea
               {...register("description")}
               rows={4}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
               placeholder="Detailed product description..."
+            /> */}
+            <RichTextEditor
+              value={watch("description") || ""}
+              onChange={(val) =>
+                setValue("description", val, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
             />
             {errors.description && (
               <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
@@ -2770,7 +2782,12 @@ console.log("isEditProd",isEditProd);
                 Description:
               </span>
               <span className="text-sm text-gray-900 font-medium text-right max-w-md">
-                {formData.description || "—"}
+                <div
+                  className="product-description"
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(formData.description),
+                  }}
+                />
               </span>
             </div>
             <div className="flex justify-between items-start">
