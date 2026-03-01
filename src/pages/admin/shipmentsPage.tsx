@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { shipmentApi } from "../../lib/api/shipment.api";
 import { orderApi } from "../../lib/api/order.api";
@@ -38,7 +38,8 @@ const ShipmentsPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showTrackingModal, setShowTrackingModal] = useState(false);
-  const [showShiprocketDetailsModal, setShowShiprocketDetailsModal] = useState(false);
+  const [showShiprocketDetailsModal, setShowShiprocketDetailsModal] =
+    useState(false);
   const [trackingData, setTrackingData] = useState<any>(null);
   const [shiprocketDetails, setShiprocketDetails] = useState<any>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -46,7 +47,7 @@ const ShipmentsPage: React.FC = () => {
   const limit = 10;
 
   // Fetch orders
-  const { data, isLoading, error, refetch ,isFetching} = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-orders", { page: currentPage, limit }],
     queryFn: () =>
       orderApi.getAllOrders({
@@ -71,11 +72,18 @@ const ShipmentsPage: React.FC = () => {
 
   // Generate AWB mutation
   const generateAwbMutation = useMutation({
-    mutationFn: ({ orderId, courierId }: { orderId: string; courierId: number }) =>
-      shipmentApi.generateAwb({ orderId, courierId }),
+    mutationFn: ({
+      orderId,
+      courierId,
+    }: {
+      orderId: string;
+      courierId: number;
+    }) => shipmentApi.generateAwb({ orderId, courierId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-      toast.success("✅ AWB generated successfully! You can now download label/manifest or schedule pickup.");
+      toast.success(
+        "✅ AWB generated successfully! You can now download label/manifest or schedule pickup.",
+      );
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to generate AWB");
@@ -124,7 +132,9 @@ const ShipmentsPage: React.FC = () => {
       }
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to generate manifest");
+      toast.error(
+        error.response?.data?.message || "Failed to generate manifest",
+      );
     },
   });
 
@@ -136,7 +146,9 @@ const ShipmentsPage: React.FC = () => {
       toast.success("Order marked as delivered");
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to mark as delivered");
+      toast.error(
+        error.response?.data?.message || "Failed to mark as delivered",
+      );
     },
   });
 
@@ -154,13 +166,16 @@ const ShipmentsPage: React.FC = () => {
 
   // Get Shiprocket details mutation
   const getShiprocketDetailsMutation = useMutation({
-    mutationFn: (orderId: string) => shipmentApi.getShiprocketOrderDetails(orderId),
+    mutationFn: (orderId: string) =>
+      shipmentApi.getShiprocketOrderDetails(orderId),
     onSuccess: (data) => {
       setShiprocketDetails(data?.data);
       setShowShiprocketDetailsModal(true);
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to fetch Shiprocket details");
+      toast.error(
+        error.response?.data?.message || "Failed to fetch Shiprocket details",
+      );
     },
   });
 
@@ -213,9 +228,11 @@ const ShipmentsPage: React.FC = () => {
   };
 
   // Helper functions
-  const hasAwb = (order: Order) => order.shipment?.awbCode ? true : false;
-  const hasPickup = (order: Order) => order.shipment?.shippedAt ? true : false;
-  const isDelivered = (order: Order) => order.shipment?.deliveredAt ? true : false;
+  const hasAwb = (order: Order) => (order.shipment?.awbCode ? true : false);
+  const hasPickup = (order: Order) =>
+    order.shipment?.shippedAt ? true : false;
+  const isDelivered = (order: Order) =>
+    order.shipment?.deliveredAt ? true : false;
 
   // Get selected courier from shippingInfo
   const getSelectedCourier = (order: Order) => {
@@ -234,7 +251,7 @@ const ShipmentsPage: React.FC = () => {
     }
 
     const courier = getSelectedCourier(order);
-    
+
     if (!courier.courierId) {
       toast.error("⚠️ No courier selected by customer. This shouldn't happen!");
       return;
@@ -972,29 +989,155 @@ const ShipmentsPage: React.FC = () => {
         />
 
         {/* Shiprocket Details Modal */}
-        {showShiprocketDetailsModal && shiprocketDetails && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        {showShiprocketDetailsModal && shiprocketDetails?.data && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-xl">
+              {/* Header */}
+              <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">
+                  <h2 className="text-xl font-semibold text-gray-900">
                     Shiprocket Order Details
                   </h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Order #{shiprocketDetails.data?.channel_order_id}
+                  <p className="text-sm text-gray-500">
+                    Order #{shiprocketDetails.data.channel_order_id}
                   </p>
                 </div>
+
                 <button
                   onClick={() => setShowShiprocketDetailsModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-gray-100 rounded-lg"
                 >
-                  <XCircle className="w-5 h-5" />
+                  ✕
                 </button>
               </div>
-              <div className="p-6">
-                <pre className="text-xs bg-gray-100 p-4 rounded overflow-auto max-h-96">
-                  {JSON.stringify(shiprocketDetails, null, 2)}
-                </pre>
+
+              {/* Body */}
+              <div className="p-6 space-y-6">
+                {/* Order Info */}
+                <Section title="Order Information">
+                  <InfoComp
+                    label="Order ID"
+                    value={shiprocketDetails.data.id}
+                  />
+                  <InfoComp
+                    label="Status"
+                    value={shiprocketDetails.data.status}
+                  />
+                  <InfoComp
+                    label="Payment Method"
+                    value={shiprocketDetails.data.payment_method}
+                  />
+                  <InfoComp
+                    label="Total Amount"
+                    value={`₹${shiprocketDetails.data.total}`}
+                  />
+                  <InfoComp
+                    label="Created At"
+                    value={shiprocketDetails.data.created_at}
+                  />
+                  <InfoComp label="SLA" value={shiprocketDetails.data.sla} />
+                </Section>
+
+                {/* Customer Info */}
+                <Section title="Customer Information">
+                  <InfoComp
+                    label="Name"
+                    value={shiprocketDetails.data.customer_name}
+                  />
+                  <InfoComp
+                    label="Email"
+                    value={shiprocketDetails.data.customer_email}
+                  />
+                  <InfoComp
+                    label="Phone"
+                    value={shiprocketDetails.data.customer_phone}
+                  />
+                  <InfoComp
+                    label="Address"
+                    value={`${shiprocketDetails.data.customer_address}, 
+                   ${shiprocketDetails.data.customer_city}, 
+                   ${shiprocketDetails.data.customer_state} - 
+                   ${shiprocketDetails.data.customer_pincode}`}
+                  />
+                </Section>
+
+                {/* Shipment Info */}
+                <Section title="Shipment Information">
+                  <InfoComp
+                    label="Courier"
+                    value={
+                      shiprocketDetails.data.shipments?.courier ||
+                      "Not Assigned"
+                    }
+                  />
+                  <InfoComp
+                    label="AWB"
+                    value={
+                      shiprocketDetails.data.shipments?.awb || "Not Generated"
+                    }
+                  />
+                  <InfoComp
+                    label="Weight"
+                    value={`${shiprocketDetails.data.shipments?.weight} kg`}
+                  />
+                  <InfoComp
+                    label="Dimensions"
+                    value={shiprocketDetails.data.shipments?.dimensions}
+                  />
+                  <InfoComp
+                    label="Shipment Status"
+                    value={shiprocketDetails.data.shipments?.status}
+                  />
+                </Section>
+
+                {/* Product Info */}
+                <Section title="Product Information">
+                  {shiprocketDetails.data.products?.map((p:any, i:number) => (
+                    <div key={i} className="border rounded-lg p-4 mb-3">
+                      <InfoComp label="Product" value={p.name} />
+                      <InfoComp label="SKU" value={p.sku} />
+                      <InfoComp label="Price" value={`₹${p.price}`} />
+                      <InfoComp label="Quantity" value={p.quantity} />
+                    </div>
+                  ))}
+                </Section>
+
+                {/* Risk Info */}
+                <Section title="Risk Analysis">
+                  <InfoComp
+                    label="Address Risk"
+                    value={shiprocketDetails.data.address_risk}
+                  />
+                  <InfoComp
+                    label="Order Risk"
+                    value={shiprocketDetails.data.order_risk}
+                  />
+                  <InfoComp
+                    label="RTO Risk"
+                    value={shiprocketDetails.data.rto_risk}
+                  />
+                  <InfoComp
+                    label="Address Score"
+                    value={shiprocketDetails.data.address_score}
+                  />
+                </Section>
+
+                {/* Pickup Info */}
+                <Section title="Pickup Address">
+                  <InfoComp
+                    label="Name"
+                    value={shiprocketDetails.data.pickup_address?.name}
+                  />
+                  <InfoComp
+                    label="Phone"
+                    value={shiprocketDetails.data.pickup_address?.phone}
+                  />
+                  <InfoComp
+                    label="Address"
+                    value={`${shiprocketDetails.data.pickup_address?.address}, 
+                    ${shiprocketDetails.data.pickup_address?.city}`}
+                  />
+                </Section>
               </div>
             </div>
           </div>
@@ -1005,3 +1148,25 @@ const ShipmentsPage: React.FC = () => {
 };
 
 export default ShipmentsPage;
+
+const Section = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <div>
+    <h3 className="text-lg font-semibold text-gray-800 mb-3">{title}</h3>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{children}</div>
+  </div>
+);
+
+const InfoComp = ({ label, value }: { label: string; value?: ReactNode }) => (
+  <div className="bg-gray-50 rounded-lg p-3">
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="text-sm font-medium text-gray-900 break-words">
+      {value || "-"}
+    </p>
+  </div>
+);
