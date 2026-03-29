@@ -45,7 +45,6 @@ import { normalizeVariantAttributes } from "@/pages/admin/products/productsPage"
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import DOMPurify from "dompurify";
 
-
 interface MediaPreviewItem {
   file: File | null;
   preview: string;
@@ -206,7 +205,7 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
   const isTypeDisabled = (type: "simple" | "variable") => {
     return isEditProd && productType !== type;
   };
-console.log("isEditProd",isEditProd);
+  console.log("isEditProd", isEditProd);
 
   const globalVariantMode = useMemo<"STANDARD" | "CUSTOM" | null>(() => {
     for (const v of watchedVariants) {
@@ -356,11 +355,7 @@ console.log("isEditProd",isEditProd);
                 ? "border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-xl scale-105"
                 : "border-gray-200 hover:border-blue-300 hover:shadow-lg"
             }
-           ${
-             isTypeDisabled("simple")
-               ? "opacity-50 cursor-not-allowed"
-               : ""
-           }
+           ${isTypeDisabled("simple") ? "opacity-50 cursor-not-allowed" : ""}
           `}
           >
             <div
@@ -411,9 +406,7 @@ console.log("isEditProd",isEditProd);
             }
             
              ${
-               isTypeDisabled("variable")
-                 ? "opacity-50 cursor-not-allowed"
-                 : ""
+               isTypeDisabled("variable") ? "opacity-50 cursor-not-allowed" : ""
              }`}
           >
             <div
@@ -1510,15 +1503,15 @@ console.log("isEditProd",isEditProd);
                 size: globalVariantMode === "CUSTOM" ? "" : "",
                 color: globalVariantMode === "CUSTOM" ? "" : "",
                 fabric: globalVariantMode === "CUSTOM" ? "" : "",
-                price: "",
-                basePrice: "",
-                sellingPrice: "",
+                price: watch("sellingPrice") || 0,
+                basePrice: watch("basePrice") || 0,
+                sellingPrice: watch("sellingPrice") || 0,
                 warehouseId: "",
                 stockQuantity: 0,
-                weight: "",
-                length: "",
-                breadth: "",
-                height: "",
+                weight: watch("weight") || 0,
+                length: watch("length") || 0,
+                breadth: watch("breadth") || 0,
+                height: watch("height") || 0,
               });
             }}
             className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl flex items-center gap-2 font-semibold transition-all shadow-lg hover:shadow-xl"

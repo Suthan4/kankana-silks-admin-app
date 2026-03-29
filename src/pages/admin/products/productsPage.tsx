@@ -772,7 +772,7 @@ const ProductsPage: React.FC = () => {
   const [filterHasVariants, setFilterHasVariants] = useState<
     boolean | undefined
   >(undefined);
-  const [isEditProd,setIsEditProd]=useState(false);
+  const [isEditProd, setIsEditProd] = useState(false);
 
   // Multi-step form state
   const [currentStep, setCurrentStep] = useState(1);
@@ -1055,6 +1055,10 @@ const ProductsPage: React.FC = () => {
       variants: productType === "variable" ? [] : undefined,
       stock:
         productType === "simple" ? { warehouseId: "", quantity: 0 } : undefined,
+      allowOutOfStockOrders: true,
+      isActive: true,
+      hasVideoConsultation: true,
+      videoPurchasingEnabled: true,
     },
   });
 
@@ -1069,6 +1073,40 @@ const ProductsPage: React.FC = () => {
       setValue("variants", undefined, { shouldValidate: false });
     }
   }, [productType, setValue, isHydratingEdit]);
+
+  const formData = watch();
+
+  useEffect(() => {
+    if (productType !== "variable") return;
+
+    const variants = formData.variants || [];
+
+    // Only apply for FIRST variant
+    if (variants.length === 0) return;
+
+    const firstVariant = variants[0];
+
+    // Prevent overriding if already filled (VERY IMPORTANT)
+    if (firstVariant?.price) return;
+
+    setValue("variants.0.price", formData.sellingPrice || 0);
+    setValue("variants.0.basePrice", formData.basePrice || 0);
+    setValue("variants.0.price", formData.sellingPrice || 0);
+
+    setValue("variants.0.weight", formData.weight || 0);
+    setValue("variants.0.length", formData.length || 0);
+    setValue("variants.0.breadth", formData.breadth || 0);
+    setValue("variants.0.height", formData.height || 0);
+  }, [
+    productType,
+    formData.basePrice,
+    formData.sellingPrice,
+    formData.sku,
+    formData.weight,
+    formData.length,
+    formData.breadth,
+    formData.height,
+  ]);
 
   const {
     fields: specFields,
@@ -1124,6 +1162,14 @@ const ProductsPage: React.FC = () => {
       basePrice: Number(fullProduct.basePrice ?? 0),
       sellingPrice: Number(fullProduct.sellingPrice ?? 0),
       isActive: Boolean(fullProduct.isActive ?? true),
+      allowOutOfStockOrders: Boolean(
+        fullProduct.allowOutOfStockOrders ?? false,
+      ),
+      videoPurchasingEnabled: Boolean(
+        fullProduct.videoPurchasingEnabled ?? false,
+      ),
+      hasVideoConsultation: Boolean(fullProduct.hasVideoConsultation ?? false),
+      videoConsultationNote: fullProduct.videoConsultationNote ?? "",
 
       hsnCode: fullProduct.hsnCode ?? "",
       artisanName: fullProduct.artisanName ?? "",
@@ -1547,6 +1593,8 @@ const ProductsPage: React.FC = () => {
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    console.log("handleEdit", product);
+
     setIsEditProd(true);
     setShowCreateModal(true);
     setCurrentStep(1);
@@ -1656,47 +1704,47 @@ const ProductsPage: React.FC = () => {
                 !!variant.fabric?.trim();
 
               // ✅ custom attributes (variant.attributes)
-                const attrs = normalizeVariantAttributes(variant);
+              const attrs = normalizeVariantAttributes(variant);
 
-                const hasCustomAttr =
-                  attrs &&
-                  Object.entries(attrs).some(
-                    ([k, v]) => String(k).trim() && String(v).trim(),
-                  );
+              const hasCustomAttr =
+                attrs &&
+                Object.entries(attrs).some(
+                  ([k, v]) => String(k).trim() && String(v).trim(),
+                );
 
-                const variantLabel =
-                  [variant.size, variant.color, variant.fabric]
-                    .filter(Boolean)
-                    .join(" / ") || `Variant ${i + 1}`;
+              const variantLabel =
+                [variant.size, variant.color, variant.fabric]
+                  .filter(Boolean)
+                  .join(" / ") || `Variant ${i + 1}`;
 
-                // ❌ RULE 1 — Cannot have both
-                if (hasStandardAttr && hasCustomAttr) {
-                  toast.error(
-                    `${variantLabel}: Use either Standard Attributes OR Custom Attributes, not both.`,
-                  );
-                  return false;
-                }
+              // ❌ RULE 1 — Cannot have both
+              if (hasStandardAttr && hasCustomAttr) {
+                toast.error(
+                  `${variantLabel}: Use either Standard Attributes OR Custom Attributes, not both.`,
+                );
+                return false;
+              }
 
-                // ❌ Must have at least one
-                if (!hasStandardAttr && !hasCustomAttr) {
-                  toast.error(
-                    `${variantLabel}: Please add Standard or Custom attributes.`,
-                  );
-                  return false;
-                }
+              // ❌ Must have at least one
+              if (!hasStandardAttr && !hasCustomAttr) {
+                toast.error(
+                  `${variantLabel}: Please add Standard or Custom attributes.`,
+                );
+                return false;
+              }
 
-                // ✅ Determine current mode
-                const currentMode = hasCustomAttr ? "CUSTOM" : "STANDARD";
+              // ✅ Determine current mode
+              const currentMode = hasCustomAttr ? "CUSTOM" : "STANDARD";
 
-                // ✅ RULE 2 — Global mode consistency
-                if (!globalMode) {
-                  globalMode = currentMode;
-                } else if (globalMode !== currentMode) {
-                  toast.error(
-                    `${variantLabel}: All variants must use ${globalMode} attributes because Variant 1 uses ${globalMode}.`,
-                  );
-                  return false;
-                }
+              // ✅ RULE 2 — Global mode consistency
+              if (!globalMode) {
+                globalMode = currentMode;
+              } else if (globalMode !== currentMode) {
+                toast.error(
+                  `${variantLabel}: All variants must use ${globalMode} attributes because Variant 1 uses ${globalMode}.`,
+                );
+                return false;
+              }
 
               // ✅ main rule: either standard OR custom must exist
               if (!hasStandardAttr && !hasCustomAttr) {

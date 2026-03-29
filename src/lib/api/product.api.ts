@@ -31,7 +31,7 @@ export const productApi = {
       };
     }>
   > => {
-    return apiCall("GET", "/products", undefined, { params });
+    return apiCall("GET", "/admin/products", undefined, { params });
   },
 
   // Get product by ID
