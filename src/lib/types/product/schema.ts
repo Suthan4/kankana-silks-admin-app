@@ -135,9 +135,9 @@ export const createProductSchema = z
     // Stock Configuration
     variants: z.array(VariantSchema).optional(),
     stock: StockSchema.optional(),
-    allowOutOfStockOrders: z.boolean().optional().default(false),
-    hasVideoConsultation: z.boolean().optional().default(false),
-    videoPurchasingEnabled: z.boolean().optional().default(false),
+    allowOutOfStockOrders: z.boolean().optional().default(true),
+    hasVideoConsultation: z.boolean().optional().default(true),
+    videoPurchasingEnabled: z.boolean().optional().default(true),
     videoConsultationNote: z.string().optional(),
   })
   .refine(
