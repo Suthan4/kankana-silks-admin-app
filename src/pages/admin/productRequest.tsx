@@ -21,6 +21,7 @@ import {
   productRequestApi,
   type ProductRequest,
 } from "@/lib/api/product-request.api";
+import { BackButton } from "@/components/ui/BackButton";
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const config = {
@@ -126,16 +127,19 @@ const ProductRequestsPage: React.FC = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
-                <MessageSquare className="h-7 w-7 text-white" />
-              </div>
-              Product Requests
-            </h1>
-            <p className="text-sm text-gray-600 mt-2">
-              Manage customer requests for out-of-stock products
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+                  <MessageSquare className="h-7 w-7 text-white" />
+                </div>
+                Product Requests
+              </h1>
+              <p className="text-sm text-gray-600 mt-2">
+                Manage customer requests for out-of-stock products
+              </p>
+            </div>
           </div>
         </div>
 

@@ -31,6 +31,7 @@ import { format } from "date-fns";
 import type { Order } from "../../lib/types/order/order";
 import { MainLayout } from "@/components/layouts/mainLayout";
 import TrackingModal from "@/components/trackingModal";
+import { BackButton } from "@/components/ui/BackButton";
 
 const ShipmentsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -332,13 +333,16 @@ const ShipmentsPage: React.FC = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Shipments Management
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Manage shipments and Shiprocket integration
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Shipments Management
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Manage shipments and Shiprocket integration
+              </p>
+            </div>
           </div>
           <div className="flex gap-2">
             <button
@@ -1092,7 +1096,7 @@ const ShipmentsPage: React.FC = () => {
 
                 {/* Product Info */}
                 <Section title="Product Information">
-                  {shiprocketDetails.data.products?.map((p:any, i:number) => (
+                  {shiprocketDetails.data.products?.map((p: any, i: number) => (
                     <div key={i} className="border rounded-lg p-4 mb-3">
                       <InfoComp label="Product" value={p.name} />
                       <InfoComp label="SKU" value={p.sku} />

@@ -28,6 +28,7 @@ import {
   createCategorySchema,
   type CreateCategoryFormData,
 } from "@/lib/types/category/schema";
+import { BackButton } from "@/components/ui/BackButton";
 
 // Tree node component for hierarchical view
 const CategoryTreeNode: React.FC<{
@@ -472,11 +473,14 @@ const CategoriesPage: React.FC = () => {
       <div className="space-y-6">
         {/* Header with View Toggle */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Manage product categories
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage product categories
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

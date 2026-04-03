@@ -32,6 +32,7 @@ import {
 import { toast } from "react-hot-toast";
 import { format } from "date-fns";
 import { MainLayout } from "@/components/layouts/mainLayout";
+import { BackButton } from "@/components/ui/BackButton";
 
 const ReturnsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -333,13 +334,16 @@ const ReturnsPage: React.FC = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Returns Management
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Process return requests and refunds
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Returns Management
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Process return requests and refunds
+              </p>
+            </div>
           </div>
           <button
             onClick={exportToCSV}

@@ -67,6 +67,7 @@ import {
   validateColorWithSuggestions,
 } from "@/lib/utils/colorValidation";
 import { useNavigate } from "react-router";
+import { BackButton } from "@/components/ui/BackButton";
 
 export interface MediaPreviewItem {
   file: File | null;
@@ -1902,16 +1903,19 @@ const ProductsPage: React.FC = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                <Package className="h-7 w-7 text-white" />
-              </div>
-              Products
-            </h1>
-            <p className="text-sm text-gray-600 mt-2">
-              Manage your complete product catalog
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                  <Package className="h-7 w-7 text-white" />
+                </div>
+                Products
+              </h1>
+              <p className="text-sm text-gray-600 mt-2">
+                Manage your complete product catalog
+              </p>
+            </div>
           </div>
 
           {canCreate && (

@@ -36,6 +36,7 @@ import {
 } from "@/lib/types/warehouse/schema";
 import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
+import { BackButton } from "@/components/ui/BackButton";
 
 // Stats Card Component
 const StatsCard: React.FC<{
@@ -375,14 +376,17 @@ const WarehousesPage = () => {
       <div className="space-y-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Warehouse className="h-6 w-6 text-blue-600" />
-              Warehouses
-            </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Manage warehouse locations and inventory
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Warehouse className="h-6 w-6 text-blue-600" />
+                Warehouses
+              </h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Manage warehouse locations and inventory
+              </p>
+            </div>
           </div>
           {canCreate && (
             <button

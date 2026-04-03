@@ -21,6 +21,7 @@ import { adminUserApi } from "@/lib/api/api.auth.service";
 import { SetPermissionsModal } from "@/components/superAdmin/setpermissionsmodal";
 import type { User } from "@/lib/types/user/user";
 import { useOnClickOutside } from "@/hooks/useClickOutside";
+import { BackButton } from "@/components/ui/BackButton";
 
 const UserManagementPage = () => {
   const queryClient = useQueryClient();
@@ -34,9 +35,9 @@ const UserManagementPage = () => {
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
- useOnClickOutside(menuRef, () => {
-  setOpenMenuId(null);
- });
+  useOnClickOutside(menuRef, () => {
+    setOpenMenuId(null);
+  });
   const {
     register,
     handleSubmit,
@@ -138,14 +139,17 @@ const UserManagementPage = () => {
       <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Users className="h-7 w-7 text-blue-600" />
-              User Management
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Manage users, admins, and permissions
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <Users className="h-7 w-7 text-blue-600" />
+                User Management
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage users, admins, and permissions
+              </p>
+            </div>
           </div>
 
           <button
@@ -314,98 +318,103 @@ const UserManagementPage = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {Array.isArray(filteredUsers)&&filteredUsers?.map((user: User) => {
-                   
-                    return (
-                      <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold">
-                              {user.firstName[0]}
-                              {user.lastName[0]}
-                            </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
-                                {user.firstName} {user.lastName}
+                  {Array.isArray(filteredUsers) &&
+                    filteredUsers?.map((user: User) => {
+                      return (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold">
+                                {user.firstName[0]}
+                                {user.lastName[0]}
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {user.firstName} {user.lastName}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">
-                            {user.email}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadgeColor(
-                              user.role
-                            )}`}
-                          >
-                            {user.role.replace("_", " ")}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <button
-                            onClick={() => toggleStatusMutation.mutate(user.id)}
-                            disabled={toggleStatusMutation.isPending}
-                            className={`px-3 py-1 inline-flex items-center gap-1 text-xs leading-5 font-semibold rounded-full transition-colors ${
-                              user.isActive
-                                ? "bg-green-100 text-green-800 hover:bg-green-200"
-                                : "bg-red-100 text-red-800 hover:bg-red-200"
-                            }`}
-                          >
-                            <Power className="h-3 w-3" />
-                            {user.isActive ? "Active" : "Inactive"}
-                          </button>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500">
-                          {new Date(user.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div ref={openMenuId === user.id ? menuRef : null} className="relative inline-block">
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900">
+                              {user.email}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadgeColor(
+                                user.role,
+                              )}`}
+                            >
+                              {user.role.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
                             <button
                               onClick={() =>
-                                setOpenMenuId(
-                                  openMenuId === user.id ? null : user.id
-                                )
+                                toggleStatusMutation.mutate(user.id)
                               }
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                              disabled={toggleStatusMutation.isPending}
+                              className={`px-3 py-1 inline-flex items-center gap-1 text-xs leading-5 font-semibold rounded-full transition-colors ${
+                                user.isActive
+                                  ? "bg-green-100 text-green-800 hover:bg-green-200"
+                                  : "bg-red-100 text-red-800 hover:bg-red-200"
+                              }`}
                             >
-                              <MoreVertical className="h-5 w-5" />
+                              <Power className="h-3 w-3" />
+                              {user.isActive ? "Active" : "Inactive"}
                             </button>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500">
+                            {new Date(user.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div
+                              ref={openMenuId === user.id ? menuRef : null}
+                              className="relative inline-block"
+                            >
+                              <button
+                                onClick={() =>
+                                  setOpenMenuId(
+                                    openMenuId === user.id ? null : user.id,
+                                  )
+                                }
+                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                              >
+                                <MoreVertical className="h-5 w-5" />
+                              </button>
 
-                            {openMenuId === user.id && (
-                              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-                                {user.role === "ADMIN" && (
+                              {openMenuId === user.id && (
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                                  {user.role === "ADMIN" && (
+                                    <button
+                                      onClick={() => {
+                                        setSelectedUser(user);
+                                        setOpenMenuId(null);
+                                        handleSetPermissions(user);
+                                      }}
+                                      className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      <Shield className="h-4 w-4" />
+                                      Set Permissions
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => {
-                                      setSelectedUser(user);
-                                      setOpenMenuId(null);
-                                      handleSetPermissions(user);
+                                      toggleStatusMutation.mutate(user.id);
                                     }}
                                     className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
                                   >
-                                    <Shield className="h-4 w-4" />
-                                    Set Permissions
+                                    <Power className="h-4 w-4" />
+                                    {user.isActive ? "Deactivate" : "Activate"}
                                   </button>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    toggleStatusMutation.mutate(user.id);
-                                  }}
-                                  className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2"
-                                >
-                                  <Power className="h-4 w-4" />
-                                  {user.isActive ? "Deactivate" : "Activate"}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
