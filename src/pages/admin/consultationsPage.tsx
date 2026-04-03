@@ -34,6 +34,7 @@ import {
   updateConsultationStatusSchema,
   type UpdateConsultationStatusFormData,
 } from "@/lib/types/consultation/schema";
+import { BackButton } from "@/components/ui/BackButton";
 
 // Status Configuration
 const getStatusConfig = (status: ConsultationStatus) => {
@@ -342,10 +343,13 @@ const ConsultationsPage: React.FC = () => {
 
   // Calculate stats
   const stats =
-    consultationsData?.consultations.reduce((acc, c) => {
-      acc[c.status.toLowerCase()] = (acc[c.status.toLowerCase()] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>) || {};
+    consultationsData?.consultations.reduce(
+      (acc, c) => {
+        acc[c.status.toLowerCase()] = (acc[c.status.toLowerCase()] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    ) || {};
 
   // Filter consultations
   const filteredConsultations =
@@ -359,7 +363,7 @@ const ConsultationsPage: React.FC = () => {
           .includes(searchQuery.toLowerCase()) ||
         consultation.user?.email
           ?.toLowerCase()
-          .includes(searchQuery.toLowerCase())
+          .includes(searchQuery.toLowerCase()),
     ) || [];
 
   if (!canRead) {
@@ -383,16 +387,19 @@ const ConsultationsPage: React.FC = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                <Video className="h-7 w-7 text-white" />
-              </div>
-              Consultations
-            </h1>
-            <p className="text-sm text-gray-600 mt-2">
-              Manage customer consultation requests
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                  <Video className="h-7 w-7 text-white" />
+                </div>
+                Consultations
+              </h1>
+              <p className="text-sm text-gray-600 mt-2">
+                Manage customer consultation requests
+              </p>
+            </div>
           </div>
         </div>
 
@@ -442,7 +449,7 @@ const ConsultationsPage: React.FC = () => {
               value={filterStatus || ""}
               onChange={(e) =>
                 setFilterStatus(
-                  (e.target.value as ConsultationStatus) || undefined
+                  (e.target.value as ConsultationStatus) || undefined,
                 )
               }
               className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -459,7 +466,7 @@ const ConsultationsPage: React.FC = () => {
               value={filterPlatform || ""}
               onChange={(e) =>
                 setFilterPlatform(
-                  (e.target.value as ConsultationPlatform) || undefined
+                  (e.target.value as ConsultationPlatform) || undefined,
                 )
               }
               className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -566,7 +573,7 @@ const ConsultationsPage: React.FC = () => {
                     <Calendar className="h-4 w-4" />
                     <span>
                       {new Date(
-                        selectedConsultation.preferredDate
+                        selectedConsultation.preferredDate,
                       ).toLocaleDateString()}{" "}
                       at {selectedConsultation.preferredTime}
                     </span>

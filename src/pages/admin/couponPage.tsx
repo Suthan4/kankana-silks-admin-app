@@ -43,6 +43,7 @@ import {
 } from "@/lib/types/coupon/schema";
 import toast from "react-hot-toast";
 import { CouponScopeSelector } from "@/components/Couponscopeselector";
+import { BackButton } from "@/components/ui/BackButton";
 
 // Stats Card
 const StatsCard: React.FC<{
@@ -159,10 +160,10 @@ const CouponCard: React.FC<{
         !coupon.isActive
           ? "border-gray-300 opacity-60"
           : isExpired
-          ? "border-red-300"
-          : isUpcoming
-          ? "border-yellow-300"
-          : "border-green-300"
+            ? "border-red-300"
+            : isUpcoming
+              ? "border-yellow-300"
+              : "border-green-300"
       }`}
     >
       <div
@@ -170,10 +171,10 @@ const CouponCard: React.FC<{
           !coupon.isActive
             ? "bg-gray-100"
             : isExpired
-            ? "bg-red-50"
-            : isUpcoming
-            ? "bg-yellow-50"
-            : "bg-green-50"
+              ? "bg-red-50"
+              : isUpcoming
+                ? "bg-yellow-50"
+                : "bg-green-50"
         }`}
       >
         <div className="flex items-center justify-between mb-2">
@@ -183,10 +184,10 @@ const CouponCard: React.FC<{
                 !coupon.isActive
                   ? "text-gray-600"
                   : isExpired
-                  ? "text-red-600"
-                  : isUpcoming
-                  ? "text-yellow-600"
-                  : "text-green-600"
+                    ? "text-red-600"
+                    : isUpcoming
+                      ? "text-yellow-600"
+                      : "text-green-600"
               }`}
             />
             <span
@@ -194,19 +195,19 @@ const CouponCard: React.FC<{
                 !coupon.isActive
                   ? "bg-gray-200 text-gray-700"
                   : isExpired
-                  ? "bg-red-200 text-red-700"
-                  : isUpcoming
-                  ? "bg-yellow-200 text-yellow-700"
-                  : "bg-green-200 text-green-700"
+                    ? "bg-red-200 text-red-700"
+                    : isUpcoming
+                      ? "bg-yellow-200 text-yellow-700"
+                      : "bg-green-200 text-green-700"
               }`}
             >
               {!coupon.isActive
                 ? "Inactive"
                 : isExpired
-                ? "Expired"
-                : isUpcoming
-                ? "Upcoming"
-                : "Active"}
+                  ? "Expired"
+                  : isUpcoming
+                    ? "Upcoming"
+                    : "Active"}
             </span>
           </div>
           {coupon.discountType === "PERCENTAGE" ? (
@@ -283,8 +284,8 @@ const CouponCard: React.FC<{
                     usagePercentage >= 90
                       ? "bg-red-600"
                       : usagePercentage >= 70
-                      ? "bg-yellow-600"
-                      : "bg-green-600"
+                        ? "bg-yellow-600"
+                        : "bg-green-600"
                   }`}
                   style={{ width: `${usagePercentage}%` }}
                 />
@@ -352,10 +353,10 @@ const CouponsPage: React.FC = () => {
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActive, setFilterActive] = useState<boolean | undefined>(
-    undefined
+    undefined,
   );
   const [filterScope, setFilterScope] = useState<CouponScope | undefined>(
-    undefined
+    undefined,
   );
 
   // 🆕 NEW: Scope State
@@ -365,7 +366,7 @@ const CouponsPage: React.FC = () => {
 
   // 🆕 NEW: User Eligibility State
   const [userEligibility, setUserEligibility] = useState<CouponUserEligibility>(
-    "ALL" as CouponUserEligibility
+    "ALL" as CouponUserEligibility,
   );
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [newUserDays, setNewUserDays] = useState<number | undefined>();
@@ -457,7 +458,7 @@ const CouponsPage: React.FC = () => {
     formState: { errors },
   } = useForm<CreateCouponFormData>({
     resolver: zodResolver(
-      editingCoupon ? updateCouponSchema : createCouponSchema
+      editingCoupon ? updateCouponSchema : createCouponSchema,
     ) as Resolver<CreateCouponFormData>,
   });
 
@@ -536,7 +537,7 @@ const CouponsPage: React.FC = () => {
     // Set scope state
     setScope(coupon.scope);
     setSelectedCategoryIds(
-      coupon.categories?.map((c) => c.id.toString()) || []
+      coupon.categories?.map((c) => c.id.toString()) || [],
     );
     setSelectedProductIds(coupon.products?.map((p) => p.id.toString()) || []);
 
@@ -568,25 +569,28 @@ const CouponsPage: React.FC = () => {
 
   const filteredCoupons =
     couponsData?.coupons.filter((coupon) =>
-      coupon.code.toLowerCase().includes(searchQuery.toLowerCase())
+      coupon.code.toLowerCase().includes(searchQuery.toLowerCase()),
     ) || [];
-console.log("errors", errors);
+  console.log("errors", errors);
 
   return (
     <MainLayout>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                <Ticket className="h-7 w-7 text-white" />
-              </div>
-              Coupons
-            </h1>
-            <p className="text-sm text-gray-600 mt-2">
-              Manage discount codes with scope and user targeting
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                  <Ticket className="h-7 w-7 text-white" />
+                </div>
+                Coupons
+              </h1>
+              <p className="text-sm text-gray-600 mt-2">
+                Manage discount codes with scope and user targeting
+              </p>
+            </div>
           </div>
 
           {canCreate && (
@@ -675,14 +679,14 @@ console.log("errors", errors);
                 filterActive === undefined
                   ? "all"
                   : filterActive
-                  ? "active"
-                  : "inactive"
+                    ? "active"
+                    : "inactive"
               }
               onChange={(e) =>
                 setFilterActive(
                   e.target.value === "all"
                     ? undefined
-                    : e.target.value === "active"
+                    : e.target.value === "active",
                 )
               }
               className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
@@ -872,7 +876,7 @@ console.log("errors", errors);
                           setMaxDiscountAmount(
                             e.target.value
                               ? parseFloat(e.target.value)
-                              : undefined
+                              : undefined,
                           )
                         }
                         placeholder="No limit"

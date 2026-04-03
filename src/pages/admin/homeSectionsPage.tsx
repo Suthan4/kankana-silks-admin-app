@@ -59,6 +59,7 @@ import { SectionTypeSelector } from "@/components/ui/Sectiontypeselector";
 import { s3Api } from "@/lib/api/s3.api";
 import toast from "react-hot-toast";
 import { CategoryProductSelector } from "@/components/Categoryproductselector";
+import { BackButton } from "@/components/ui/BackButton";
 
 // ─── Shared compact input class ───────────────────────────────────────────────
 const inp =
@@ -663,16 +664,19 @@ export const HomeSectionsPage: React.FC = () => {
       <div className="space-y-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <div className="p-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                <Home className="h-5 w-5 text-white" />
-              </div>
-              Home Sections
-            </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Manage homepage sections with media, CTAs, and styling
-            </p>
+          <div className="flex items-center gap-4">
+            <BackButton />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <div className="p-1.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                  <Home className="h-5 w-5 text-white" />
+                </div>
+                Home Sections
+              </h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Manage homepage sections with media, CTAs, and styling
+              </p>
+            </div>
           </div>
           {canCreate && (
             <button
@@ -952,8 +956,7 @@ export const HomeSectionsPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
                         <ImageIcon className="h-3.5 w-3.5 text-blue-600" />
-                        Media ({media.length}) 
-                        {errors.media?.message}
+                        Media ({media.length}){errors.media?.message}
                       </h3>
                       <button
                         type="button"
