@@ -547,7 +547,11 @@ export const HomeSectionsPage: React.FC = () => {
         layout,
         columns: layout === "grid" ? columns : undefined,
         media: uploadedMedia,
-        ctaButtons: ctaButtons.map((c, idx) => ({ ...c, order: idx })),
+        ctaButtons: ctaButtons.map((c, idx) => ({
+          ...c,
+          icon: c.icon ?? "",
+          order: idx,
+        })),
       };
       if (editingSection) {
         updateMutation.mutate(
