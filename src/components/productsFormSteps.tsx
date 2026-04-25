@@ -227,6 +227,8 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
 
     return null;
   }, [watchedVariants]);
+  const isStandardDisabled = globalVariantMode === "STANDARD";
+  const isCustomDisabled = globalVariantMode === "CUSTOM";
 
   // Drag and drop handlers
   const handleDragStart = (index: number) => {
@@ -1653,8 +1655,9 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                                             e.target.value,
                                           )
                                         }
+                                        disabled={isStandardDisabled}
                                         placeholder="Attribute (e.g., Material, Color)"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isStandardDisabled ? "bg-gray-100 cursor-not-allowed opacity-60" : ""}`}
                                       />
                                       {isColorField && (
                                         <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -1681,7 +1684,8 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                                               ? "Any CSS color (red, #FF0000, rgb(255,0,0))"
                                               : "Value (e.g., Silk)"
                                           }
-                                          className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-all ${
+                                          disabled={isStandardDisabled}
+                                          className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-all ${isStandardDisabled ? "bg-gray-100 cursor-not-allowed opacity-60" : ""} ${
                                             hasError
                                               ? "border-red-500 focus:ring-red-500"
                                               : isColorField &&
@@ -1879,12 +1883,12 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                             Size
                           </label>
                           <input
-                            disabled={globalVariantMode === "CUSTOM"}
                             {...register(
                               `variants.${variantIndex}.size` as const,
                             )}
+                            disabled={isCustomDisabled}
                             type="text"
-                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
+                            className={`w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${isCustomDisabled ? "bg-gray-200 cursor-not-allowed" : ""}`}
                             placeholder="e.g., M, L, XL"
                           />
                         </div>
@@ -1911,12 +1915,12 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                                 <>
                                   <div className="flex gap-2">
                                     <input
-                                      disabled={globalVariantMode === "CUSTOM"}
+                                      disabled={isCustomDisabled}
                                       {...register(
                                         `variants.${variantIndex}.color` as const,
                                       )}
                                       type="text"
-                                      className={`flex-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all disabled:bg-gray-200 disabled:cursor-not-allowed ${
+                                      className={`flex-1 px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-all ${isCustomDisabled ? "bg-gray-200 cursor-not-allowed" : ""} ${
                                         colorValue && !isValidColor
                                           ? "border-red-500 focus:ring-red-500"
                                           : colorValue && isValidColor
@@ -2042,12 +2046,12 @@ const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
                             Fabric
                           </label>
                           <input
-                            disabled={globalVariantMode === "CUSTOM"}
+                            disabled={isCustomDisabled}
                             {...register(
                               `variants.${variantIndex}.fabric` as const,
                             )}
                             type="text"
-                            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
+                            className={`w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${isCustomDisabled ? "bg-gray-200 cursor-not-allowed" : ""}`}
                             placeholder="e.g., Cotton"
                           />
                         </div>
