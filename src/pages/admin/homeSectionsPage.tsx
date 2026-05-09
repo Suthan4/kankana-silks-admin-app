@@ -1078,7 +1078,174 @@ export const HomeSectionsPage: React.FC = () => {
                   </div>
 
                   {/* 3 · CTA Buttons */}
-                  <div className="bg-purple-50 rounded-lg p-3 space-y-2">
+                  {(() => {
+                    const CTA_ALLOWED_LAYOUTS = [
+                      "banner",
+                      "aesthetic-fullscreen",
+                    ];
+
+                    const isCTAEnabledLayout =
+                      CTA_ALLOWED_LAYOUTS.includes(layout);
+
+                    const showCTARemoveWarning =
+                      !isCTAEnabledLayout && ctaButtons.length > 0;
+
+                    return (
+                      <div className="bg-purple-50 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                              <LinkIcon className="h-3.5 w-3.5 text-purple-600" />
+                              CTA Buttons ({ctaButtons.length})
+                            </h3>
+
+                            {!isCTAEnabledLayout && (
+                              <p className="text-[10px] text-gray-500 mt-1">
+                                Available only for Banner & Aesthetic FS layouts
+                              </p>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={!isCTAEnabledLayout}
+                            onClick={() => {
+                              if (!isCTAEnabledLayout) {
+                                toast.error(
+                                  "CTA buttons are only available for Banner and Aesthetic FS layouts.",
+                                );
+                                return;
+                              }
+
+                              setCurrentCTA({
+                                text: "",
+                                url: "",
+                                style: "PRIMARY",
+                                order: ctaButtons.length,
+                                openNewTab: false,
+                              });
+
+                              setEditingCTAIndex(null);
+                              setShowCTAModal(true);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                              isCTAEnabledLayout
+                                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            }`}
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add Button
+                          </button>
+                        </div>
+
+                        {!isCTAEnabledLayout && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <p className="text-xs font-medium text-amber-800">
+                              CTA buttons are supported only for Banner and
+                              Aesthetic FS layouts.
+                            </p>
+
+                            {showCTARemoveWarning && (
+                              <p className="text-[11px] text-red-500 mt-1">
+                                Please remove existing CTA buttons before
+                                changing the layout.
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {ctaButtons.length === 0 ? (
+                          <div className="text-center py-5 border-2 border-dashed border-purple-200 rounded-lg bg-white">
+                            <LinkIcon className="h-8 w-8 mx-auto mb-1 text-purple-300 opacity-50" />
+
+                            <p className="text-xs text-gray-500">
+                              No CTA buttons added yet
+                            </p>
+
+                            <p className="text-[10px] text-gray-400">
+                              Click "Add Button" to create call-to-action
+                              buttons
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {ctaButtons.map((cta, i) => (
+                              <div
+                                key={i}
+                                className="bg-white px-3 py-2 rounded-lg border border-purple-100 flex items-center gap-2"
+                              >
+                                <div
+                                  className={`px-2 py-1 rounded text-xs font-semibold flex-shrink-0 ${
+                                    cta.style === "PRIMARY"
+                                      ? "bg-blue-600 text-white"
+                                      : cta.style === "SECONDARY"
+                                        ? "bg-gray-600 text-white"
+                                        : cta.style === "OUTLINE"
+                                          ? "border border-blue-600 text-blue-600"
+                                          : "text-blue-600"
+                                  }`}
+                                >
+                                  {cta.style}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-gray-800 truncate">
+                                    {cta.text}
+                                  </p>
+
+                                  <p className="text-xs text-gray-500 truncate flex items-center gap-1">
+                                    {cta.url}
+
+                                    {cta.openNewTab && (
+                                      <ExternalLink className="h-2.5 w-2.5" />
+                                    )}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-0.5 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveCTA(i, "up")}
+                                    disabled={i === 0}
+                                    className="p-1 text-gray-300 hover:text-gray-600 disabled:opacity-20"
+                                  >
+                                    <ArrowUp className="h-3.5 w-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMoveCTA(i, "down")}
+                                    disabled={i === ctaButtons.length - 1}
+                                    className="p-1 text-gray-300 hover:text-gray-600 disabled:opacity-20"
+                                  >
+                                    <ArrowDown className="h-3.5 w-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditCTA(i)}
+                                    className="p-1 text-blue-500 hover:text-blue-700"
+                                  >
+                                    <Edit className="h-3.5 w-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCTA(i)}
+                                    className="p-1 text-red-400 hover:text-red-600"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {/* <div className="bg-purple-50 rounded-lg p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
                         <LinkIcon className="h-3.5 w-3.5 text-purple-600" />
@@ -1172,7 +1339,7 @@ export const HomeSectionsPage: React.FC = () => {
                         ))}
                       </div>
                     )}
-                  </div>
+                  </div> */}
 
                   {/* 4 · Layout & Styling */}
                   <div className="bg-green-50 rounded-lg p-3 space-y-2.5">
@@ -1191,6 +1358,25 @@ export const HomeSectionsPage: React.FC = () => {
                             key={opt.value}
                             type="button"
                             onClick={() => {
+                              const CTA_ALLOWED_LAYOUTS = [
+                                "banner",
+                                "aesthetic-fullscreen",
+                              ];
+
+                              const isChangingToUnsupportedLayout =
+                                !CTA_ALLOWED_LAYOUTS.includes(opt.value);
+
+                              if (
+                                isChangingToUnsupportedLayout &&
+                                ctaButtons.length > 0
+                              ) {
+                                toast.error(
+                                  "Please remove CTA buttons first. CTA buttons are only supported for Banner and Aesthetic FS layouts.",
+                                );
+
+                                return;
+                              }
+
                               setLayout(opt.value);
                               setValue("layout" as any, opt.value);
                             }}

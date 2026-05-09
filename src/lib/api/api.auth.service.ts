@@ -31,7 +31,7 @@ export const authApi = {
   refreshToken: async (): Promise<ApiResponse<{ accessToken: string }>> => {
     return apiCall<{ accessToken: string }>("POST", "/auth/refresh-token");
   },
-};
+};  
 
 // Admin User API (Super Admin only)
 export const adminUserApi = {
@@ -76,6 +76,6 @@ export const adminUserApi = {
 
   // Toggle User Status
   toggleUserStatus: async (userId: string): Promise<ApiResponse<User>> => {
-    return apiCall<User>("PATCH", `/admin/users/${userId}/toggle-status`);
+    return apiCall<User>("PUT", `/admin/users/${userId}/toggle-status`);
   },
 };
