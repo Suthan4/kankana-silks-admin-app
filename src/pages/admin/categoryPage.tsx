@@ -266,9 +266,8 @@ const CategoriesPage: React.FC = () => {
       toast.success("Category created successfully!");
     },
     onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message || "Failed to create category",
-      );
+      console.log("error", error);
+      toast.error(error?.message || "Failed to create category");
     },
   });
 
@@ -340,6 +339,22 @@ const CategoriesPage: React.FC = () => {
     }
     // Reset input value to allow selecting the same file again
     e.target.value = "";
+  };
+
+  // Recursively flatten category tree with full path labels
+  const flattenCategoriesWithPath = (
+    categories: Category[],
+    parentPath = "",
+    excludeId?: string,
+  ): { id: string; label: string }[] => {
+    return categories.flatMap((cat) => {
+      if (cat.id === excludeId) return [];
+      const fullPath = parentPath ? `${parentPath} > ${cat.name}` : cat.name;
+      return [
+        { id: cat.id, label: fullPath },
+        ...flattenCategoriesWithPath(cat.children || [], fullPath, excludeId),
+      ];
+    });
   };
 
   // Process image file with size validation
@@ -794,14 +809,15 @@ const CategoriesPage: React.FC = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">None (Root Category)</option>
-                    {categoriesData?.categories
-                      ?.filter((cat) => cat.id !== editingCategory?.id)
-                      .map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.parent?.name ? `${cat.parent.name} > ` : ""}
-                          {cat.name}
-                        </option>
-                      ))}
+                    {flattenCategoriesWithPath(
+                      categoryTree || [],
+                      "",
+                      editingCategory?.id,
+                    ).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
