@@ -14,13 +14,18 @@ export const createCategorySchema = z.object({
   metaTitle: z.string().max(60).optional(),
   metaDesc: z.string().max(160).optional(),
   // image: z.string().url("Invalid image URL").optional().or(z.literal("")),
-  image: z
-    .string()
-    .refine(
-      (value) => value.startsWith("data:image/") || value.startsWith("http"),
-      "Only JPG, PNG, WEBP images are allowed"
-    )
-    .optional(),
+image: z
+  .string()
+  .refine(
+    (value) =>
+      value === "" ||
+      value.startsWith("data:image/") ||
+      value.startsWith("http"),
+    {
+      message: "Only JPG, PNG, WEBP images are allowed",
+    }
+  )
+  .optional(),
   isActive: z.boolean().optional(),
   order: z.coerce.number().int().optional(),
     // 🆕 Video features
@@ -35,7 +40,18 @@ export const updateCategorySchema = z.object({
   parentId: parentIdSchema.optional(),
   metaTitle: z.string().max(60).optional(),
   metaDesc: z.string().max(160).optional(),
-  image: z.string().url("Invalid image URL").optional().or(z.literal("")),
+  image: z
+  .string()
+  .refine(
+    (value) =>
+      value === "" ||
+      value.startsWith("data:image/") ||
+      value.startsWith("http"),
+    {
+      message: "Only JPG, PNG, WEBP images are allowed",
+    }
+  )
+  .optional(),
   isActive: z.boolean().optional(),
   order: z.number().int().optional(),
    // 🆕 Video features
