@@ -38,7 +38,7 @@ import { BackButton } from "@/components/ui/BackButton";
 const BannerCard: React.FC<{
   banner: Banner;
   onEdit: (banner: Banner) => void;
-  onDelete: (id: string) => void;
+  onDelete: (banner: Banner) => void;
   canUpdate: boolean;
   canDelete: boolean;
 }> = ({ banner, onEdit, onDelete, canUpdate, canDelete }) => {
@@ -193,7 +193,7 @@ const BannerCard: React.FC<{
             )}
             {canDelete && (
               <button
-                onClick={() => onDelete(banner.id)}
+                onClick={() => onDelete(banner)}
                 className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1"
               >
                 <Trash2 className="h-4 w-4" />
@@ -335,10 +335,26 @@ const BannersPage: React.FC = () => {
 
   const onSubmit = async (data: CreateBannerFormData) => {
     try {
-      // Upload media to S3 if there's a new file
       let mediaUrl = data.url || "";
+
+      // ✅ upload new media
       if (mediaFile) {
+        // ✅ delete old media from S3 while editing
+        if (editingBanner?.url) {
+          try {
+            await s3Api.deleteFileByUrl(editingBanner.url);
+
+            // optional thumbnail cleanup
+            if (editingBanner.thumbnailUrl) {
+              await s3Api.deleteFileByUrl(editingBanner.thumbnailUrl);
+            }
+          } catch (err) {
+            console.error("Failed to delete old banner media:", err);
+          }
+        }
+
         const uploadedUrl = await uploadMediaToS3();
+
         if (uploadedUrl) {
           mediaUrl = uploadedUrl;
         }
@@ -384,9 +400,33 @@ const BannersPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this banner?")) {
-      deleteMutation.mutate(id);
+  const handleDelete = async (banner: Banner) => {
+    if (!window.confirm("Are you sure you want to delete this banner?")) {
+      return;
+    }
+
+    try {
+      // ✅ delete banner media
+      if (banner.url) {
+        try {
+          await s3Api.deleteFileByUrl(banner.url);
+        } catch (err) {
+          console.error("Failed deleting banner media:", err);
+        }
+      }
+
+      // ✅ delete thumbnail too if exists
+      if (banner.thumbnailUrl) {
+        try {
+          await s3Api.deleteFileByUrl(banner.thumbnailUrl);
+        } catch (err) {
+          console.error("Failed deleting thumbnail:", err);
+        }
+      }
+
+      deleteMutation.mutate(banner.id);
+    } catch (error) {
+      console.error(error);
     }
   };
 
