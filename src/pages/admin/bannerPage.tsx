@@ -430,61 +430,8 @@ const BannersPage: React.FC = () => {
     }
   };
 
-  const validateBannerImage = (file: File): Promise<boolean> => {
-    return new Promise((resolve) => {
-      if (!file.type.startsWith("image/")) {
-        resolve(true);
-        return;
-      }
-
-      const img = new Image();
-      img.onload = () => {
-        const width = img.width;
-        const height = img.height;
-        const ratio = width / height;
-
-        const targetRatio = 1920 / 600; // 3.2
-        const tolerance = 0.15;
-
-        const isValidRatio = Math.abs(ratio - targetRatio) <= tolerance;
-        const isValidSize = width >= 1200 && height >= 375;
-
-        if (!isValidRatio) {
-          toast.error(
-            "Please upload a wide banner image like 1920×600. Square images are not allowed.",
-          );
-          resolve(false);
-          return;
-        }
-
-        if (!isValidSize) {
-          toast.error(
-            "Image is too small. Please upload at least 1200×375 or 1920×600.",
-          );
-          resolve(false);
-          return;
-        }
-
-        resolve(true);
-      };
-
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
   // Handle media selection from MediaUploadManager
-  const handleMediaSelect = async (file: File, preview: string) => {
-    if (mediaType === "IMAGE") {
-      const isValid = await validateBannerImage(file);
-
-      if (!isValid) {
-        setMediaFile(null);
-        setMediaPreview("");
-        setValue("url", "");
-        return;
-      }
-    }
-
+  const handleMediaSelect = (file: File, preview: string) => {
     setMediaFile(file);
     setMediaPreview(preview);
     setValue("url", preview, {

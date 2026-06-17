@@ -290,13 +290,23 @@ const MediaUploadManager: React.FC<MediaUploadManagerProps> = ({
         if (mediaType === "IMAGE") {
           const dims = await getImageDimensions(file);
 
-          const minBannerRatio = 2.5; // wide image only
           const minWidth = 1200;
           const minHeight = 375;
+          const squareTolerance = 100;
 
-          if (dims.aspectRatio < minBannerRatio) {
+          if (dims.height > dims.width) {
             toast.error(
-              "Only wide banner images are allowed. Square and portrait images are not supported.",
+              "Portrait images are not supported. Please upload a landscape banner image.",
+            );
+            setOriginalFile(null);
+            setOriginalDimensions(null);
+            setPreviewUrl("");
+            return;
+          }
+
+          if (Math.abs(dims.width - dims.height) < squareTolerance) {
+            toast.error(
+              "Square images are not supported. Please upload a landscape banner image.",
             );
             setOriginalFile(null);
             setOriginalDimensions(null);
@@ -312,12 +322,14 @@ const MediaUploadManager: React.FC<MediaUploadManagerProps> = ({
             return;
           }
 
+          // ✅ No cropper. Upload original image directly.
           setOriginalDimensions(dims);
+
           const preview = URL.createObjectURL(file);
           setPreviewUrl(preview);
-          setShowCropModal(true);
-          setCropPosition({ x: 50, y: 50, scale: 1 });
-          setImageLoaded(false);
+          onMediaSelect(file, preview);
+
+          toast.success("Image selected successfully!");
         } else {
           const duration = await getVideoMetadata(file);
           setVideoDuration(duration);
@@ -535,19 +547,6 @@ const MediaUploadManager: React.FC<MediaUploadManagerProps> = ({
                 </p>
               </div>
             </div>
-          )}
-
-          {mediaType === "IMAGE" && (
-            <button
-              onClick={() => {
-                setShowCropModal(true);
-                setImageLoaded(false);
-              }}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
-            >
-              <Scissors className="h-5 w-5" />
-              Edit Crop & Position
-            </button>
           )}
         </div>
       )}
