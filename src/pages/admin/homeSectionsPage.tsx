@@ -190,7 +190,7 @@ const StatsCard: React.FC<{
 const SectionCard: React.FC<{
   section: HomeSection;
   onEdit: (s: HomeSection) => void;
-  onDelete: (id: string) => void;
+  onDelete: (section: HomeSection) => void;
   canUpdate: boolean;
   canDelete: boolean;
 }> = ({ section, onEdit, onDelete, canUpdate, canDelete }) => {
@@ -320,7 +320,7 @@ const SectionCard: React.FC<{
             )}
             {canDelete && (
               <button
-                onClick={() => onDelete(section.id)}
+                onClick={() => onDelete(section)}
                 className="flex-1 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center gap-1 transition-colors"
               >
                 <Trash2 className="h-3 w-3" />
@@ -512,9 +512,36 @@ export const HomeSectionsPage: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Delete this section? This cannot be undone."))
-      deleteMutation.mutate(id);
+  const handleDelete = async (section: HomeSection) => {
+    if (!window.confirm("Delete this section? This cannot be undone.")) {
+      return;
+    }
+
+    try {
+      // ✅ delete all media from S3
+      if (section.media?.length) {
+        await Promise.all(
+          section.media.map(async (m) => {
+            try {
+              if (m.url) {
+                await s3Api.deleteFileByUrl(m.url);
+              }
+
+              // optional thumbnail support
+              if ((m as any).thumbnailUrl) {
+                await s3Api.deleteFileByUrl((m as any).thumbnailUrl);
+              }
+            } catch (err) {
+              console.error("Failed deleting section media:", err);
+            }
+          }),
+        );
+      }
+
+      deleteMutation.mutate(section.id);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const onSubmit = async (data: CreateHomeSectionFormData) => {
@@ -525,7 +552,17 @@ export const HomeSectionsPage: React.FC = () => {
         media.map(async (m, idx) => {
           let url = m.url ?? "";
           if (m.file) {
+            // ✅ delete old media while editing
+            if (editingSection?.media?.[idx]?.url) {
+              try {
+                await s3Api.deleteFileByUrl(editingSection.media[idx].url);
+              } catch (err) {
+                console.error("Failed deleting old section media:", err);
+              }
+            }
+
             const res = await s3Api.uploadSingle(m.file, "home-sections");
+
             url = res.url;
           }
           return {

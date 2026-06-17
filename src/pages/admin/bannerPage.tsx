@@ -38,7 +38,7 @@ import { BackButton } from "@/components/ui/BackButton";
 const BannerCard: React.FC<{
   banner: Banner;
   onEdit: (banner: Banner) => void;
-  onDelete: (id: string) => void;
+  onDelete: (banner: Banner) => void;
   canUpdate: boolean;
   canDelete: boolean;
 }> = ({ banner, onEdit, onDelete, canUpdate, canDelete }) => {
@@ -193,7 +193,7 @@ const BannerCard: React.FC<{
             )}
             {canDelete && (
               <button
-                onClick={() => onDelete(banner.id)}
+                onClick={() => onDelete(banner)}
                 className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1"
               >
                 <Trash2 className="h-4 w-4" />
@@ -335,10 +335,26 @@ const BannersPage: React.FC = () => {
 
   const onSubmit = async (data: CreateBannerFormData) => {
     try {
-      // Upload media to S3 if there's a new file
       let mediaUrl = data.url || "";
+
+      // ✅ upload new media
       if (mediaFile) {
+        // ✅ delete old media from S3 while editing
+        if (editingBanner?.url) {
+          try {
+            await s3Api.deleteFileByUrl(editingBanner.url);
+
+            // optional thumbnail cleanup
+            if (editingBanner.thumbnailUrl) {
+              await s3Api.deleteFileByUrl(editingBanner.thumbnailUrl);
+            }
+          } catch (err) {
+            console.error("Failed to delete old banner media:", err);
+          }
+        }
+
         const uploadedUrl = await uploadMediaToS3();
+
         if (uploadedUrl) {
           mediaUrl = uploadedUrl;
         }
@@ -384,14 +400,91 @@ const BannersPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this banner?")) {
-      deleteMutation.mutate(id);
+  const handleDelete = async (banner: Banner) => {
+    if (!window.confirm("Are you sure you want to delete this banner?")) {
+      return;
+    }
+
+    try {
+      // ✅ delete banner media
+      if (banner.url) {
+        try {
+          await s3Api.deleteFileByUrl(banner.url);
+        } catch (err) {
+          console.error("Failed deleting banner media:", err);
+        }
+      }
+
+      // ✅ delete thumbnail too if exists
+      if (banner.thumbnailUrl) {
+        try {
+          await s3Api.deleteFileByUrl(banner.thumbnailUrl);
+        } catch (err) {
+          console.error("Failed deleting thumbnail:", err);
+        }
+      }
+
+      deleteMutation.mutate(banner.id);
+    } catch (error) {
+      console.error(error);
     }
   };
 
+  const validateBannerImage = (file: File): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith("image/")) {
+        resolve(true);
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        const width = img.width;
+        const height = img.height;
+        const ratio = width / height;
+
+        const targetRatio = 1920 / 600; // 3.2
+        const tolerance = 0.15;
+
+        const isValidRatio = Math.abs(ratio - targetRatio) <= tolerance;
+        const isValidSize = width >= 1200 && height >= 375;
+
+        if (!isValidRatio) {
+          toast.error(
+            "Please upload a wide banner image like 1920×600. Square images are not allowed.",
+          );
+          resolve(false);
+          return;
+        }
+
+        if (!isValidSize) {
+          toast.error(
+            "Image is too small. Please upload at least 1200×375 or 1920×600.",
+          );
+          resolve(false);
+          return;
+        }
+
+        resolve(true);
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   // Handle media selection from MediaUploadManager
-  const handleMediaSelect = (file: File, preview: string) => {
+  const handleMediaSelect = async (file: File, preview: string) => {
+    if (mediaType === "IMAGE") {
+      const isValid = await validateBannerImage(file);
+
+      if (!isValid) {
+        setMediaFile(null);
+        setMediaPreview("");
+        setValue("url", "");
+        return;
+      }
+    }
+
     setMediaFile(file);
     setMediaPreview(preview);
     setValue("url", preview, {
@@ -691,6 +784,25 @@ const BannersPage: React.FC = () => {
                   targetHeight={600}
                   maxSizeMB={mediaType === "IMAGE" ? 10 : 50}
                 />
+                {/* Banner Requirements */}
+                {mediaType === "IMAGE" && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <h4 className="font-medium text-amber-900 mb-2">
+                      Banner Image Requirements
+                    </h4>
+
+                    <ul className="list-disc list-inside text-sm text-amber-800 space-y-1">
+                      <li>Upload only wide banner images.</li>
+                      <li>Recommended size: 1920 × 600 pixels.</li>
+                      <li>Minimum size: 1200 × 375 pixels.</li>
+                      <li>Do not upload square or portrait images.</li>
+                      <li>
+                        Incorrect image dimensions may result in blurry,
+                        stretched, or cropped banners.
+                      </li>
+                    </ul>
+                  </div>
+                )}
                 {errors.url && (
                   <p className="text-sm text-red-600">{errors.url.message}</p>
                 )}

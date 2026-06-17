@@ -35,7 +35,7 @@ const CategoryTreeNode: React.FC<{
   category: Category;
   level: number;
   onEdit: (category: Category) => void;
-  onDelete: (id: string) => void;
+  onDelete: (category: Category) => void;
   canUpdate: boolean;
   canDelete: boolean;
 }> = ({ category, level, onEdit, onDelete, canUpdate, canDelete }) => {
@@ -116,7 +116,7 @@ const CategoryTreeNode: React.FC<{
             )}
             {canDelete && (
               <button
-                onClick={() => onDelete(category.id)}
+                onClick={() => onDelete(category)}
                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 title="Delete"
               >
@@ -150,7 +150,7 @@ const CategoryTreeNode: React.FC<{
 const CategoryCard: React.FC<{
   category: Category;
   onEdit: (category: Category) => void;
-  onDelete: (id: string) => void;
+  onDelete: (category: Category) => void;
   canUpdate: boolean;
   canDelete: boolean;
 }> = ({ category, onEdit, onDelete, canUpdate, canDelete }) => {
@@ -206,7 +206,7 @@ const CategoryCard: React.FC<{
               )}
               {canDelete && (
                 <button
-                  onClick={() => onDelete(category.id)}
+                  onClick={() => onDelete(category)}
                   className="flex-1 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                 >
                   Delete
@@ -423,7 +423,16 @@ const CategoriesPage: React.FC = () => {
     try {
       // Upload image to S3 if there's a new file
       let imageUrl = data.image || "";
+      // ✅ upload new image
       if (imageFile) {
+        // ✅ delete old image from S3 if editing
+        if (editingCategory?.image) {
+          try {
+            await s3Api.deleteFileByUrl(editingCategory.image);
+          } catch (err) {
+            console.error("Failed to delete old category image:", err);
+          }
+        }
         const uploadedUrl = await uploadImageToS3();
         if (uploadedUrl) {
           imageUrl = uploadedUrl;
@@ -472,9 +481,23 @@ const CategoriesPage: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this category?")) {
-      deleteMutation.mutate(id);
+  const handleDelete = async (category: Category) => {
+    if (!window.confirm("Are you sure you want to delete this category?")) {
+      return;
+    }
+    try {
+      // ✅ delete image from S3 first
+      if (category.image) {
+        try {
+          await s3Api.deleteFileByUrl(category.image);
+        } catch (err) {
+          console.error("Failed to delete category image from S3:", err);
+        }
+      }
+
+      deleteMutation.mutate(category.id);
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -706,7 +729,7 @@ const CategoriesPage: React.FC = () => {
                               )}
                               {canDelete && (
                                 <button
-                                  onClick={() => handleDelete(category.id)}
+                                  onClick={() => handleDelete(category)}
                                   className="text-red-600 hover:text-red-900"
                                 >
                                   <Trash2 className="h-4 w-4 inline" />
