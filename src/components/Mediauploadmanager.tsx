@@ -289,6 +289,29 @@ const MediaUploadManager: React.FC<MediaUploadManagerProps> = ({
       try {
         if (mediaType === "IMAGE") {
           const dims = await getImageDimensions(file);
+
+          const minBannerRatio = 2.5; // wide image only
+          const minWidth = 1200;
+          const minHeight = 375;
+
+          if (dims.aspectRatio < minBannerRatio) {
+            toast.error(
+              "Only wide banner images are allowed. Square and portrait images are not supported.",
+            );
+            setOriginalFile(null);
+            setOriginalDimensions(null);
+            setPreviewUrl("");
+            return;
+          }
+
+          if (dims.width < minWidth || dims.height < minHeight) {
+            toast.error("Image is too small. Minimum size is 1200×375 pixels.");
+            setOriginalFile(null);
+            setOriginalDimensions(null);
+            setPreviewUrl("");
+            return;
+          }
+
           setOriginalDimensions(dims);
           const preview = URL.createObjectURL(file);
           setPreviewUrl(preview);
