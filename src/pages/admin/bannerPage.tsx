@@ -430,8 +430,61 @@ const BannersPage: React.FC = () => {
     }
   };
 
+  const validateBannerImage = (file: File): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith("image/")) {
+        resolve(true);
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        const width = img.width;
+        const height = img.height;
+        const ratio = width / height;
+
+        const targetRatio = 1920 / 600; // 3.2
+        const tolerance = 0.15;
+
+        const isValidRatio = Math.abs(ratio - targetRatio) <= tolerance;
+        const isValidSize = width >= 1200 && height >= 375;
+
+        if (!isValidRatio) {
+          toast.error(
+            "Please upload a wide banner image like 1920×600. Square images are not allowed.",
+          );
+          resolve(false);
+          return;
+        }
+
+        if (!isValidSize) {
+          toast.error(
+            "Image is too small. Please upload at least 1200×375 or 1920×600.",
+          );
+          resolve(false);
+          return;
+        }
+
+        resolve(true);
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   // Handle media selection from MediaUploadManager
-  const handleMediaSelect = (file: File, preview: string) => {
+  const handleMediaSelect = async (file: File, preview: string) => {
+    if (mediaType === "IMAGE") {
+      const isValid = await validateBannerImage(file);
+
+      if (!isValid) {
+        setMediaFile(null);
+        setMediaPreview("");
+        setValue("url", "");
+        return;
+      }
+    }
+
     setMediaFile(file);
     setMediaPreview(preview);
     setValue("url", preview, {
@@ -731,6 +784,25 @@ const BannersPage: React.FC = () => {
                   targetHeight={600}
                   maxSizeMB={mediaType === "IMAGE" ? 10 : 50}
                 />
+                {/* Banner Requirements */}
+                {mediaType === "IMAGE" && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <h4 className="font-medium text-amber-900 mb-2">
+                      Banner Image Requirements
+                    </h4>
+
+                    <ul className="list-disc list-inside text-sm text-amber-800 space-y-1">
+                      <li>Upload only wide banner images.</li>
+                      <li>Recommended size: 1920 × 600 pixels.</li>
+                      <li>Minimum size: 1200 × 375 pixels.</li>
+                      <li>Do not upload square or portrait images.</li>
+                      <li>
+                        Incorrect image dimensions may result in blurry,
+                        stretched, or cropped banners.
+                      </li>
+                    </ul>
+                  </div>
+                )}
                 {errors.url && (
                   <p className="text-sm text-red-600">{errors.url.message}</p>
                 )}
