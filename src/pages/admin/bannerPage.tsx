@@ -16,7 +16,6 @@ import {
   Eye,
   EyeOff,
   Link as LinkIcon,
-  Type,
   Hash,
   Clock,
   FileImage,
@@ -34,6 +33,10 @@ import {
 } from "@/lib/types/banner/schema";
 import MediaUploadManager from "@/components/Mediauploadmanager"; // Import the new component
 import { BackButton } from "@/components/ui/BackButton";
+
+const BANNER_WIDTH = 1920;
+const BANNER_HEIGHT = 1080;
+const BANNER_ASPECT_RATIO = "16 / 9";
 
 const BannerCard: React.FC<{
   banner: Banner;
@@ -59,14 +62,17 @@ const BannerCard: React.FC<{
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 group">
       {/* Media Section */}
-      <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-200">
+      <div
+        className="relative bg-[#f5f5f5]"
+        style={{ aspectRatio: BANNER_ASPECT_RATIO }}
+      >
         {banner.type === "VIDEO" ? (
           <div className="relative w-full h-full">
             <video
               ref={videoRef}
               src={banner.url}
               poster={banner.thumbnailUrl}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain bg-black"
               loop
               muted
             />
@@ -90,7 +96,7 @@ const BannerCard: React.FC<{
             <img
               src={banner.url}
               alt={banner.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="h-full w-full object-cover bg-[#111] transition-transform duration-300"
             />
             <div className="absolute top-2 left-2 px-2 py-1 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center gap-1">
               <ImageIcon className="h-3 w-3" />
@@ -293,7 +299,6 @@ const BannersPage: React.FC = () => {
     handleSubmit,
     reset,
     setValue,
-    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createBannerSchema),
@@ -726,10 +731,19 @@ const BannersPage: React.FC = () => {
                 <MediaUploadManager
                   mediaType={mediaType}
                   onMediaSelect={handleMediaSelect}
+                  onMediaClear={() => {
+                    setMediaFile(null);
+                    setMediaPreview("");
+                    setValue("url", "", {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    });
+                  }}
                   currentPreview={mediaPreview}
-                  targetWidth={1920}
-                  targetHeight={600}
-                  maxSizeMB={mediaType === "IMAGE" ? 10 : 50}
+                  targetWidth={BANNER_WIDTH}
+                  targetHeight={BANNER_HEIGHT}
+                  maxSizeMB={mediaType === "IMAGE" ? 30 : 50}
+                  maxOutputWidth={3840}
                 />
                 {/* Banner Requirements */}
                 {mediaType === "IMAGE" && (
@@ -739,13 +753,20 @@ const BannersPage: React.FC = () => {
                     </h4>
 
                     <ul className="list-disc list-inside text-sm text-amber-800 space-y-1">
-                      <li>Upload only wide banner images.</li>
-                      <li>Recommended size: 1920 × 600 pixels.</li>
-                      <li>Minimum size: 1200 × 375 pixels.</li>
-                      <li>Do not upload square or portrait images.</li>
                       <li>
-                        Incorrect image dimensions may result in blurry,
-                        stretched, or cropped banners.
+                        Upload a high-resolution landscape image and select the
+                        exact 16:9 area you want to show.
+                      </li>
+                      <li>Camera images such as 6000 × 4000 are supported.</li>
+                      <li>Minimum source size: 1920 × 1080 pixels.</li>
+                      <li>
+                        The selected crop is exported at high quality, up to
+                        3840 pixels wide, and is never enlarged.
+                      </li>
+                      <li>
+                        Keep faces, logos and important content away from the
+                        extreme edges because a full-screen hero can still trim
+                        small edges on unusually wide or tall screens.
                       </li>
                     </ul>
                   </div>
