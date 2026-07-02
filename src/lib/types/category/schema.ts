@@ -1,26 +1,16 @@
-import z from "zod";
+import { z } from "zod";
 
-const parentIdSchema = z
-  .union([z.string(), z.null(), z.undefined()])
-  .transform((val) => {
-    if (val === "" || val === "null" || val === "undefined") return null;
-    return val;
-  });
+const optionalIdSchema = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) return undefined;
+  return value;
+}, z.string().min(1).optional());
 
-export const createCategorySchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
-  description: z.string().optional(),
-  parentId: parentIdSchema.optional(),
-metaTitle: z
-  .string()
-  .max(70, "Meta title must be less than 70 characters")
-  .optional(),
-metaDesc: z
-  .string()
-  .max(160, "Meta description must be less than 160 characters")
-  .optional(),
-  // image: z.string().url("Invalid image URL").optional().or(z.literal("")),
-image: z
+const optionalTextSchema = z.preprocess(
+  (value) => (value === null || value === undefined ? "" : value),
+  z.string().optional(),
+);
+
+const imageSchema = z
   .string()
   .refine(
     (value) =>
@@ -29,48 +19,72 @@ image: z
       value.startsWith("http"),
     {
       message: "Only JPG, PNG, WEBP images are allowed",
-    }
+    },
   )
-  .optional(),
-  isActive: z.boolean().optional(),
-  order: z.coerce.number().int().optional(),
-    // 🆕 Video features
+  .optional();
+
+const categoryFields = {
+  name: z.string().min(1, "Name is required").max(100),
+  description: optionalTextSchema,
+  metaTitle: z
+    .string()
+    .max(70, "Meta title must be less than 70 characters")
+    .optional(),
+  metaDesc: z
+    .string()
+    .max(160, "Meta description must be less than 160 characters")
+    .optional(),
+  image: imageSchema,
+  isActive: z.boolean().optional().default(true),
+  isRoot: z.boolean().optional().default(false),
+  order: z.coerce.number().int("Order must be a whole number").default(0),
   hasVideoConsultation: z.boolean().optional().default(false),
   videoPurchasingEnabled: z.boolean().optional().default(false),
-  videoConsultationNote: z.string().optional(),
+  videoConsultationNote: optionalTextSchema,
+};
+
+export const createCategorySchema = z.object({
+  ...categoryFields,
+  parentId: optionalIdSchema,
 });
 
 export const updateCategorySchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  description: z.string().optional(),
-  parentId: parentIdSchema.optional(),
-metaTitle: z
-  .string()
-  .max(70, "Meta title must be less than 70 characters")
-  .optional(),
-metaDesc: z
-  .string()
-  .max(160, "Meta description must be less than 160 characters")
-  .optional(),
-  image: z
-  .string()
-  .refine(
-    (value) =>
-      value === "" ||
-      value.startsWith("data:image/") ||
-      value.startsWith("http"),
-    {
-      message: "Only JPG, PNG, WEBP images are allowed",
-    }
-  )
-  .optional(),
+  name: categoryFields.name.optional(),
+  description: categoryFields.description,
+  isRoot: z.boolean().optional(),
+  metaTitle: categoryFields.metaTitle,
+  metaDesc: categoryFields.metaDesc,
+  image: categoryFields.image,
   isActive: z.boolean().optional(),
-  order: z.number().int().optional(),
-   // 🆕 Video features
+  order: z.coerce.number().int("Order must be a whole number").optional(),
   hasVideoConsultation: z.boolean().optional(),
   videoPurchasingEnabled: z.boolean().optional(),
-  videoConsultationNote: z.string().optional(),
+  videoConsultationNote: categoryFields.videoConsultationNote,
 });
 
-export type CreateCategoryFormData = z.infer<typeof createCategorySchema>;
-export type UpdateCategoryFormData = z.infer<typeof updateCategorySchema>;
+export const linkCategorySchema = z
+  .object({
+    parentId: z.string().min(1, "Select a parent category"),
+    childId: z.string().min(1, "Select a category to link"),
+    order: z.coerce.number().int("Order must be a whole number").default(0),
+  })
+  .refine((data) => data.parentId !== data.childId, {
+    message: "A category cannot be linked under itself",
+    path: ["childId"],
+  });
+
+export const updatePlacementSchema = z.object({
+  order: z.coerce.number().int("Order must be a whole number"),
+});
+
+export type CreateCategoryFormInput = z.input<typeof createCategorySchema>;
+export type CreateCategoryFormData = z.output<typeof createCategorySchema>;
+
+export type UpdateCategoryFormInput = z.input<typeof updateCategorySchema>;
+export type UpdateCategoryFormData = z.output<typeof updateCategorySchema>;
+
+export type LinkCategoryFormInput = z.input<typeof linkCategorySchema>;
+export type LinkCategoryFormData = z.output<typeof linkCategorySchema>;
+
+export type UpdatePlacementFormInput = z.input<typeof updatePlacementSchema>;
+export type UpdatePlacementFormData = z.output<typeof updatePlacementSchema>;

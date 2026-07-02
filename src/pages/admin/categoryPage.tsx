@@ -1,60 +1,108 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MainLayout } from "@/components/layouts/mainLayout";
-import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "react-hot-toast";
-
 import {
-  Plus,
+  ChevronDown,
+  ChevronRight,
   Edit,
-  Trash2,
-  Upload,
-  X,
-  FolderTree,
   Eye,
   EyeOff,
-  List,
-  ChevronRight,
-  ChevronDown,
+  FolderTree,
   Grid3x3,
+  Link2,
+  List,
   Loader2,
+  Plus,
+  Trash2,
+  Unlink,
+  Upload,
+  X,
 } from "lucide-react";
+
+import { MainLayout } from "@/components/layouts/mainLayout";
+import { BackButton } from "@/components/ui/BackButton";
+import { usePermissions } from "@/hooks/usePermissions";
 import { categoryApi } from "@/lib/api/category.api";
 import { s3Api } from "@/lib/api/s3.api";
-import type { Category } from "@/lib/types/category/category";
+import type {
+  Category,
+  CreateCategoryData,
+  UpdateCategoryData,
+} from "@/lib/types/category/category";
 import {
   createCategorySchema,
+  linkCategorySchema,
   type CreateCategoryFormData,
+  type CreateCategoryFormInput,
+  type LinkCategoryFormData,
+  type LinkCategoryFormInput,
 } from "@/lib/types/category/schema";
-import { BackButton } from "@/components/ui/BackButton";
 
-// Tree node component for hierarchical view
-const CategoryTreeNode: React.FC<{
+const getErrorMessage = (error: any, fallback: string) =>
+  error?.response?.data?.message || error?.message || fallback;
+
+const getParentNames = (category: Category): string[] => {
+  if (category.parents?.length) {
+    return category.parents.map((parent) => parent.name);
+  }
+
+  if (category.parentPlacements?.length) {
+    return category.parentPlacements
+      .map((placement) => placement.parent?.name)
+      .filter((name): name is string => Boolean(name));
+  }
+
+  return category.parent ? [category.parent.name] : [];
+};
+
+interface CategoryTreeNodeProps {
   category: Category;
   level: number;
+  incomingPlacementId?: string;
+  incomingPlacementOrder?: number;
   onEdit: (category: Category) => void;
   onDelete: (category: Category) => void;
+  onLink: (parentId: string) => void;
+  onUnlink: (placementId: string, categoryName: string) => void;
+  canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
-}> = ({ category, level, onEdit, onDelete, canUpdate, canDelete }) => {
+}
+
+const CategoryTreeNode: React.FC<CategoryTreeNodeProps> = ({
+  category,
+  level,
+  incomingPlacementId,
+  incomingPlacementOrder,
+  onEdit,
+  onDelete,
+  onLink,
+  onUnlink,
+  canCreate,
+  canUpdate,
+  canDelete,
+}) => {
   const [isExpanded, setIsExpanded] = useState(true);
-  const hasChildren = category.children && category.children.length > 0;
+  const childPlacements = (category.childPlacements ?? []).filter((placement) =>
+    Boolean(placement.child),
+  );
+  const hasChildren = childPlacements.length > 0;
 
   return (
     <div className="border-b border-gray-100 last:border-b-0">
       <div
-        className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors ${
-          level > 0 ? `ml-${level * 8}` : ""
-        }`}
+        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50"
         style={{ paddingLeft: `${level * 2 + 1}rem` }}
       >
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className={`p-1 hover:bg-gray-200 rounded transition-colors ${
+          type="button"
+          onClick={() => setIsExpanded((value) => !value)}
+          className={`rounded p-1 transition-colors hover:bg-gray-200 ${
             !hasChildren ? "invisible" : ""
           }`}
+          aria-label={isExpanded ? "Collapse category" : "Expand category"}
         >
           {isExpanded ? (
             <ChevronDown className="h-4 w-4 text-gray-600" />
@@ -71,19 +119,26 @@ const CategoryTreeNode: React.FC<{
               className="h-10 w-10 rounded-lg object-cover"
             />
           ) : (
-            <div className="h-10 w-10 bg-gray-200 rounded-lg flex items-center justify-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-200">
               <FolderTree className="h-5 w-5 text-gray-500" />
             </div>
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-gray-900 truncate">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-medium text-gray-900">
               {category.name}
             </p>
+
+            {category.isRoot && (
+              <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-800">
+                Root
+              </span>
+            )}
+
             <span
-              className={`px-2 py-0.5 text-xs font-semibold rounded-full flex-shrink-0 ${
+              className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
                 category.isActive
                   ? "bg-green-100 text-green-800"
                   : "bg-red-100 text-red-800"
@@ -92,33 +147,60 @@ const CategoryTreeNode: React.FC<{
               {category.isActive ? "Active" : "Inactive"}
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+
+          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-500">
             <span className="truncate">{category.slug}</span>
-            <span className="flex-shrink-0">
-              {category._count?.products || 0} products
+            <span>{category._count?.products ?? 0} products</span>
+            <span className="hidden sm:inline">
+              Category order: {category.order}
             </span>
-            <span className="hidden sm:inline flex-shrink-0">
-              Order: {category.order}
-            </span>
+            {incomingPlacementOrder !== undefined && (
+              <span>Placement order: {incomingPlacementOrder}</span>
+            )}
           </div>
         </div>
 
-        {(canUpdate || canDelete) && (
-          <div className="flex items-center gap-2 flex-shrink-0">
+        {(canCreate || canUpdate || canDelete) && (
+          <div className="flex flex-shrink-0 items-center gap-1">
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => onLink(category.id)}
+                className="rounded-lg p-2 text-purple-600 transition-colors hover:bg-purple-50"
+                title="Link an existing category under this category"
+              >
+                <Link2 className="h-4 w-4" />
+              </button>
+            )}
+
             {canUpdate && (
               <button
+                type="button"
                 onClick={() => onEdit(category)}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                title="Edit"
+                className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50"
+                title="Edit category"
               >
                 <Edit className="h-4 w-4" />
               </button>
             )}
+
+            {incomingPlacementId && canDelete && (
+              <button
+                type="button"
+                onClick={() => onUnlink(incomingPlacementId, category.name)}
+                className="rounded-lg p-2 text-orange-600 transition-colors hover:bg-orange-50"
+                title="Unlink from this parent"
+              >
+                <Unlink className="h-4 w-4" />
+              </button>
+            )}
+
             {canDelete && (
               <button
+                type="button"
                 onClick={() => onDelete(category)}
-                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Delete"
+                className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50"
+                title="Delete category"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -129,13 +211,18 @@ const CategoryTreeNode: React.FC<{
 
       {hasChildren && isExpanded && (
         <div>
-          {category.children?.map((child) => (
+          {childPlacements.map((placement) => (
             <CategoryTreeNode
-              key={child.id}
-              category={child}
+              key={placement.id}
+              category={placement.child as Category}
               level={level + 1}
+              incomingPlacementId={placement.id}
+              incomingPlacementOrder={placement.order}
               onEdit={onEdit}
               onDelete={onDelete}
+              onLink={onLink}
+              onUnlink={onUnlink}
+              canCreate={canCreate}
               canUpdate={canUpdate}
               canDelete={canDelete}
             />
@@ -146,39 +233,60 @@ const CategoryTreeNode: React.FC<{
   );
 };
 
-// Card view for mobile
-const CategoryCard: React.FC<{
+interface CategoryCardProps {
   category: Category;
   onEdit: (category: Category) => void;
   onDelete: (category: Category) => void;
+  onLink: (parentId: string) => void;
+  canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
-}> = ({ category, onEdit, onDelete, canUpdate, canDelete }) => {
+}
+
+const CategoryCard: React.FC<CategoryCardProps> = ({
+  category,
+  onEdit,
+  onDelete,
+  onLink,
+  canCreate,
+  canUpdate,
+  canDelete,
+}) => {
+  const parentNames = getParentNames(category);
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
+    <div className="rounded-lg border border-gray-200 bg-white p-4 transition-shadow hover:shadow-md">
       <div className="flex items-start gap-3">
         {category.image ? (
           <img
             src={category.image}
             alt={category.name}
-            className="h-16 w-16 rounded-lg object-cover flex-shrink-0"
+            className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
           />
         ) : (
-          <div className="h-16 w-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-gray-200">
             <FolderTree className="h-8 w-8 text-gray-500" />
           </div>
         )}
 
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base font-semibold text-gray-900 truncate">
-                {category.name}
-              </h3>
-              <p className="text-sm text-gray-500 truncate">{category.slug}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="truncate text-base font-semibold text-gray-900">
+                  {category.name}
+                </h3>
+                {category.isRoot && (
+                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-800">
+                    Root
+                  </span>
+                )}
+              </div>
+              <p className="truncate text-sm text-gray-500">{category.slug}</p>
             </div>
+
             <span
-              className={`px-2 py-1 text-xs font-semibold rounded-full flex-shrink-0 ${
+              className={`flex-shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${
                 category.isActive
                   ? "bg-green-100 text-green-800"
                   : "bg-red-100 text-red-800"
@@ -189,25 +297,40 @@ const CategoryCard: React.FC<{
           </div>
 
           <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-600">
-            {category.parent && <span>Parent: {category.parent.name}</span>}
-            <span>{category._count?.products || 0} products</span>
+            <span>
+              Parents: {parentNames.length ? parentNames.join(", ") : "None"}
+            </span>
+            <span>{category._count?.products ?? 0} products</span>
             <span>Order: {category.order}</span>
           </div>
 
-          {(canUpdate || canDelete) && (
-            <div className="mt-3 flex gap-2">
+          {(canCreate || canUpdate || canDelete) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {canCreate && (
+                <button
+                  type="button"
+                  onClick={() => onLink(category.id)}
+                  className="flex-1 rounded-lg bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-600 transition-colors hover:bg-purple-100"
+                >
+                  Link child
+                </button>
+              )}
+
               {canUpdate && (
                 <button
+                  type="button"
                   onClick={() => onEdit(category)}
-                  className="flex-1 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                  className="flex-1 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-100"
                 >
                   Edit
                 </button>
               )}
+
               {canDelete && (
                 <button
+                  type="button"
                   onClick={() => onDelete(category)}
-                  className="flex-1 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                  className="flex-1 rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100"
                 >
                   Delete
                 </button>
@@ -223,9 +346,11 @@ const CategoryCard: React.FC<{
 const CategoriesPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>("");
+  const [imagePreview, setImagePreview] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [viewMode, setViewMode] = useState<"tree" | "table" | "grid">("tree");
@@ -235,16 +360,25 @@ const CategoriesPage: React.FC = () => {
   const canUpdate = hasPermission("categories", "canUpdate");
   const canDelete = hasPermission("categories", "canDelete");
 
-  // Fetch categories
+  const invalidateCategoryQueries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["categories"] }),
+      queryClient.invalidateQueries({ queryKey: ["category-tree"] }),
+    ]);
+  };
+
   const { data: categoriesData, isLoading } = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
-      const response = await categoryApi.getCategories({ limit: 100 });
+      const response = await categoryApi.getCategories({
+        limit: 100,
+        sortBy: "order",
+        sortOrder: "asc",
+      });
       return response.data;
     },
   });
 
-  // Fetch category tree
   const { data: categoryTree } = useQuery({
     queryKey: ["category-tree"],
     queryFn: async () => {
@@ -253,59 +387,23 @@ const CategoriesPage: React.FC = () => {
     },
   });
 
-  // Create category mutation
-  const createMutation = useMutation({
-    mutationFn: categoryApi.createCategory,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      queryClient.invalidateQueries({ queryKey: ["category-tree"] });
-      setShowCreateModal(false);
-      reset();
-      setImagePreview("");
-      setImageFile(null);
-      toast.success("Category created successfully!");
-    },
-    onError: (error: any) => {
-      console.log("error", error);
-      toast.error(error?.message || "Failed to create category");
-    },
-  });
+  const categoryOptions = useMemo(
+    () =>
+      [...(categoriesData?.categories ?? [])].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+    [categoriesData?.categories],
+  );
 
-  // Update category mutation
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
-      categoryApi.updateCategory(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      queryClient.invalidateQueries({ queryKey: ["category-tree"] });
-      setEditingCategory(null);
-      reset();
-      setImagePreview("");
-      setImageFile(null);
-      setShowCreateModal(false);
-      toast.success("Category updated successfully!");
-    },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message || "Failed to update category",
-      );
-    },
-  });
+  const rootCategories = useMemo(() => {
+    const tree = categoryTree ?? [];
+    const roots = tree.filter(
+      (category) =>
+        category.isRoot || (category.parentPlacements?.length ?? 0) === 0,
+    );
 
-  // Delete category mutation
-  const deleteMutation = useMutation({
-    mutationFn: categoryApi.deleteCategory,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      queryClient.invalidateQueries({ queryKey: ["category-tree"] });
-      toast.success("Category deleted successfully!");
-    },
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message || "Failed to delete category",
-      );
-    },
-  });
+    return roots.length > 0 ? roots : tree;
+  }, [categoryTree]);
 
   const {
     register,
@@ -314,59 +412,174 @@ const CategoriesPage: React.FC = () => {
     setValue,
     watch,
     formState: { errors },
-  } = useForm({
+  } = useForm<CreateCategoryFormInput, unknown, CreateCategoryFormData>({
     resolver: zodResolver(createCategorySchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      parentId: undefined,
+      isRoot: false,
+      metaTitle: "",
+      metaDesc: "",
+      image: "",
+      isActive: true,
+      order: 0,
+      hasVideoConsultation: false,
+      videoPurchasingEnabled: false,
+      videoConsultationNote: "",
+    },
   });
 
-  const watchedImage = watch("image");
+  const {
+    register: registerLink,
+    handleSubmit: handleLinkSubmit,
+    reset: resetLink,
+    watch: watchLink,
+    formState: { errors: linkErrors },
+  } = useForm<LinkCategoryFormInput, unknown, LinkCategoryFormData>({
+    resolver: zodResolver(linkCategorySchema),
+    defaultValues: {
+      parentId: "",
+      childId: "",
+      order: 0,
+    },
+  });
 
-  // Handle file drop
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
+  const watchedParentId = watch("parentId");
+  const watchedLinkParentId = watchLink("parentId");
 
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("image/")) {
-      handleImageFile(file);
-    }
+  const closeCategoryModal = () => {
+    setShowCategoryModal(false);
+    setEditingCategory(null);
+    reset();
+    setImagePreview("");
+    setImageFile(null);
   };
 
-  // Handle file selection
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleImageFile(file);
-    }
-    // Reset input value to allow selecting the same file again
-    e.target.value = "";
+  const closeLinkModal = () => {
+    setShowLinkModal(false);
+    resetLink({ parentId: "", childId: "", order: 0 });
   };
 
-  // Recursively flatten category tree with full path labels
-  const flattenCategoriesWithPath = (
-    categories: Category[],
-    parentPath = "",
-    excludeId?: string,
-  ): { id: string; label: string }[] => {
-    return categories.flatMap((cat) => {
-      if (cat.id === excludeId) return [];
-      const fullPath = parentPath ? `${parentPath} > ${cat.name}` : cat.name;
-      return [
-        { id: cat.id, label: fullPath },
-        ...flattenCategoriesWithPath(cat.children || [], fullPath, excludeId),
-      ];
+  const createMutation = useMutation({
+    mutationFn: categoryApi.createCategory,
+    onSuccess: async () => {
+      await invalidateCategoryQueries();
+      closeCategoryModal();
+      toast.success("Category created successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(getErrorMessage(error, "Failed to create category"));
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateCategoryData }) =>
+      categoryApi.updateCategory(id, data),
+    onSuccess: async () => {
+      await invalidateCategoryQueries();
+      closeCategoryModal();
+      toast.success("Category updated successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(getErrorMessage(error, "Failed to update category"));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: categoryApi.deleteCategory,
+    onSuccess: async () => {
+      await invalidateCategoryQueries();
+      toast.success("Category deleted successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(getErrorMessage(error, "Failed to delete category"));
+    },
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: categoryApi.linkCategory,
+    onSuccess: async () => {
+      await invalidateCategoryQueries();
+      closeLinkModal();
+      toast.success("Category linked successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(getErrorMessage(error, "Failed to link category"));
+    },
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: categoryApi.unlinkCategory,
+    onSuccess: async () => {
+      await invalidateCategoryQueries();
+      toast.success("Category unlinked successfully!");
+    },
+    onError: (error: any) => {
+      toast.error(getErrorMessage(error, "Failed to unlink category"));
+    },
+  });
+
+  const openCreateModal = () => {
+    setEditingCategory(null);
+    reset({
+      name: "",
+      description: "",
+      parentId: undefined,
+      isRoot: false,
+      metaTitle: "",
+      metaDesc: "",
+      image: "",
+      isActive: true,
+      order: 0,
+      hasVideoConsultation: false,
+      videoPurchasingEnabled: false,
+      videoConsultationNote: "",
     });
+    setImagePreview("");
+    setImageFile(null);
+    setShowCategoryModal(true);
   };
 
-  // Process image file with size validation
+  const openLinkModal = (parentId?: string) => {
+    resetLink({
+      parentId: parentId ?? "",
+      childId: "",
+      order: 0,
+    });
+    setShowLinkModal(true);
+  };
+
+  const handleEdit = (category: Category) => {
+    setEditingCategory(category);
+    reset({
+      name: category.name,
+      description: category.description ?? "",
+      parentId: undefined,
+      isRoot: category.isRoot ?? false,
+      metaTitle: category.metaTitle ?? "",
+      metaDesc: category.metaDesc ?? "",
+      image: category.image ?? "",
+      isActive: category.isActive,
+      order: category.order,
+      hasVideoConsultation: category.hasVideoConsultation ?? false,
+      videoPurchasingEnabled: category.videoPurchasingEnabled ?? false,
+      videoConsultationNote: category.videoConsultationNote ?? "",
+    });
+    setImagePreview(category.image ?? "");
+    setImageFile(null);
+    setShowCategoryModal(true);
+  };
+
   const handleImageFile = (file: File) => {
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select a valid image file");
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Only JPG, PNG and WEBP images are allowed");
       return;
     }
 
-    // Validate file size (10MB = 10 * 1024 * 1024 bytes)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       toast.error(
         `Image size must be less than 10MB. Your file is ${(
@@ -378,12 +591,11 @@ const CategoriesPage: React.FC = () => {
     }
 
     setImageFile(file);
+
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
       setImagePreview(result);
-
-      // 🔑 THIS IS THE MISSING LINE
       setValue("image", result, {
         shouldValidate: true,
         shouldDirty: true,
@@ -392,7 +604,20 @@ const CategoriesPage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // Upload image to S3
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setIsDragging(false);
+
+    const file = event.dataTransfer.files[0];
+    if (file) handleImageFile(file);
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) handleImageFile(file);
+    event.target.value = "";
+  };
+
   const uploadImageToS3 = async (): Promise<string | null> => {
     if (!imageFile) return null;
 
@@ -401,16 +626,12 @@ const CategoriesPage: React.FC = () => {
 
     try {
       const response = await s3Api.uploadSingle(imageFile, "categories");
-
-      if (!response.success) {
-        throw new Error("Failed to upload image");
-      }
+      if (!response.success) throw new Error("Failed to upload image");
 
       toast.success("Image uploaded successfully!", { id: uploadToast });
       return response.url;
     } catch (error: any) {
-      console.error("Image upload error:", error);
-      toast.error(error?.response?.data?.message || "Failed to upload image", {
+      toast.error(getErrorMessage(error, "Failed to upload image"), {
         id: uploadToast,
       });
       throw error;
@@ -421,186 +642,209 @@ const CategoriesPage: React.FC = () => {
 
   const onSubmit = async (data: CreateCategoryFormData) => {
     try {
-      // Upload image to S3 if there's a new file
-      let imageUrl = data.image || "";
-      // ✅ upload new image
-      if (imageFile) {
-        // ✅ delete old image from S3 if editing
-        if (editingCategory?.image) {
-          try {
-            await s3Api.deleteFileByUrl(editingCategory.image);
-          } catch (err) {
-            console.error("Failed to delete old category image:", err);
-          }
-        }
-        const uploadedUrl = await uploadImageToS3();
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl;
-        }
-      }
+      let imageUrl = data.image ?? "";
+      const previousImageUrl = editingCategory?.image;
 
-      const submitData = {
-        ...data,
-        parentId: editingCategory
-          ? data.parentId
-            ? data.parentId
-            : null
-          : data?.parentId
-            ? data.parentId
-            : "",
-        isActive: data.isActive ?? true,
-        order: data.order ?? 0,
-        image: imageUrl,
-      };
+      if (imageFile) {
+        const uploadedUrl = await uploadImageToS3();
+        if (uploadedUrl) imageUrl = uploadedUrl;
+      }
 
       if (editingCategory) {
+        const updateData: UpdateCategoryData = {
+          name: data.name,
+          description: data.description,
+          isRoot: data.isRoot ?? false,
+          metaTitle: data.metaTitle,
+          metaDesc: data.metaDesc,
+          image: imageUrl,
+          isActive: data.isActive ?? true,
+          order: data.order ?? 0,
+          hasVideoConsultation: data.hasVideoConsultation ?? false,
+          videoPurchasingEnabled: data.videoPurchasingEnabled ?? false,
+          videoConsultationNote: data.videoConsultationNote,
+        };
+
         await updateMutation.mutateAsync({
           id: editingCategory.id,
-          data: submitData,
+          data: updateData,
         });
-      } else {
-        await createMutation.mutateAsync(submitData);
+
+        if (imageFile && previousImageUrl && previousImageUrl !== imageUrl) {
+          try {
+            await s3Api.deleteFileByUrl(previousImageUrl);
+          } catch (error) {
+            console.error("Failed to delete old category image:", error);
+          }
+        }
+
+        return;
       }
+
+      const createData: CreateCategoryData = {
+        name: data.name,
+        description: data.description,
+        parentId: data.parentId || undefined,
+        isRoot: data.parentId ? false : (data.isRoot ?? false),
+        metaTitle: data.metaTitle,
+        metaDesc: data.metaDesc,
+        image: imageUrl,
+        isActive: data.isActive ?? true,
+        order: data.order ?? 0,
+        hasVideoConsultation: data.hasVideoConsultation ?? false,
+        videoPurchasingEnabled: data.videoPurchasingEnabled ?? false,
+        videoConsultationNote: data.videoConsultationNote,
+      };
+
+      await createMutation.mutateAsync(createData);
     } catch (error) {
       console.error("Category submit error:", error);
     }
   };
 
-  const handleEdit = (category: Category) => {
-    setEditingCategory(category);
-    setValue("name", category.name);
-    setValue("description", category.description || "");
-    setValue("parentId", category.parentId ?? null);
-    setValue("metaTitle", category.metaTitle || "");
-    setValue("metaDesc", category.metaDesc || "");
-    setValue("image", category.image || "");
-    setValue("isActive", category.isActive);
-    setValue("order", category.order);
-    setImagePreview(category.image || "");
-    setImageFile(null);
-    setShowCreateModal(true);
+  const onLinkSubmit = async (data: LinkCategoryFormData) => {
+    try {
+      await linkMutation.mutateAsync({
+        parentId: data.parentId,
+        childId: data.childId,
+        order: data.order ?? 0,
+      });
+    } catch (error) {
+      console.error("Link category error:", error);
+    }
   };
 
   const handleDelete = async (category: Category) => {
-    if (!window.confirm("Are you sure you want to delete this category?")) {
-      return;
-    }
+    const confirmed = window.confirm(
+      `Delete “${category.name}”? This deletes the category itself, not only a placement.`,
+    );
+    if (!confirmed) return;
+
     try {
-      // ✅ delete image from S3 first
+      await deleteMutation.mutateAsync(category.id);
+
       if (category.image) {
         try {
           await s3Api.deleteFileByUrl(category.image);
-        } catch (err) {
-          console.error("Failed to delete category image from S3:", err);
+        } catch (error) {
+          console.error("Failed to delete category image from S3:", error);
         }
       }
-
-      deleteMutation.mutate(category.id);
     } catch (error) {
-      console.error(error);
+      console.error("Delete category error:", error);
     }
   };
 
-  const rootCategories =
-    categoryTree ||
-    categoriesData?.categories?.filter((cat) => !cat.parentId) ||
-    [];
+  const handleUnlink = async (placementId: string, categoryName: string) => {
+    const confirmed = window.confirm(
+      `Unlink “${categoryName}” from this parent? The category itself will not be deleted.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await unlinkMutation.mutateAsync(placementId);
+    } catch (error) {
+      console.error("Unlink category error:", error);
+    }
+  };
+
+  const isCategorySaving =
+    isUploadingImage || createMutation.isPending || updateMutation.isPending;
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Header with View Toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex items-center gap-4">
             <BackButton />
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
-              <p className="text-sm text-gray-600 mt-1">
-                Manage product categories
+              <p className="mt-1 text-sm text-gray-600">
+                Manage categories and link one category under multiple parents
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-gray-100 rounded-lg p-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center rounded-lg bg-gray-100 p-1">
               <button
+                type="button"
                 onClick={() => setViewMode("tree")}
-                className={`p-2 rounded-md transition-colors ${
+                className={`rounded-md p-2 transition-colors ${
                   viewMode === "tree"
                     ? "bg-white text-blue-600 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
-                title="Tree View"
+                title="Tree view"
               >
                 <FolderTree className="h-4 w-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode("table")}
-                className={`p-2 rounded-md transition-colors ${
+                className={`rounded-md p-2 transition-colors ${
                   viewMode === "table"
                     ? "bg-white text-blue-600 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
-                title="Table View"
+                title="Table view"
               >
                 <List className="h-4 w-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode("grid")}
-                className={`p-2 rounded-md transition-colors ${
+                className={`rounded-md p-2 transition-colors ${
                   viewMode === "grid"
                     ? "bg-white text-blue-600 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
-                title="Grid View"
+                title="Grid view"
               >
                 <Grid3x3 className="h-4 w-4" />
               </button>
             </div>
 
             {canCreate && (
-              <button
-                onClick={() => {
-                  setEditingCategory(null);
-                  reset({
-                    name: "",
-                    description: "",
-                    parentId: "",
-                    metaTitle: "",
-                    metaDesc: "",
-                    image: "",
-                    isActive: true,
-                    order: 0,
-                  });
-                  setImagePreview("");
-                  setImageFile(null);
-                  setShowCreateModal(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors whitespace-nowrap"
-              >
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Add Category</span>
-                <span className="sm:hidden">Add</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => openLinkModal()}
+                  className="flex items-center gap-2 whitespace-nowrap rounded-lg border border-purple-200 bg-purple-50 px-4 py-2 text-purple-700 transition-colors hover:bg-purple-100"
+                >
+                  <Link2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Link Existing</span>
+                  <span className="sm:hidden">Link</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="flex items-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Add Category</span>
+                  <span className="sm:hidden">Add</span>
+                </button>
+              </>
             )}
           </div>
         </div>
 
-        {/* Categories Display */}
         {isLoading ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="rounded-lg bg-white p-12 text-center shadow-md">
+            <Loader2 className="mx-auto h-10 w-10 animate-spin text-blue-600" />
             <p className="mt-4 text-gray-500">Loading categories...</p>
           </div>
-        ) : categoriesData?.categories?.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <FolderTree className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+        ) : categoriesData?.categories.length === 0 ? (
+          <div className="rounded-lg bg-white p-12 text-center shadow-md">
+            <FolderTree className="mx-auto mb-4 h-16 w-16 text-gray-400" />
             <p className="text-gray-500">No categories found</p>
             {canCreate && (
               <button
-                onClick={() => setShowCreateModal(true)}
-                className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
+                type="button"
+                onClick={openCreateModal}
+                className="mt-4 font-medium text-blue-600 hover:text-blue-700"
               >
                 Create your first category
               </button>
@@ -608,14 +852,14 @@ const CategoriesPage: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Tree View */}
             {viewMode === "tree" && (
-              <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                <div className="border-b border-gray-200 px-4 py-3 bg-gray-50">
+              <div className="overflow-hidden rounded-lg bg-white shadow-md">
+                <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
                   <p className="text-sm font-medium text-gray-700">
-                    Category Hierarchy
+                    Placement-based category hierarchy
                   </p>
                 </div>
+
                 <div className="divide-y divide-gray-100">
                   {rootCategories.map((category) => (
                     <CategoryTreeNode
@@ -624,6 +868,9 @@ const CategoriesPage: React.FC = () => {
                       level={0}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
+                      onLink={openLinkModal}
+                      onUnlink={handleUnlink}
+                      canCreate={canCreate}
                       canUpdate={canUpdate}
                       canDelete={canDelete}
                     />
@@ -632,128 +879,155 @@ const CategoriesPage: React.FC = () => {
               </div>
             )}
 
-            {/* Table View */}
             {viewMode === "table" && (
-              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="overflow-hidden rounded-lg bg-white shadow-md">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">
                           Category
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Parent
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                          Parents
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">
                           Products
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">
+                        <th className="hidden px-6 py-3 text-left text-xs font-medium uppercase text-gray-500 sm:table-cell">
                           Order
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium uppercase text-gray-500">
                           Status
                         </th>
-                        {(canUpdate || canDelete) && (
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                        {(canCreate || canUpdate || canDelete) && (
+                          <th className="px-6 py-3 text-right text-xs font-medium uppercase text-gray-500">
                             Actions
                           </th>
                         )}
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {categoriesData?.categories?.map((category) => (
-                        <tr key={category.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              {category.image ? (
-                                <img
-                                  src={category.image}
-                                  alt={category.name}
-                                  className="h-10 w-10 rounded-lg object-cover mr-3"
-                                />
-                              ) : (
-                                <div className="h-10 w-10 bg-gray-200 rounded-lg flex items-center justify-center mr-3">
-                                  <FolderTree className="h-5 w-5 text-gray-500" />
-                                </div>
-                              )}
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">
-                                  {category.name}
-                                </div>
-                                <div className="text-sm text-gray-500">
-                                  {category.slug}
+
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {categoriesData?.categories.map((category) => {
+                        const parentNames = getParentNames(category);
+
+                        return (
+                          <tr key={category.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center">
+                                {category.image ? (
+                                  <img
+                                    src={category.image}
+                                    alt={category.name}
+                                    className="mr-3 h-10 w-10 rounded-lg object-cover"
+                                  />
+                                ) : (
+                                  <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gray-200">
+                                    <FolderTree className="h-5 w-5 text-gray-500" />
+                                  </div>
+                                )}
+
+                                <div>
+                                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                                    {category.name}
+                                    {category.isRoot && (
+                                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-800">
+                                        Root
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    {category.slug}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {category.parent?.name || "-"}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {category._count?.products || 0}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 hidden sm:table-cell">
-                            {category.order}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className={`px-2 py-1 inline-flex items-center text-xs leading-5 font-semibold rounded-full ${
-                                category.isActive
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {category.isActive ? (
-                                <>
-                                  <Eye className="h-3 w-3 mr-1" />
-                                  Active
-                                </>
-                              ) : (
-                                <>
-                                  <EyeOff className="h-3 w-3 mr-1" />
-                                  Inactive
-                                </>
-                              )}
-                            </span>
-                          </td>
-                          {(canUpdate || canDelete) && (
-                            <td className="px-6 py-4 text-right text-sm font-medium">
-                              {canUpdate && (
-                                <button
-                                  onClick={() => handleEdit(category)}
-                                  className="text-blue-600 hover:text-blue-900 mr-3"
-                                >
-                                  <Edit className="h-4 w-4 inline" />
-                                </button>
-                              )}
-                              {canDelete && (
-                                <button
-                                  onClick={() => handleDelete(category)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  <Trash2 className="h-4 w-4 inline" />
-                                </button>
-                              )}
                             </td>
-                          )}
-                        </tr>
-                      ))}
+
+                            <td className="px-6 py-4 text-sm text-gray-500">
+                              {parentNames.length
+                                ? parentNames.join(", ")
+                                : "-"}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-900">
+                              {category._count?.products ?? 0}
+                            </td>
+                            <td className="hidden px-6 py-4 text-sm text-gray-900 sm:table-cell">
+                              {category.order}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold leading-5 ${
+                                  category.isActive
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {category.isActive ? (
+                                  <>
+                                    <Eye className="mr-1 h-3 w-3" /> Active
+                                  </>
+                                ) : (
+                                  <>
+                                    <EyeOff className="mr-1 h-3 w-3" /> Inactive
+                                  </>
+                                )}
+                              </span>
+                            </td>
+
+                            {(canCreate || canUpdate || canDelete) && (
+                              <td className="px-6 py-4 text-right text-sm font-medium">
+                                {canCreate && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openLinkModal(category.id)}
+                                    className="mr-3 text-purple-600 hover:text-purple-900"
+                                    title="Link child"
+                                  >
+                                    <Link2 className="inline h-4 w-4" />
+                                  </button>
+                                )}
+                                {canUpdate && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEdit(category)}
+                                    className="mr-3 text-blue-600 hover:text-blue-900"
+                                    title="Edit"
+                                  >
+                                    <Edit className="inline h-4 w-4" />
+                                  </button>
+                                )}
+                                {canDelete && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(category)}
+                                    className="text-red-600 hover:text-red-900"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="inline h-4 w-4" />
+                                  </button>
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
 
-            {/* Grid View */}
             {viewMode === "grid" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {categoriesData?.categories?.map((category) => (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {categoriesData?.categories.map((category) => (
                   <CategoryCard
                     key={category.id}
                     category={category}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onLink={openLinkModal}
+                    canCreate={canCreate}
                     canUpdate={canUpdate}
                     canDelete={canDelete}
                   />
@@ -763,43 +1037,32 @@ const CategoriesPage: React.FC = () => {
           </>
         )}
 
-        {/* Create/Edit Modal */}
-        {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+        {showCategoryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
                 <h2 className="text-xl font-semibold text-gray-900">
                   {editingCategory ? "Edit Category" : "Create Category"}
                 </h2>
                 <button
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setEditingCategory(null);
-                    reset();
-                    setImagePreview("");
-                    setImageFile(null);
-                  }}
+                  type="button"
+                  onClick={closeCategoryModal}
                   className="text-gray-400 hover:text-gray-600"
-                  disabled={
-                    isUploadingImage ||
-                    createMutation.isPending ||
-                    updateMutation.isPending
-                  }
+                  disabled={isCategorySaving}
                 >
                   <X className="h-6 w-6" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-                {/* Name */}
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 p-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
                     Name *
                   </label>
                   <input
                     {...register("name")}
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Electronics, Clothing, etc."
                   />
                   {errors.name && (
@@ -809,54 +1072,65 @@ const CategoriesPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
                     Description
                   </label>
                   <textarea
                     {...register("description")}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Category description..."
                   />
                 </div>
 
-                {/* Parent Category */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Parent Category
+                {!editingCategory && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Create under parent
+                    </label>
+                    <select
+                      {...register("parentId")}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">No parent</option>
+                      {categoryOptions.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name} ({category.slug})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      This creates the category and its first placement
+                      together.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center">
+                  <input
+                    {...register("isRoot")}
+                    type="checkbox"
+                    disabled={!editingCategory && Boolean(watchedParentId)}
+                    className="h-4 w-4 rounded text-purple-600 focus:ring-purple-500 disabled:opacity-50"
+                  />
+                  <label className="ml-2 text-sm text-gray-700">
+                    Show as a root/top-level category
                   </label>
-                  <select
-                    {...register("parentId")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">None (Root Category)</option>
-                    {flattenCategoriesWithPath(
-                      categoryTree || [],
-                      "",
-                      editingCategory?.id,
-                    ).map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
-                {/* Image Upload with Drag & Drop */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
                     Category Image
                   </label>
                   <div
                     onDrop={handleDrop}
-                    onDragOver={(e) => {
-                      e.preventDefault();
+                    onDragOver={(event) => {
+                      event.preventDefault();
                       setIsDragging(true);
                     }}
                     onDragLeave={() => setIsDragging(false)}
-                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
                       isDragging
                         ? "border-blue-500 bg-blue-50"
                         : "border-gray-300 hover:border-gray-400"
@@ -867,39 +1141,42 @@ const CategoriesPage: React.FC = () => {
                         <img
                           src={imagePreview}
                           alt="Preview"
-                          className="h-32 w-32 object-cover rounded-lg"
+                          className="h-32 w-32 rounded-lg object-cover"
                         />
                         <button
                           type="button"
                           onClick={() => {
                             setImagePreview("");
                             setImageFile(null);
-                            setValue("image", "");
+                            setValue("image", "", {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            });
                           }}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                          className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white transition-colors hover:bg-red-600"
                         >
                           <X className="h-4 w-4" />
                         </button>
                       </div>
                     ) : (
                       <>
-                        <Upload className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600 mb-2">
-                          Drag & drop an image here, or click to select
+                        <Upload className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+                        <p className="mb-2 text-sm text-gray-600">
+                          Drag and drop an image here, or select a file
                         </p>
-                        <p className="text-xs text-gray-500 mb-2">
-                          PNG, JPG, WEBP up to 10MB
+                        <p className="mb-2 text-xs text-gray-500">
+                          JPG, PNG or WEBP up to 10MB
                         </p>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/webp"
                           onChange={handleFileSelect}
                           className="hidden"
-                          id="image-upload"
+                          id="category-image-upload"
                         />
                         <label
-                          htmlFor="image-upload"
-                          className="cursor-pointer text-blue-600 hover:text-blue-700 font-medium"
+                          htmlFor="category-image-upload"
+                          className="cursor-pointer font-medium text-blue-600 hover:text-blue-700"
                         >
                           Browse files
                         </label>
@@ -913,65 +1190,76 @@ const CategoriesPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Meta Fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
                       Meta Title
                     </label>
                     <input
                       {...register("metaTitle")}
                       type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="SEO title (max 60 chars)"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="SEO title (max 70 chars)"
                     />
+                    {errors.metaTitle && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.metaTitle.message}
+                      </p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
                       Meta Description
                     </label>
                     <input
                       {...register("metaDesc")}
                       type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="SEO description (max 160 chars)"
                     />
+                    {errors.metaDesc && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.metaDesc.message}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                {/* Order & Status */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Display Order
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Category Order
                     </label>
                     <input
                       {...register("order", { valueAsNumber: true })}
                       type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    {errors.order && (
+                      <p className="mt-1 text-sm text-red-600">
+                        {errors.order.message}
+                      </p>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
                       Status
                     </label>
-                    <div className="flex items-center h-10">
+                    <div className="flex h-10 items-center">
                       <input
                         {...register("isActive")}
                         type="checkbox"
-                        className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                        className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">Active</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Video Consultation Features */}
                 <div className="border-t border-gray-200 pt-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                  <h4 className="mb-3 text-sm font-semibold text-gray-900">
                     Video Features
                   </h4>
 
@@ -980,7 +1268,7 @@ const CategoriesPage: React.FC = () => {
                       <input
                         {...register("hasVideoConsultation")}
                         type="checkbox"
-                        className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                        className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                       />
                       <label className="ml-2 text-sm text-gray-700">
                         Enable Video Consultation
@@ -991,7 +1279,7 @@ const CategoriesPage: React.FC = () => {
                       <input
                         {...register("videoPurchasingEnabled")}
                         type="checkbox"
-                        className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                        className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                       />
                       <label className="ml-2 text-sm text-gray-700">
                         Enable Video Purchasing
@@ -999,51 +1287,34 @@ const CategoriesPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
                         Video Consultation Note
                       </label>
                       <textarea
                         {...register("videoConsultationNote")}
                         rows={2}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Add instructions for video consultation..."
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Submit Buttons */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setEditingCategory(null);
-                      reset();
-                      setImagePreview("");
-                      setImageFile(null);
-                    }}
-                    disabled={
-                      isUploadingImage ||
-                      createMutation.isPending ||
-                      updateMutation.isPending
-                    }
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={closeCategoryModal}
+                    disabled={isCategorySaving}
+                    className="rounded-lg bg-gray-100 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={
-                      isUploadingImage ||
-                      createMutation.isPending ||
-                      updateMutation.isPending
-                    }
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    disabled={isCategorySaving}
+                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isUploadingImage ||
-                    createMutation.isPending ||
-                    updateMutation.isPending ? (
+                    {isCategorySaving ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         {isUploadingImage ? "Uploading..." : "Saving..."}
@@ -1060,9 +1331,127 @@ const CategoriesPage: React.FC = () => {
           </div>
         )}
 
-        {/* Read-Only Notice */}
+        {showLinkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Link Existing Category
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    The child category remains available in its other
+                    placements.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeLinkModal}
+                  disabled={linkMutation.isPending}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={handleLinkSubmit(onLinkSubmit)}
+                className="space-y-4 p-6"
+              >
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Parent Category *
+                  </label>
+                  <select
+                    {...registerLink("parentId")}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">Select parent category</option>
+                    {categoryOptions.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name} ({category.slug})
+                      </option>
+                    ))}
+                  </select>
+                  {linkErrors.parentId && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {linkErrors.parentId.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Category To Link *
+                  </label>
+                  <select
+                    {...registerLink("childId")}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">Select category</option>
+                    {categoryOptions
+                      .filter((category) => category.id !== watchedLinkParentId)
+                      .map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name} ({category.slug})
+                        </option>
+                      ))}
+                  </select>
+                  {linkErrors.childId && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {linkErrors.childId.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Placement Order
+                  </label>
+                  <input
+                    {...registerLink("order", { valueAsNumber: true })}
+                    type="number"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  {linkErrors.order && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {linkErrors.order.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeLinkModal}
+                    disabled={linkMutation.isPending}
+                    className="rounded-lg bg-gray-100 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={linkMutation.isPending}
+                    className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {linkMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Linking...
+                      </>
+                    ) : (
+                      <>
+                        <Link2 className="h-4 w-4" /> Link Category
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {!canCreate && !canUpdate && !canDelete && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
             <p className="text-sm text-yellow-800">
               You have read-only access to categories. Contact your
               administrator for additional permissions.

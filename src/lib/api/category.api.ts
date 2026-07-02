@@ -1,59 +1,142 @@
-import type { Category, CreateCategoryData, QueryCategoryParams, UpdateCategoryData } from "../types/category/category";
+import type {
+  Category,
+  CategoryListData,
+  CategoryPlacement,
+  CreateCategoryData,
+  LinkCategoryData,
+  QueryCategoryParams,
+  UpdateCategoryData,
+  UpdatePlacementData,
+} from "../types/category/category";
 import { apiCall, type ApiResponse } from "./api.base.service";
 
+/**
+ * Converts placement-based backend responses into convenient `children` and
+ * `parents` arrays while preserving the original placement records.
+ */
+const normalizeCategory = (category: Category): Category => {
+  const childPlacements = (category.childPlacements ?? []).map((placement) => ({
+    ...placement,
+    child: placement.child ? normalizeCategory(placement.child) : undefined,
+  }));
 
+  const parentPlacements = category.parentPlacements ?? [];
 
-// Category API
+  return {
+    ...category,
+    childPlacements,
+    parentPlacements,
+    children: childPlacements
+      .map((placement) => placement.child)
+      .filter((child): child is Category => Boolean(child)),
+    parents: parentPlacements
+      .map((placement) => placement.parent)
+      .filter((parent): parent is Category => Boolean(parent)),
+  };
+};
+
+const normalizeCategories = (categories: Category[] = []): Category[] =>
+  categories.map(normalizeCategory);
+
 export const categoryApi = {
-  // Get all categories
   getCategories: async (
-    params?: QueryCategoryParams
-  ): Promise<
-    ApiResponse<{
-      categories: Category[];
-      pagination: {
-        page: number;
-        limit: number;
-        total: number;
-        totalPages: number;
-      };
-    }>
-  > => {
-    return apiCall("GET", "/categories", undefined, { params });
+    params?: QueryCategoryParams,
+  ): Promise<ApiResponse<CategoryListData>> => {
+    const response = await apiCall<CategoryListData>(
+      "GET",
+      "/categories",
+      undefined,
+      { params },
+    );
+
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        categories: normalizeCategories(response.data?.categories),
+        // Ensure pagination is always present to satisfy CategoryListData type
+        pagination:
+          response.data?.pagination ?? {
+            page: 1,
+            limit: response.data?.categories?.length ?? 0,
+            total: response.data?.categories?.length ?? 0,
+            totalPages: 1,
+          },
+      },
+    };
   },
 
-  // Get category tree
   getCategoryTree: async (): Promise<ApiResponse<Category[]>> => {
-    return apiCall("GET", "/categories/tree");
+    const response = await apiCall<Category[]>("GET", "/categories/tree");
+
+    return {
+      ...response,
+      data: normalizeCategories(response.data),
+    };
   },
 
-  // Get category by ID
+  getCategoryTreeById: async (id: string): Promise<ApiResponse<Category>> => {
+    const response = await apiCall<Category>("GET", `/categories/tree/${id}`);
+
+    return {
+      ...response,
+      data: response.data ? normalizeCategory(response.data) : response.data,
+    };
+  },
+
   getCategory: async (id: string): Promise<ApiResponse<Category>> => {
-    return apiCall("GET", `/categories/${id}`);
+    const response = await apiCall<Category>("GET", `/categories/${id}`);
+
+    return {
+      ...response,
+      data: response.data ? normalizeCategory(response.data) : response.data,
+    };
   },
 
-  // Get category by slug
   getCategoryBySlug: async (slug: string): Promise<ApiResponse<Category>> => {
-    return apiCall("GET", `/categories/slug/${slug}`);
+    const response = await apiCall<Category>("GET", `/categories/slug/${slug}`);
+
+    return {
+      ...response,
+      data: response.data ? normalizeCategory(response.data) : response.data,
+    };
   },
 
-  // Create category (Admin only)
   createCategory: async (
-    data: CreateCategoryData
+    data: CreateCategoryData,
   ): Promise<ApiResponse<Category>> => {
-    return apiCall("POST", "/categories", data);
+    return apiCall<Category>("POST", "/categories", data);
   },
 
-  // Update category (Admin only)
   updateCategory: async (
     id: string,
-    data: UpdateCategoryData
+    data: UpdateCategoryData,
   ): Promise<ApiResponse<Category>> => {
-    return apiCall("PUT", `/categories/${id}`, data);
+    return apiCall<Category>("PUT", `/categories/${id}`, data);
   },
 
-  // Delete category (Admin only)
   deleteCategory: async (id: string): Promise<ApiResponse<void>> => {
-    return apiCall("DELETE", `/categories/${id}`);
+    return apiCall<void>("DELETE", `/categories/${id}`);
+  },
+
+  linkCategory: async (
+    data: LinkCategoryData,
+  ): Promise<ApiResponse<CategoryPlacement>> => {
+    return apiCall<CategoryPlacement>("POST", "/categories/link", data);
+  },
+
+  unlinkCategory: async (placementId: string): Promise<ApiResponse<void>> => {
+    return apiCall<void>("DELETE", `/categories/placements/${placementId}`);
+  },
+
+  updatePlacementOrder: async (
+    placementId: string,
+    data: UpdatePlacementData,
+  ): Promise<ApiResponse<CategoryPlacement>> => {
+    return apiCall<CategoryPlacement>(
+      "PUT",
+      `/categories/placements/${placementId}`,
+      data,
+    );
   },
 };
