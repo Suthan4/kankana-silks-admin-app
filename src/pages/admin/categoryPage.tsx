@@ -418,7 +418,7 @@ const CategoriesPage: React.FC = () => {
       name: "",
       description: "",
       parentId: undefined,
-      isRoot: false,
+      isRoot: true,
       metaTitle: "",
       metaDesc: "",
       image: "",
@@ -526,7 +526,7 @@ const CategoriesPage: React.FC = () => {
       name: "",
       description: "",
       parentId: undefined,
-      isRoot: false,
+      isRoot: true,
       metaTitle: "",
       metaDesc: "",
       image: "",
@@ -654,7 +654,6 @@ const CategoriesPage: React.FC = () => {
         const updateData: UpdateCategoryData = {
           name: data.name,
           description: data.description,
-          isRoot: data.isRoot ?? false,
           metaTitle: data.metaTitle,
           metaDesc: data.metaDesc,
           image: imageUrl,
@@ -681,11 +680,17 @@ const CategoriesPage: React.FC = () => {
         return;
       }
 
+      const parentId = data.parentId?.trim() || undefined;
+
       const createData: CreateCategoryData = {
         name: data.name,
         description: data.description,
-        parentId: data.parentId || undefined,
-        isRoot: data.parentId ? false : (data.isRoot ?? false),
+        parentId,
+
+        // No parent = root
+        // Selected parent = child
+        isRoot: parentId === undefined,
+
         metaTitle: data.metaTitle,
         metaDesc: data.metaDesc,
         image: imageUrl,
@@ -1085,39 +1090,43 @@ const CategoriesPage: React.FC = () => {
                 </div>
 
                 {!editingCategory && (
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">
-                      Create under parent
-                    </label>
-                    <select
-                      {...register("parentId")}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">No parent</option>
-                      {categoryOptions.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name} ({category.slug})
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500">
-                      This creates the category and its first placement
-                      together.
-                    </p>
-                  </div>
-                )}
+                  <>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Create under parent
+                      </label>
 
-                <div className="flex items-center">
-                  <input
-                    {...register("isRoot")}
-                    type="checkbox"
-                    disabled={!editingCategory && Boolean(watchedParentId)}
-                    className="h-4 w-4 rounded text-purple-600 focus:ring-purple-500 disabled:opacity-50"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Show as a root/top-level category
-                  </label>
-                </div>
+                      <select
+                        {...register("parentId")}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">No parent</option>
+
+                        {categoryOptions.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name} ({category.slug})
+                          </option>
+                        ))}
+                      </select>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        Select “No parent” to create a root category.
+                      </p>
+                    </div>
+
+                    <div
+                      className={`rounded-lg border px-4 py-3 text-sm ${
+                        watchedParentId
+                          ? "border-blue-200 bg-blue-50 text-blue-700"
+                          : "border-purple-200 bg-purple-50 text-purple-700"
+                      }`}
+                    >
+                      {watchedParentId
+                        ? "This category will be created under the selected parent."
+                        : "This category will be created as a root/top-level category."}
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
