@@ -46,6 +46,8 @@ const categoryFields = {
 export const createCategorySchema = z.object({
   ...categoryFields,
   parentId: optionalIdSchema,
+  /** Only relevant when parentId is set — show subcategories under this parent. */
+  includeChildren: z.boolean().optional().default(true),
 });
 
 export const updateCategorySchema = z.object({
@@ -67,15 +69,23 @@ export const linkCategorySchema = z
     parentId: z.string().min(1, "Select a parent category"),
     childId: z.string().min(1, "Select a category to link"),
     order: z.coerce.number().int("Order must be a whole number").default(0),
+    /** Show the linked category's own subcategories under this parent. */
+    includeChildren: z.boolean().optional().default(true),
   })
   .refine((data) => data.parentId !== data.childId, {
     message: "A category cannot be linked under itself",
     path: ["childId"],
   });
 
-export const updatePlacementSchema = z.object({
-  order: z.coerce.number().int("Order must be a whole number"),
-});
+export const updatePlacementSchema = z
+  .object({
+    order: z.coerce.number().int("Order must be a whole number").optional(),
+    includeChildren: z.boolean().optional(),
+  })
+  .refine(
+    (data) => data.order !== undefined || data.includeChildren !== undefined,
+    { message: "Provide at least one field to update" },
+  );
 
 export type CreateCategoryFormInput = z.input<typeof createCategorySchema>;
 export type CreateCategoryFormData = z.output<typeof createCategorySchema>;

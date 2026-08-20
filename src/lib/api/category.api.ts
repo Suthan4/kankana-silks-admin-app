@@ -129,7 +129,7 @@ export const categoryApi = {
     return apiCall<void>("DELETE", `/categories/placements/${placementId}`);
   },
 
-  updatePlacementOrder: async (
+  updatePlacement: async (
     placementId: string,
     data: UpdatePlacementData,
   ): Promise<ApiResponse<CategoryPlacement>> => {
@@ -137,6 +137,18 @@ export const categoryApi = {
       "PUT",
       `/categories/placements/${placementId}`,
       data,
+    );
+  },
+
+  /** Convenience wrapper for toggling whether a placement shows the category's subcategories. */
+  togglePlacementChildren: async (
+    placementId: string,
+    includeChildren: boolean,
+  ): Promise<ApiResponse<CategoryPlacement>> => {
+    return apiCall<CategoryPlacement>(
+      "PUT",
+      `/categories/placements/${placementId}`,
+      { includeChildren },
     );
   },
 };

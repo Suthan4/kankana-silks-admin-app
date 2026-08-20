@@ -13,6 +13,8 @@ import {
   Grid3x3,
   Link2,
   List,
+  ListTree,
+  ListX,
   Loader2,
   Plus,
   Trash2,
@@ -62,10 +64,16 @@ interface CategoryTreeNodeProps {
   level: number;
   incomingPlacementId?: string;
   incomingPlacementOrder?: number;
+  incomingIncludeChildren?: boolean;
   onEdit: (category: Category) => void;
   onDelete: (category: Category) => void;
   onLink: (parentId: string) => void;
   onUnlink: (placementId: string, categoryName: string) => void;
+  onToggleChildren: (
+    placementId: string,
+    categoryName: string,
+    nextIncludeChildren: boolean,
+  ) => void;
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
@@ -76,10 +84,12 @@ const CategoryTreeNode: React.FC<CategoryTreeNodeProps> = ({
   level,
   incomingPlacementId,
   incomingPlacementOrder,
+  incomingIncludeChildren = true,
   onEdit,
   onDelete,
   onLink,
   onUnlink,
+  onToggleChildren,
   canCreate,
   canUpdate,
   canDelete,
@@ -88,7 +98,13 @@ const CategoryTreeNode: React.FC<CategoryTreeNodeProps> = ({
   const childPlacements = (category.childPlacements ?? []).filter((placement) =>
     Boolean(placement.child),
   );
-  const hasChildren = childPlacements.length > 0;
+  // Subcategories are only actually renderable here when this occurrence is
+  // set to show them (includeChildren) AND the backend returned some.
+  const hasChildren = incomingIncludeChildren && childPlacements.length > 0;
+  // Whether to offer the "show/hide subcategories" toggle at all — only
+  // meaningful for nested placements (i.e. this node arrived via a parent
+  // placement), not for root-level categories.
+  const canToggleChildren = Boolean(incomingPlacementId) && canUpdate;
 
   return (
     <div className="border-b border-gray-100 last:border-b-0">
@@ -157,6 +173,11 @@ const CategoryTreeNode: React.FC<CategoryTreeNodeProps> = ({
             {incomingPlacementOrder !== undefined && (
               <span>Placement order: {incomingPlacementOrder}</span>
             )}
+            {incomingPlacementId && !incomingIncludeChildren && (
+              <span className="flex-shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                Subcategories hidden here
+              </span>
+            )}
           </div>
         </div>
 
@@ -181,6 +202,35 @@ const CategoryTreeNode: React.FC<CategoryTreeNodeProps> = ({
                 title="Edit category"
               >
                 <Edit className="h-4 w-4" />
+              </button>
+            )}
+
+            {canToggleChildren && (
+              <button
+                type="button"
+                onClick={() =>
+                  onToggleChildren(
+                    incomingPlacementId as string,
+                    category.name,
+                    !incomingIncludeChildren,
+                  )
+                }
+                className={`rounded-lg p-2 transition-colors ${
+                  incomingIncludeChildren
+                    ? "text-teal-600 hover:bg-teal-50"
+                    : "text-amber-600 hover:bg-amber-50"
+                }`}
+                title={
+                  incomingIncludeChildren
+                    ? "Hide subcategories under this parent (shown here as a leaf only)"
+                    : "Show subcategories under this parent"
+                }
+              >
+                {incomingIncludeChildren ? (
+                  <ListTree className="h-4 w-4" />
+                ) : (
+                  <ListX className="h-4 w-4" />
+                )}
               </button>
             )}
 
@@ -218,10 +268,12 @@ const CategoryTreeNode: React.FC<CategoryTreeNodeProps> = ({
               level={level + 1}
               incomingPlacementId={placement.id}
               incomingPlacementOrder={placement.order}
+              incomingIncludeChildren={placement.includeChildren ?? true}
               onEdit={onEdit}
               onDelete={onDelete}
               onLink={onLink}
               onUnlink={onUnlink}
+              onToggleChildren={onToggleChildren}
               canCreate={canCreate}
               canUpdate={canUpdate}
               canDelete={canDelete}
@@ -419,6 +471,7 @@ const CategoriesPage: React.FC = () => {
       description: "",
       parentId: undefined,
       isRoot: true,
+      includeChildren: true,
       metaTitle: "",
       metaDesc: "",
       image: "",
@@ -442,6 +495,7 @@ const CategoriesPage: React.FC = () => {
       parentId: "",
       childId: "",
       order: 0,
+      includeChildren: true,
     },
   });
 
@@ -520,6 +574,22 @@ const CategoriesPage: React.FC = () => {
     },
   });
 
+  const toggleChildrenMutation = useMutation({
+    mutationFn: ({
+      placementId,
+      includeChildren,
+    }: {
+      placementId: string;
+      includeChildren: boolean;
+    }) => categoryApi.togglePlacementChildren(placementId, includeChildren),
+    onSuccess: async () => {
+      await invalidateCategoryQueries();
+    },
+    onError: (error: any) => {
+      toast.error(getErrorMessage(error, "Failed to update placement"));
+    },
+  });
+
   const openCreateModal = () => {
     setEditingCategory(null);
     reset({
@@ -527,6 +597,7 @@ const CategoriesPage: React.FC = () => {
       description: "",
       parentId: undefined,
       isRoot: true,
+      includeChildren: true,
       metaTitle: "",
       metaDesc: "",
       image: "",
@@ -546,6 +617,7 @@ const CategoriesPage: React.FC = () => {
       parentId: parentId ?? "",
       childId: "",
       order: 0,
+      includeChildren: true,
     });
     setShowLinkModal(true);
   };
@@ -557,6 +629,7 @@ const CategoriesPage: React.FC = () => {
       description: category.description ?? "",
       parentId: undefined,
       isRoot: category.isRoot ?? false,
+      includeChildren: true,
       metaTitle: category.metaTitle ?? "",
       metaDesc: category.metaDesc ?? "",
       image: category.image ?? "",
@@ -690,6 +763,7 @@ const CategoriesPage: React.FC = () => {
         // No parent = root
         // Selected parent = child
         isRoot: parentId === undefined,
+        includeChildren: parentId ? (data.includeChildren ?? true) : undefined,
 
         metaTitle: data.metaTitle,
         metaDesc: data.metaDesc,
@@ -713,6 +787,7 @@ const CategoriesPage: React.FC = () => {
         parentId: data.parentId,
         childId: data.childId,
         order: data.order ?? 0,
+        includeChildren: data.includeChildren ?? true,
       });
     } catch (error) {
       console.error("Link category error:", error);
@@ -750,6 +825,26 @@ const CategoriesPage: React.FC = () => {
       await unlinkMutation.mutateAsync(placementId);
     } catch (error) {
       console.error("Unlink category error:", error);
+    }
+  };
+
+  const handleToggleChildren = async (
+    placementId: string,
+    categoryName: string,
+    nextIncludeChildren: boolean,
+  ) => {
+    try {
+      await toggleChildrenMutation.mutateAsync({
+        placementId,
+        includeChildren: nextIncludeChildren,
+      });
+      toast.success(
+        nextIncludeChildren
+          ? `Subcategories of “${categoryName}” are now visible here`
+          : `“${categoryName}” now shows as a leaf here — its subcategories stay visible under its other parents`,
+      );
+    } catch (error) {
+      console.error("Toggle placement children error:", error);
     }
   };
 
@@ -875,6 +970,7 @@ const CategoriesPage: React.FC = () => {
                       onDelete={handleDelete}
                       onLink={openLinkModal}
                       onUnlink={handleUnlink}
+                      onToggleChildren={handleToggleChildren}
                       canCreate={canCreate}
                       canUpdate={canUpdate}
                       canDelete={canDelete}
@@ -1125,6 +1221,31 @@ const CategoriesPage: React.FC = () => {
                         ? "This category will be created under the selected parent."
                         : "This category will be created as a root/top-level category."}
                     </div>
+
+                    {watchedParentId && (
+                      <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                        <input
+                          {...register("includeChildren")}
+                          type="checkbox"
+                          id="create-include-children"
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label
+                          htmlFor="create-include-children"
+                          className="text-sm text-gray-700"
+                        >
+                          <span className="block font-medium">
+                            Show subcategories under this parent
+                          </span>
+                          <span className="mt-0.5 block text-xs text-gray-500">
+                            Leave on if this category may get its own
+                            subcategories later that should also appear here.
+                            Turn off to always show it as a leaf under this
+                            specific parent.
+                          </span>
+                        </label>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -1427,6 +1548,30 @@ const CategoriesPage: React.FC = () => {
                       {linkErrors.order.message}
                     </p>
                   )}
+                </div>
+
+                <div className="flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <input
+                    {...registerLink("includeChildren")}
+                    type="checkbox"
+                    id="link-include-children"
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  />
+                  <label
+                    htmlFor="link-include-children"
+                    className="text-sm text-gray-700"
+                  >
+                    <span className="block font-medium">
+                      Show subcategories under this parent
+                    </span>
+                    <span className="mt-0.5 block text-xs text-gray-500">
+                      Turn this off to show the category as a leaf here only —
+                      useful when the same category also appears elsewhere with
+                      its full subtree (e.g. a nested category shown flat under
+                      "What's New" but with all its subcategories under its main
+                      parent).
+                    </span>
+                  </label>
                 </div>
 
                 <div className="flex justify-end gap-3 border-t border-gray-200 pt-4">
