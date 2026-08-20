@@ -752,7 +752,7 @@ const calculateTotalMediaSize = (
 };
 
 // Maximum allowed size (50MB)
-const MAX_MEDIA_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+const MAX_MEDIA_SIZE = 400 * 1024 * 1024; // 400MB in bytes
 
 const ProductsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -1317,7 +1317,9 @@ const ProductsPage: React.FC = () => {
 
     if (currentTotal + newFilesSize > MAX_MEDIA_SIZE) {
       const excess = currentTotal + newFilesSize - MAX_MEDIA_SIZE;
-      alert(`Cannot upload: Would exceed 50MB limit by ${formatBytes(excess)}`);
+      alert(
+        `Cannot upload: Would exceed 490MB limit by ${formatBytes(excess)}`,
+      );
       e.target.value = "";
       return;
     }

@@ -3,6 +3,13 @@ export interface CategoryPlacement {
   parentId: string;
   childId: string;
   order: number;
+  /**
+   * Whether this occurrence shows the category's own subcategories.
+   * When false, `child` is rendered as a leaf in this branch of the tree
+   * even though the same category may show its subtree under a different
+   * parent. Defaults to true on the backend.
+   */
+  includeChildren: boolean;
   parent?: Category;
   child?: Category;
   createdAt?: string;
@@ -51,6 +58,8 @@ export interface CreateCategoryData {
   description?: string;
   parentId?: string;
   isRoot?: boolean;
+  /** Only relevant when parentId is set — whether this placement should show subcategories. */
+  includeChildren?: boolean;
   metaTitle?: string;
   metaDesc?: string;
   image?: string;
@@ -79,10 +88,18 @@ export interface LinkCategoryData {
   parentId: string;
   childId: string;
   order?: number;
+  /**
+   * Whether this placement should show the linked category's own
+   * subcategories here. Default true (matches current behavior).
+   * Set false for a "leaf-only" placement — e.g. showing "Banarasi Sarees"
+   * flat under "What's New" while it keeps its full subtree under "sarees".
+   */
+  includeChildren?: boolean;
 }
 
 export interface UpdatePlacementData {
-  order: number;
+  order?: number;
+  includeChildren?: boolean;
 }
 
 export interface QueryCategoryParams {
