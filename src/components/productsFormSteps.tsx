@@ -160,8 +160,8 @@ const calculateTotalMediaSize = (
   return productMediaSize + variantMediaSize;
 };
 
-// Maximum allowed size (50MB)
-const MAX_MEDIA_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+// Maximum allowed size (400MB)
+const MAX_MEDIA_SIZE = 400 * 1024 * 1024; // 400MB in bytes
 
 const ProductFormSteps: React.FC<ProductFormStepsProps> = ({
   currentStep,

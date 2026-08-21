@@ -751,7 +751,7 @@ const calculateTotalMediaSize = (
   return productMediaSize + variantMediaSize;
 };
 
-// Maximum allowed size (50MB)
+// Maximum allowed size (400MB)
 const MAX_MEDIA_SIZE = 400 * 1024 * 1024; // 400MB in bytes
 
 const ProductsPage: React.FC = () => {
