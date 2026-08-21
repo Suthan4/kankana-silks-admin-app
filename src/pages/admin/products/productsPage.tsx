@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useForm,
   useFieldArray,
+  useWatch,
   type SubmitHandler,
   type Resolver,
 } from "react-hook-form";
@@ -90,7 +91,7 @@ export type AttributeField = {
   value: string;
 };
 
-// Stats Card (unchanged)
+// Stats Card
 const StatsCard: React.FC<{
   icon: React.ReactNode;
   label: string;
@@ -98,7 +99,7 @@ const StatsCard: React.FC<{
   color: string;
   subtitle?: string;
   trend?: string;
-}> = ({ icon, label, value, color, subtitle, trend }) => {
+}> = React.memo(({ icon, label, value, color, subtitle, trend }) => {
   const colorMap = {
     blue: "bg-blue-100 text-blue-600",
     green: "bg-green-100 text-green-600",
@@ -130,7 +131,8 @@ const StatsCard: React.FC<{
       </div>
     </div>
   );
-};
+});
+StatsCard.displayName = "StatsCard";
 
 // Product Card
 const ProductCard: React.FC<{
@@ -140,172 +142,177 @@ const ProductCard: React.FC<{
   onView: (product: Product) => void;
   canUpdate: boolean;
   canDelete: boolean;
-}> = ({ product, onEdit, onDelete, onView, canUpdate, canDelete }) => {
-  const primaryMedia =
-    product.media?.find((m) => m.order === 0) || product.media?.[0];
-  const isVideo = primaryMedia?.type === "VIDEO";
+}> = React.memo(
+  ({ product, onEdit, onDelete, onView, canUpdate, canDelete }) => {
+    const primaryMedia =
+      product.media?.find((m) => m.order === 0) || product.media?.[0];
+    const isVideo = primaryMedia?.type === "VIDEO";
 
-  return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:border-blue-300 group">
-      <div className="relative h-56 bg-gradient-to-br from-gray-100 to-gray-200">
-        {primaryMedia ? (
-          isVideo ? (
-            <div className="relative w-full h-full">
-              {primaryMedia.thumbnailUrl ? (
-                <img
-                  src={primaryMedia.thumbnailUrl}
-                  alt={primaryMedia.altText || product.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gray-800">
-                  <Video className="h-20 w-20 text-gray-400" />
-                </div>
-              )}
-              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
-                <div className="w-16 h-16 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
-                  <Play className="h-8 w-8 text-gray-800 ml-1" />
+    return (
+      <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:border-blue-300 group">
+        <div className="relative h-56 bg-gradient-to-br from-gray-100 to-gray-200">
+          {primaryMedia ? (
+            isVideo ? (
+              <div className="relative w-full h-full">
+                {primaryMedia.thumbnailUrl ? (
+                  <img
+                    src={primaryMedia.thumbnailUrl}
+                    alt={primaryMedia.altText || product.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                    <Video className="h-20 w-20 text-gray-400" />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+                  <div className="w-16 h-16 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
+                    <Play className="h-8 w-8 text-gray-800 ml-1" />
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <img
+                src={primaryMedia.url}
+                alt={primaryMedia.altText || product.name}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            )
           ) : (
-            <img
-              src={primaryMedia.url}
-              alt={primaryMedia.altText || product.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          )
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Package className="h-20 w-20 text-gray-400" />
-          </div>
-        )}
-
-        <div className="absolute top-3 right-3 flex flex-col gap-2">
-          {product.hasVariants && (
-            <span className="px-2.5 py-1 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center gap-1 shadow-lg">
-              <Layers className="h-3 w-3" />
-              {product.variants?.length || 0}
-            </span>
+            <div className="w-full h-full flex items-center justify-center">
+              <Package className="h-20 w-20 text-gray-400" />
+            </div>
           )}
-          <span
-            className={`px-2.5 py-1 text-xs font-bold rounded-full shadow-lg ${
-              product.isActive
-                ? "bg-green-500 text-white"
-                : "bg-red-500 text-white"
-            }`}
-          >
-            {product.isActive ? "LIVE" : "DRAFT"}
-          </span>
+
+          <div className="absolute top-3 right-3 flex flex-col gap-2">
+            {product.hasVariants && (
+              <span className="px-2.5 py-1 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center gap-1 shadow-lg">
+                <Layers className="h-3 w-3" />
+                {product.variants?.length || 0}
+              </span>
+            )}
+            <span
+              className={`px-2.5 py-1 text-xs font-bold rounded-full shadow-lg ${
+                product.isActive
+                  ? "bg-green-500 text-white"
+                  : "bg-red-500 text-white"
+              }`}
+            >
+              {product.isActive ? "LIVE" : "DRAFT"}
+            </span>
+          </div>
+
+          {product.media && product.media.length > 1 && (
+            <div className="absolute bottom-3 left-3 px-3 py-1.5 bg-black bg-opacity-70 text-white text-xs font-medium rounded-full flex items-center gap-1">
+              <ImageIcon className="h-3 w-3" />
+              {product.media.length}
+            </div>
+          )}
         </div>
 
-        {product.media && product.media.length > 1 && (
-          <div className="absolute bottom-3 left-3 px-3 py-1.5 bg-black bg-opacity-70 text-white text-xs font-medium rounded-full flex items-center gap-1">
-            <ImageIcon className="h-3 w-3" />
-            {product.media.length}
-          </div>
-        )}
-      </div>
+        <div className="p-4">
+          <h3 className="text-lg font-bold text-gray-900 line-clamp-2 mb-1">
+            {product.name}
+          </h3>
 
-      <div className="p-4">
-        <h3 className="text-lg font-bold text-gray-900 line-clamp-2 mb-1">
-          {product.name}
-        </h3>
+          {product.category && (
+            <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-3">
+              <Tag className="h-3.5 w-3.5" />
+              <span>{product.category.name}</span>
+            </div>
+          )}
 
-        {product.category && (
-          <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-3">
-            <Tag className="h-3.5 w-3.5" />
-            <span>{product.category.name}</span>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">
-              Price
-            </p>
-            <p className="text-2xl font-bold text-blue-600">
-              ₹{product.sellingPrice.toLocaleString()}
-            </p>
-            {product.basePrice !== product.sellingPrice && (
-              <p className="text-xs text-gray-400 line-through">
-                ₹{product.basePrice.toLocaleString()}
+          <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">
+                Price
               </p>
+              <p className="text-2xl font-bold text-blue-600">
+                ₹{product.sellingPrice.toLocaleString()}
+              </p>
+              {product.basePrice !== product.sellingPrice && (
+                <p className="text-xs text-gray-400 line-through">
+                  ₹{product.basePrice.toLocaleString()}
+                </p>
+              )}
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500 uppercase tracking-wide">
+                SKU
+              </p>
+              <p className="text-sm font-mono font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                {product.sku}
+              </p>
+            </div>
+          </div>
+
+          {product.hasVariants &&
+            product.variants &&
+            product.variants.length > 0 && (
+              <div className="mb-3 p-2.5 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+                <p className="text-xs font-semibold text-purple-700 flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5" />
+                  {product.variants.length} Variant
+                  {product.variants.length > 1 ? "s" : ""} Available
+                </p>
+                <div className="flex gap-1 mt-1.5 flex-wrap">
+                  {product.variants.slice(0, 3).map((variant, idx) => (
+                    <span
+                      key={idx}
+                      className="text-xs bg-white px-2 py-0.5 rounded border border-purple-200 text-purple-700"
+                    >
+                      {variant.size || variant.color || variant.fabric}
+                    </span>
+                  ))}
+                  {product.variants.length > 3 && (
+                    <span className="text-xs text-purple-600 font-medium">
+                      +{product.variants.length - 3} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => onView(product)}
+              className="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+              title="View Details"
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+            {canUpdate && (
+              <button
+                onClick={() => onEdit(product)}
+                className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center justify-center gap-1"
+                title="Edit Product"
+              >
+                <Edit className="h-4 w-4" />
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={() => onDelete(product.id)}
+                className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+                title="Delete Product"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             )}
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">SKU</p>
-            <p className="text-sm font-mono font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded">
-              {product.sku}
-            </p>
-          </div>
-        </div>
-
-        {product.hasVariants &&
-          product.variants &&
-          product.variants.length > 0 && (
-            <div className="mb-3 p-2.5 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
-              <p className="text-xs font-semibold text-purple-700 flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5" />
-                {product.variants.length} Variant
-                {product.variants.length > 1 ? "s" : ""} Available
-              </p>
-              <div className="flex gap-1 mt-1.5 flex-wrap">
-                {product.variants.slice(0, 3).map((variant, idx) => (
-                  <span
-                    key={idx}
-                    className="text-xs bg-white px-2 py-0.5 rounded border border-purple-200 text-purple-700"
-                  >
-                    {variant.size || variant.color || variant.fabric}
-                  </span>
-                ))}
-                {product.variants.length > 3 && (
-                  <span className="text-xs text-purple-600 font-medium">
-                    +{product.variants.length - 3} more
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={() => onView(product)}
-            className="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1"
-            title="View Details"
-          >
-            <Eye className="h-4 w-4" />
-          </button>
-          {canUpdate && (
-            <button
-              onClick={() => onEdit(product)}
-              className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center justify-center gap-1"
-              title="Edit Product"
-            >
-              <Edit className="h-4 w-4" />
-            </button>
-          )}
-          {canDelete && (
-            <button
-              onClick={() => onDelete(product.id)}
-              className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1"
-              title="Delete Product"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          )}
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  },
+);
+ProductCard.displayName = "ProductCard";
 
-// Step Indicator (unchanged)
+// Step Indicator
 const StepIndicator: React.FC<{
   currentStep: number;
   totalSteps: number;
   stepLabels: string[];
-}> = ({ currentStep, totalSteps, stepLabels }) => {
+}> = React.memo(({ currentStep, totalSteps, stepLabels }) => {
   return (
     <div className="w-full py-3 border-b bg-white/60 backdrop-blur">
       <div className="flex items-center justify-between max-w-4xl mx-auto px-4">
@@ -357,7 +364,8 @@ const StepIndicator: React.FC<{
       </div>
     </div>
   );
-};
+});
+StepIndicator.displayName = "StepIndicator";
 
 // View Product Modal Component
 const ViewProductModal: React.FC<{
@@ -722,14 +730,14 @@ const ViewProductModal: React.FC<{
 };
 
 // Format bytes to human readable
-const formatBytes = (bytes: number): string => {
+export const formatBytes = (bytes: number): string => {
   if (bytes === 0) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 };
 // Calculate total media size across product + all variants
-const calculateTotalMediaSize = (
+export const calculateTotalMediaSize = (
   mediaPreviews: MediaPreviewItem[],
   variantMediaPreviews: Record<number, MediaPreviewItem[]>,
 ): number => {
@@ -752,7 +760,7 @@ const calculateTotalMediaSize = (
 };
 
 // Maximum allowed size (400MB)
-const MAX_MEDIA_SIZE = 400 * 1024 * 1024; // 400MB in bytes
+export const MAX_MEDIA_SIZE = 400 * 1024 * 1024; // 400MB in bytes
 
 const ProductsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -790,16 +798,22 @@ const ProductsPage: React.FC = () => {
     Record<number, AttributeField[]>
   >({});
   const [isHydratingEdit, setIsHydratingEdit] = useState(false);
-  // Add this after variantAttributeFields state
   const [variantAttributeErrors, setVariantAttributeErrors] = useState<
     Record<number, Record<number, string>>
   >({});
 
-  const appendVariantAttribute = (variantIndex: number) => {
+  // ✅ Memoized: only recomputes when the underlying media actually changes,
+  // instead of being recalculated from scratch on every render inside the
+  // (formerly unmemoized) step components.
+  const totalMediaSize = useMemo(
+    () => calculateTotalMediaSize(mediaPreviews, variantMediaPreviews),
+    [mediaPreviews, variantMediaPreviews],
+  );
+
+  const appendVariantAttribute = useCallback((variantIndex: number) => {
     setVariantAttributeFields((prev) => {
       const updated = [...(prev?.[variantIndex] ?? []), { key: "", value: "" }];
 
-      // ✅ update RHF too (still empty record)
       setValue(
         `variants.${variantIndex}.attributes` as any,
         {},
@@ -811,144 +825,147 @@ const ProductsPage: React.FC = () => {
 
       return { ...prev, [variantIndex]: updated };
     });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const removeVariantAttribute = (variantIndex: number, attrIndex: number) => {
-    setVariantAttributeFields((prev) => {
-      const updated = (prev?.[variantIndex] ?? []).filter(
-        (_, i) => i !== attrIndex,
-      );
+  const removeVariantAttribute = useCallback(
+    (variantIndex: number, attrIndex: number) => {
+      setVariantAttributeFields((prev) => {
+        const updated = (prev?.[variantIndex] ?? []).filter(
+          (_, i) => i !== attrIndex,
+        );
 
-      const record: Record<string, string> = {};
-      updated.forEach((a) => {
-        if (a.key?.trim() && a.value?.trim()) {
-          record[a.key.trim()] = a.value.trim();
-        }
+        const record: Record<string, string> = {};
+        updated.forEach((a) => {
+          if (a.key?.trim() && a.value?.trim()) {
+            record[a.key.trim()] = a.value.trim();
+          }
+        });
+
+        setValue(`variants.${variantIndex}.attributes` as any, record, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
+
+        return { ...prev, [variantIndex]: updated };
       });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
-      setValue(`variants.${variantIndex}.attributes` as any, record, {
-        shouldDirty: true,
-        shouldValidate: false,
-      });
+  const updateVariantAttribute = useCallback(
+    (
+      variantIndex: number,
+      attrIndex: number,
+      field: "key" | "value",
+      value: string,
+    ) => {
+      setVariantAttributeFields((prev) => {
+        const current = prev?.[variantIndex] ?? [];
+        const updated = current.map((attr, i) =>
+          i === attrIndex ? { ...attr, [field]: value } : attr,
+        );
 
-      return { ...prev, [variantIndex]: updated };
-    });
-  };
+        if (field === "value") {
+          const currentAttr = updated[attrIndex];
 
-  const updateVariantAttribute = (
-    variantIndex: number,
-    attrIndex: number,
-    field: "key" | "value",
-    value: string,
-  ) => {
-    setVariantAttributeFields((prev) => {
-      const current = prev?.[variantIndex] ?? [];
-      const updated = current.map((attr, i) =>
-        i === attrIndex ? { ...attr, [field]: value } : attr,
-      );
+          if (isColorAttribute(currentAttr.key) && value) {
+            const validation = validateColorWithSuggestions(value);
 
-      // ✅ Validate color fields dynamically
-      if (field === "value") {
-        const currentAttr = updated[attrIndex];
-
-        if (isColorAttribute(currentAttr.key) && value) {
-          const validation = validateColorWithSuggestions(value);
-
-          if (!validation.isValid) {
-            setVariantAttributeErrors((prevErrors) => ({
-              ...prevErrors,
-              [variantIndex]: {
-                ...(prevErrors[variantIndex] || {}),
-                [attrIndex]:
-                  validation.suggestions.length > 0
-                    ? `Invalid color. Did you mean: ${validation.suggestions.slice(0, 3).join(", ")}?`
-                    : "Please enter a valid CSS color name or hex code",
-              },
-            }));
-          } else {
-            // Clear error if valid
-            setVariantAttributeErrors((prevErrors) => {
-              const newErrors = { ...prevErrors };
-              if (newErrors[variantIndex]) {
-                delete newErrors[variantIndex][attrIndex];
-                if (Object.keys(newErrors[variantIndex]).length === 0) {
-                  delete newErrors[variantIndex];
+            if (!validation.isValid) {
+              setVariantAttributeErrors((prevErrors) => ({
+                ...prevErrors,
+                [variantIndex]: {
+                  ...(prevErrors[variantIndex] || {}),
+                  [attrIndex]:
+                    validation.suggestions.length > 0
+                      ? `Invalid color. Did you mean: ${validation.suggestions.slice(0, 3).join(", ")}?`
+                      : "Please enter a valid CSS color name or hex code",
+                },
+              }));
+            } else {
+              setVariantAttributeErrors((prevErrors) => {
+                const newErrors = { ...prevErrors };
+                if (newErrors[variantIndex]) {
+                  delete newErrors[variantIndex][attrIndex];
+                  if (Object.keys(newErrors[variantIndex]).length === 0) {
+                    delete newErrors[variantIndex];
+                  }
                 }
-              }
-              return newErrors;
-            });
+                return newErrors;
+              });
+            }
           }
         }
+
+        const record: Record<string, string> = {};
+        updated.forEach((a) => {
+          if (a.key?.trim() && a.value?.trim()) {
+            record[a.key.trim()] = a.value.trim();
+          }
+        });
+
+        setValue(`variants.${variantIndex}.attributes` as any, record, {
+          shouldDirty: true,
+          shouldValidate: false,
+        });
+
+        return { ...prev, [variantIndex]: updated };
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const handleVariantMediaUpload = useCallback(
+    (variantIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files) return;
+
+      const fileArray = Array.from(files);
+      const currentTotal = calculateTotalMediaSize(
+        mediaPreviews,
+        variantMediaPreviews,
+      );
+      const newFilesSize = fileArray.reduce((sum, file) => sum + file.size, 0);
+
+      if (currentTotal + newFilesSize > MAX_MEDIA_SIZE) {
+        const excess = currentTotal + newFilesSize - MAX_MEDIA_SIZE;
+        alert(
+          `Cannot upload variant media: Would exceed limit by ${formatBytes(excess)}`,
+        );
+        e.target.value = "";
+        return;
       }
 
-      // ✅ convert array -> record (Zod expects record now)
-      const record: Record<string, string> = {};
-      updated.forEach((a) => {
-        if (a.key?.trim() && a.value?.trim()) {
-          record[a.key.trim()] = a.value.trim();
-        }
+      const items: MediaPreviewItem[] = fileArray.map((file) => {
+        const isVideo = file.type.startsWith("video/");
+        return {
+          file,
+          preview: URL.createObjectURL(file),
+          isPrimary: false,
+          id: `${Date.now()}-${variantIndex}-${crypto.randomUUID()}`,
+          type: isVideo ? "VIDEO" : "IMAGE",
+        };
       });
 
-      // ✅ push into react-hook-form
-      setValue(`variants.${variantIndex}.attributes` as any, record, {
-        shouldDirty: true,
-        shouldValidate: false,
+      setVariantMediaPreviews((prev) => {
+        const existing = prev?.[variantIndex] ?? [];
+        const merged = [...existing, ...items];
+
+        const fixed = merged.map((m, i) => ({
+          ...m,
+          isPrimary: i === 0,
+        }));
+
+        return { ...prev, [variantIndex]: fixed };
       });
 
-      return { ...prev, [variantIndex]: updated };
-    });
-  };
-
-  const handleVariantMediaUpload = (
-    variantIndex: number,
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const files = e.target.files;
-    if (!files) return;
-
-    // ✅ NEW — Size validation
-    const fileArray = Array.from(files);
-    const currentTotal = calculateTotalMediaSize(
-      mediaPreviews,
-      variantMediaPreviews,
-    );
-    const newFilesSize = fileArray.reduce((sum, file) => sum + file.size, 0);
-
-    if (currentTotal + newFilesSize > MAX_MEDIA_SIZE) {
-      const excess = currentTotal + newFilesSize - MAX_MEDIA_SIZE;
-      alert(
-        `Cannot upload variant media: Would exceed limit by ${formatBytes(excess)}`,
-      );
       e.target.value = "";
-      return;
-    }
-
-    // ✅ KEEP YOUR ORIGINAL LOGIC
-    const items: MediaPreviewItem[] = fileArray.map((file) => {
-      const isVideo = file.type.startsWith("video/");
-      return {
-        file,
-        preview: URL.createObjectURL(file),
-        isPrimary: false,
-        id: `${Date.now()}-${variantIndex}-${crypto.randomUUID()}`,
-        type: isVideo ? "VIDEO" : "IMAGE",
-      };
-    });
-
-    setVariantMediaPreviews((prev) => {
-      const existing = prev?.[variantIndex] ?? [];
-      const merged = [...existing, ...items];
-
-      const fixed = merged.map((m, i) => ({
-        ...m,
-        isPrimary: i === 0,
-      }));
-
-      return { ...prev, [variantIndex]: fixed };
-    });
-
-    e.target.value = "";
-  };
+    },
+    [mediaPreviews, variantMediaPreviews],
+  );
 
   const canCreate = hasPermission("products", "canCreate");
   const canUpdate = hasPermission("products", "canUpdate");
@@ -1075,38 +1092,60 @@ const ProductsPage: React.FC = () => {
     }
   }, [productType, setValue, isHydratingEdit]);
 
-  const formData = watch();
+  // ✅ PERFORMANCE FIX:
+  // The previous `const formData = watch();` subscribed to EVERY field in the
+  // form, so ProductsPage (and everything under it) re-rendered on every
+  // keystroke anywhere in the wizard — including deep inside variant custom
+  // attributes. That cascaded into ProductFormSteps re-rendering its entire
+  // tree (all variant cards, all media thumbnails, size recalculation) on
+  // every character typed, which is what caused the hang.
+  //
+  // useWatch scoped to just the fields this effect needs means ProductsPage
+  // only re-renders when one of THESE fields changes.
+  const [
+    watchedSellingPrice,
+    watchedBasePrice,
+    watchedWeight,
+    watchedLength,
+    watchedBreadth,
+    watchedHeight,
+    watchedFirstVariantPrice,
+  ] = useWatch({
+    control,
+    name: [
+      "sellingPrice",
+      "basePrice",
+      "weight",
+      "length",
+      "breadth",
+      "height",
+      "variants.0.price",
+    ] as const,
+  }) as [number, number, number, number, number, number, number | undefined];
 
   useEffect(() => {
     if (productType !== "variable") return;
-
-    const variants = formData.variants || [];
-
-    // Only apply for FIRST variant
-    if (variants.length === 0) return;
-
-    const firstVariant = variants[0];
-
     // Prevent overriding if already filled (VERY IMPORTANT)
-    if (firstVariant?.price) return;
+    if (watchedFirstVariantPrice) return;
 
-    setValue("variants.0.price", formData.sellingPrice || 0);
-    setValue("variants.0.basePrice", formData.basePrice || 0);
-    setValue("variants.0.price", formData.sellingPrice || 0);
+    setValue("variants.0.price", watchedSellingPrice || 0);
+    setValue("variants.0.basePrice", watchedBasePrice || 0);
+    setValue("variants.0.sellingPrice", watchedSellingPrice || 0);
 
-    setValue("variants.0.weight", formData.weight || 0);
-    setValue("variants.0.length", formData.length || 0);
-    setValue("variants.0.breadth", formData.breadth || 0);
-    setValue("variants.0.height", formData.height || 0);
+    setValue("variants.0.weight", watchedWeight || 0);
+    setValue("variants.0.length", watchedLength || 0);
+    setValue("variants.0.breadth", watchedBreadth || 0);
+    setValue("variants.0.height", watchedHeight || 0);
   }, [
     productType,
-    formData.basePrice,
-    formData.sellingPrice,
-    formData.sku,
-    formData.weight,
-    formData.length,
-    formData.breadth,
-    formData.height,
+    watchedSellingPrice,
+    watchedBasePrice,
+    watchedWeight,
+    watchedLength,
+    watchedBreadth,
+    watchedHeight,
+    watchedFirstVariantPrice,
+    setValue,
   ]);
 
   const {
@@ -1139,7 +1178,6 @@ const ProductsPage: React.FC = () => {
     },
     enabled: !!editingProduct?.id,
   });
-  console.log("productDetailsData", productDetailsData);
 
   // Populate form when editing
   useEffect(() => {
@@ -1240,7 +1278,7 @@ const ProductsPage: React.FC = () => {
           );
 
           return {
-            attributes: v.attributes ?? undefined, // ✅ ADD THIS
+            attributes: v.attributes ?? undefined,
 
             size: v.size ?? "",
             color: v.color ?? "",
@@ -1266,14 +1304,13 @@ const ProductsPage: React.FC = () => {
       const nextAttrFields: Record<number, AttributeField[]> = {};
 
       (fullProduct.variants ?? []).forEach((v: any, idx: number) => {
-        const attrs = v.attributes ?? {}; // record
+        const attrs = v.attributes ?? {};
 
         nextAttrFields[idx] = Object.entries(attrs).map(([key, value]) => ({
           key,
           value: String(value),
         }));
 
-        // ✅ also push into RHF
         setValue(`variants.${idx}.attributes` as any, attrs);
       });
 
@@ -1303,50 +1340,51 @@ const ProductsPage: React.FC = () => {
     setTimeout(() => setIsHydratingEdit(false), 0);
   }, [productDetailsData, reset, replaceSpecs, replaceMedia, replaceVariants]);
 
-  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  const handleMediaUpload = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files) return;
 
-    // ✅ NEW — Size validation
-    const fileArray = Array.from(files);
-    const currentTotal = calculateTotalMediaSize(
-      mediaPreviews,
-      variantMediaPreviews,
-    );
-    const newFilesSize = fileArray.reduce((sum, file) => sum + file.size, 0);
-
-    if (currentTotal + newFilesSize > MAX_MEDIA_SIZE) {
-      const excess = currentTotal + newFilesSize - MAX_MEDIA_SIZE;
-      alert(
-        `Cannot upload: Would exceed 490MB limit by ${formatBytes(excess)}`,
+      const fileArray = Array.from(files);
+      const currentTotal = calculateTotalMediaSize(
+        mediaPreviews,
+        variantMediaPreviews,
       );
+      const newFilesSize = fileArray.reduce((sum, file) => sum + file.size, 0);
+
+      if (currentTotal + newFilesSize > MAX_MEDIA_SIZE) {
+        const excess = currentTotal + newFilesSize - MAX_MEDIA_SIZE;
+        alert(
+          `Cannot upload: Would exceed 490MB limit by ${formatBytes(excess)}`,
+        );
+        e.target.value = "";
+        return;
+      }
+
+      const items: MediaPreviewItem[] = fileArray.map((file) => {
+        const isVideo = file.type.startsWith("video/");
+        return {
+          file,
+          preview: URL.createObjectURL(file),
+          isPrimary: false,
+          id: `${Date.now()}-${crypto.randomUUID()}`,
+          type: isVideo ? "VIDEO" : "IMAGE",
+        };
+      });
+
+      setMediaPreviews((prev) => {
+        const merged = [...prev, ...items];
+        const fixed = merged.map((m, i) => ({
+          ...m,
+          isPrimary: i === 0,
+        }));
+        return fixed;
+      });
+
       e.target.value = "";
-      return;
-    }
-
-    // ✅ KEEP YOUR ORIGINAL LOGIC
-    const items: MediaPreviewItem[] = fileArray.map((file) => {
-      const isVideo = file.type.startsWith("video/");
-      return {
-        file,
-        preview: URL.createObjectURL(file),
-        isPrimary: false,
-        id: `${Date.now()}-${crypto.randomUUID()}`,
-        type: isVideo ? "VIDEO" : "IMAGE",
-      };
-    });
-
-    setMediaPreviews((prev) => {
-      const merged = [...prev, ...items];
-      const fixed = merged.map((m, i) => ({
-        ...m,
-        isPrimary: i === 0,
-      }));
-      return fixed;
-    });
-
-    e.target.value = "";
-  };
+    },
+    [mediaPreviews, variantMediaPreviews],
+  );
 
   // Upload media to S3 and get URLs
   const uploadProductMediaToS3 = async (): Promise<
@@ -1361,7 +1399,6 @@ const ProductsPage: React.FC = () => {
     const newMedia = mediaPreviews.filter((item) => item.file !== null);
     const existingMedia = mediaPreviews.filter((item) => item.file === null);
 
-    // ✅ no new upload → return existing
     if (newMedia.length === 0) {
       return existingMedia.map((item, index) => ({
         type: item.type,
@@ -1376,8 +1413,6 @@ const ProductsPage: React.FC = () => {
     const uploadToast = toast.loading("Uploading product media...");
 
     try {
-      // ✅ keep same order as previews (drag order already arranged)
-      // ✅ just ensure primary is first if needed
       const sorted = [...mediaPreviews].sort((a, b) => {
         if (a.isPrimary) return -1;
         if (b.isPrimary) return 1;
@@ -1392,7 +1427,6 @@ const ProductsPage: React.FC = () => {
 
       if (!response.success) throw new Error("Failed to upload product media");
 
-      // ✅ map uploaded urls back
       const uploadedMapped = response.files.map((f: any, idx: number) => ({
         type: newSorted[idx].type,
         url: f.url,
@@ -1441,7 +1475,6 @@ const ProductsPage: React.FC = () => {
 
     const variantEntries = Object.entries(variantMediaPreviews ?? {});
 
-    // ✅ if no variant media at all => return empty (no issue)
     if (variantEntries.length === 0) return result;
 
     setIsUploadingMedia(true);
@@ -1452,7 +1485,6 @@ const ProductsPage: React.FC = () => {
         const variantIndex = Number(variantIndexStr);
         const list = previewList ?? [];
 
-        // ✅ keep primary first + keep order
         const sorted = [...list].sort((a, b) => {
           if (a.isPrimary) return -1;
           if (b.isPrimary) return 1;
@@ -1470,7 +1502,6 @@ const ProductsPage: React.FC = () => {
           isPrimary: m.isPrimary,
         }));
 
-        // ✅ no new upload for this variant
         if (newFiles.length === 0) {
           result[variantIndex] = existingMapped;
           continue;
@@ -1512,11 +1543,9 @@ const ProductsPage: React.FC = () => {
   // Form Submit Handler
   const onSubmit: SubmitHandler<CreateProductFormData> = async (data) => {
     try {
-      // ✅ 1) Upload Product Media
       const productMedia =
         mediaPreviews.length > 0 ? await uploadProductMediaToS3() : [];
 
-      // ✅ 2) Upload Variant Media (only if exists)
       const hasAnyVariantMedia = Object.values(variantMediaPreviews ?? {}).some(
         (arr) => (arr ?? []).length > 0,
       );
@@ -1541,7 +1570,6 @@ const ProductsPage: React.FC = () => {
           ...v,
           attributes:
             Object.keys(attributes).length > 0 ? attributes : undefined,
-          // ✅ attach variant media only if available for this variant
           media:
             variantMediaMap?.[idx]?.length > 0
               ? variantMediaMap[idx].map((m: any, order: number) => ({
@@ -1583,25 +1611,26 @@ const ProductsPage: React.FC = () => {
   };
 
   // Other Handlers
-  const handleDelete = (id: string) => {
-    if (window.confirm("Delete this product? This cannot be undone.")) {
-      deleteMutation.mutate(id);
-    }
-  };
+  const handleDelete = useCallback(
+    (id: string) => {
+      if (window.confirm("Delete this product? This cannot be undone.")) {
+        deleteMutation.mutate(id);
+      }
+    },
+    [deleteMutation],
+  );
 
-  const handleView = (product: Product) => {
+  const handleView = useCallback((product: Product) => {
     setSelectedProduct(product);
     setShowViewModal(true);
-  };
+  }, []);
 
-  const handleEdit = (product: Product) => {
+  const handleEdit = useCallback((product: Product) => {
     setEditingProduct(product);
-    console.log("handleEdit", product);
-
     setIsEditProd(true);
     setShowCreateModal(true);
     setCurrentStep(1);
-  };
+  }, []);
 
   const handleCloseModal = () => {
     setShowCreateModal(false);
@@ -1612,7 +1641,7 @@ const ProductsPage: React.FC = () => {
     setEditingProduct(null);
   };
 
-  // ✅ NEW: Step validation function
+  // ✅ Step validation function
   const validateStep = async (step: number): Promise<boolean> => {
     const formValues = watch();
 
@@ -1642,7 +1671,6 @@ const ProductsPage: React.FC = () => {
           basicErrors.push("Selling price cannot be greater than base price");
         }
 
-        // ✅ Shipping Dimensions Validation
         if (!formValues.weight || Number(formValues.weight) <= 0) {
           basicErrors.push("Weight is required and must be greater than 0");
         }
@@ -1691,164 +1719,132 @@ const ProductsPage: React.FC = () => {
 
       case 4: {
         if (productType === "variable") {
-          if (productType === "variable") {
-            if (!formValues.variants || formValues.variants.length === 0) {
-              toast.error("Please add at least one variant");
+          if (!formValues.variants || formValues.variants.length === 0) {
+            toast.error("Please add at least one variant");
+            return false;
+          }
+          let globalMode: "STANDARD" | "CUSTOM" | null = null;
+          for (let i = 0; i < formValues.variants.length; i++) {
+            const variant = formValues.variants[i];
+
+            const hasStandardAttr =
+              !!variant.size?.trim() ||
+              !!variant.color?.trim() ||
+              !!variant.fabric?.trim();
+
+            const attrs = normalizeVariantAttributes(variant);
+
+            const hasCustomAttr =
+              attrs &&
+              Object.entries(attrs).some(
+                ([k, v]) => String(k).trim() && String(v).trim(),
+              );
+
+            const variantLabel =
+              [variant.size, variant.color, variant.fabric]
+                .filter(Boolean)
+                .join(" / ") || `Variant ${i + 1}`;
+
+            if (hasStandardAttr && hasCustomAttr) {
+              toast.error(
+                `${variantLabel}: Use either Standard Attributes OR Custom Attributes, not both.`,
+              );
               return false;
             }
-            let globalMode: "STANDARD" | "CUSTOM" | null = null;
-            for (let i = 0; i < formValues.variants.length; i++) {
-              const variant = formValues.variants[i];
 
-              // ✅ standard attributes
-              const hasStandardAttr =
-                !!variant.size?.trim() ||
-                !!variant.color?.trim() ||
-                !!variant.fabric?.trim();
+            if (!hasStandardAttr && !hasCustomAttr) {
+              toast.error(
+                `${variantLabel}: Please add Standard or Custom attributes.`,
+              );
+              return false;
+            }
 
-              // ✅ custom attributes (variant.attributes)
-              const attrs = normalizeVariantAttributes(variant);
+            const currentMode = hasCustomAttr ? "CUSTOM" : "STANDARD";
 
-              const hasCustomAttr =
-                attrs &&
-                Object.entries(attrs).some(
-                  ([k, v]) => String(k).trim() && String(v).trim(),
-                );
+            if (!globalMode) {
+              globalMode = currentMode;
+            } else if (globalMode !== currentMode) {
+              toast.error(
+                `${variantLabel}: All variants must use ${globalMode} attributes because Variant 1 uses ${globalMode}.`,
+              );
+              return false;
+            }
 
-              const variantLabel =
-                [variant.size, variant.color, variant.fabric]
-                  .filter(Boolean)
-                  .join(" / ") || `Variant ${i + 1}`;
+            if (!variant.price || Number(variant.price) <= 0) {
+              toast.error(`${variantLabel}: Price must be greater than 0`);
+              return false;
+            }
 
-              // ❌ RULE 1 — Cannot have both
-              if (hasStandardAttr && hasCustomAttr) {
-                toast.error(
-                  `${variantLabel}: Use either Standard Attributes OR Custom Attributes, not both.`,
-                );
-                return false;
-              }
+            if (!variant.stock?.warehouseId) {
+              toast.error(`${variantLabel}: Warehouse is required`);
+              return false;
+            }
 
-              // ❌ Must have at least one
-              if (!hasStandardAttr && !hasCustomAttr) {
-                toast.error(
-                  `${variantLabel}: Please add Standard or Custom attributes.`,
-                );
-                return false;
-              }
+            if (
+              variant.stock?.quantity === undefined ||
+              Number(variant.stock.quantity) < 0
+            ) {
+              toast.error(`${variantLabel}: Quantity must be 0 or greater`);
+              return false;
+            }
 
-              // ✅ Determine current mode
-              const currentMode = hasCustomAttr ? "CUSTOM" : "STANDARD";
+            if (!variant.weight || Number(variant.weight) <= 0) {
+              toast.error(`${variantLabel}: Weight must be greater than 0`);
+              return false;
+            }
 
-              // ✅ RULE 2 — Global mode consistency
-              if (!globalMode) {
-                globalMode = currentMode;
-              } else if (globalMode !== currentMode) {
-                toast.error(
-                  `${variantLabel}: All variants must use ${globalMode} attributes because Variant 1 uses ${globalMode}.`,
-                );
-                return false;
-              }
+            if (!variant.length || Number(variant.length) <= 0) {
+              toast.error(`${variantLabel}: Length must be greater than 0`);
+              return false;
+            }
 
-              // ✅ main rule: either standard OR custom must exist
-              if (!hasStandardAttr && !hasCustomAttr) {
-                toast.error(
-                  `${variantLabel}: Please provide at least one attribute (Size/Color/Fabric) OR add custom attributes`,
-                );
-                return false;
-              }
+            if (!variant.breadth || Number(variant.breadth) <= 0) {
+              toast.error(`${variantLabel}: Breadth must be greater than 0`);
+              return false;
+            }
 
-              // ✅ price validation
-              if (!variant.price || Number(variant.price) <= 0) {
-                toast.error(`${variantLabel}: Price must be greater than 0`);
-                return false;
-              }
+            if (!variant.height || Number(variant.height) <= 0) {
+              toast.error(`${variantLabel}: Height must be greater than 0`);
+              return false;
+            }
 
-              // ✅ stock
-              if (!variant.stock?.warehouseId) {
-                toast.error(`${variantLabel}: Warehouse is required`);
-                return false;
-              }
+            if (variant.color && !isValidCSSColor(variant.color)) {
+              const suggestions = getColorSuggestions(variant.color);
+              const suggestionText =
+                suggestions.length > 0
+                  ? ` Did you mean: ${suggestions.slice(0, 3).join(", ")}?`
+                  : "";
 
-              if (
-                variant.stock?.quantity === undefined ||
-                Number(variant.stock.quantity) < 0
-              ) {
-                toast.error(`${variantLabel}: Quantity must be 0 or greater`);
-                return false;
-              }
+              toast.error(
+                `${variantLabel}: "${variant.color}" is not a valid color in the Standard Attributes field.${suggestionText}`,
+              );
+              return false;
+            }
 
-              // ✅ dimensions
-              if (!variant.weight || Number(variant.weight) <= 0) {
-                toast.error(`${variantLabel}: Weight must be greater than 0`);
-                return false;
-              }
+            const variantAttrs = variantAttributeFields[i] || [];
 
-              if (!variant.length || Number(variant.length) <= 0) {
-                toast.error(`${variantLabel}: Length must be greater than 0`);
-                return false;
-              }
+            for (let j = 0; j < variantAttrs.length; j++) {
+              const attr = variantAttrs[j];
 
-              if (!variant.breadth || Number(variant.breadth) <= 0) {
-                toast.error(`${variantLabel}: Breadth must be greater than 0`);
-                return false;
-              }
+              if (attr.key && attr.value) {
+                if (isColorAttribute(attr.key)) {
+                  if (!isValidCSSColor(attr.value)) {
+                    const suggestions = getColorSuggestions(attr.value);
+                    const suggestionText =
+                      suggestions.length > 0
+                        ? ` Did you mean: ${suggestions.slice(0, 3).join(", ")}?`
+                        : "";
 
-              if (!variant.height || Number(variant.height) <= 0) {
-                toast.error(`${variantLabel}: Height must be greater than 0`);
-                return false;
-              }
-
-              // ✅ VALIDATE LEGACY COLOR FIELD
-              if (variant.color && !isValidCSSColor(variant.color)) {
-                const suggestions = getColorSuggestions(variant.color);
-                const variantLabel =
-                  [variant.size, variant.color, variant.fabric]
-                    .filter(Boolean)
-                    .join(" / ") || `Variant ${i + 1}`;
-
-                const suggestionText =
-                  suggestions.length > 0
-                    ? ` Did you mean: ${suggestions.slice(0, 3).join(", ")}?`
-                    : "";
-
-                toast.error(
-                  `${variantLabel}: "${variant.color}" is not a valid color in the Standard Attributes field.${suggestionText}`,
-                );
-                return false;
-              }
-
-              // Validate custom attributes - especially colors
-              const variantAttrs = variantAttributeFields[i] || [];
-
-              for (let j = 0; j < variantAttrs.length; j++) {
-                const attr = variantAttrs[j];
-                const variantLabel =
-                  [variant.size, variant.color, variant.fabric]
-                    .filter(Boolean)
-                    .join(" / ") || `Variant ${i + 1}`;
-
-                if (attr.key && attr.value) {
-                  // Validate color attributes dynamically
-                  if (isColorAttribute(attr.key)) {
-                    if (!isValidCSSColor(attr.value)) {
-                      const suggestions = getColorSuggestions(attr.value);
-                      const suggestionText =
-                        suggestions.length > 0
-                          ? ` Did you mean: ${suggestions.slice(0, 3).join(", ")}?`
-                          : "";
-
-                      toast.error(
-                        `${variantLabel}: "${attr.value}" is not a valid color.${suggestionText}`,
-                      );
-                      return false;
-                    }
+                    toast.error(
+                      `${variantLabel}: "${attr.value}" is not a valid color.${suggestionText}`,
+                    );
+                    return false;
                   }
                 }
               }
             }
           }
         } else {
-          // ✅ simple product
           if (!formValues.stock?.warehouseId) {
             toast.error("Please select a warehouse");
             return false;
@@ -1871,7 +1867,6 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  // ✅ UPDATED: Next step with validation
   const nextStep = async () => {
     const isValid = await validateStep(currentStep);
     if (!isValid) return;
@@ -1890,15 +1885,16 @@ const ProductsPage: React.FC = () => {
 
   const filteredProducts = productsData?.products || [];
 
-  const stepLabels = [
-    "Type",
-    "Basic Info",
-    "Media",
-    productType === "variable" ? "Variants" : "Stock",
-    "Review",
-  ];
-  console.log("errors", errors);
-  console.log("variants", watch("variants"));
+  const stepLabels = useMemo(
+    () => [
+      "Type",
+      "Basic Info",
+      "Media",
+      productType === "variable" ? "Variants" : "Stock",
+      "Review",
+    ],
+    [productType],
+  );
 
   return (
     <MainLayout>
@@ -1961,10 +1957,7 @@ const ProductsPage: React.FC = () => {
                 </p>
                 <button
                   onClick={() => {
-                    // Navigate to warehouse page - adjust based on your routing setup
-                    // For react-router: navigate('/admin/warehouses')
-                    // For Next.js: router.push('/admin/warehouses')
-                    window.location.href = "/admin/warehouses"; // Fallback option
+                    window.location.href = "/admin/warehouses";
                   }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg transition-all shadow-md hover:shadow-lg font-medium"
                 >
@@ -2151,9 +2144,7 @@ const ProductsPage: React.FC = () => {
 
         {/* Create/Edit Product Modal */}
         {showCreateModal && (
-          // <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="fixed inset-0 bg-black/50 z-50">
-            {/* <div className="bg-white rounded-xl shadow-2xl max-w-7xl w-full my-8"> */}
             <div className="bg-white w-full h-full flex flex-col">
               <div className="sticky top-0">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
@@ -2189,7 +2180,6 @@ const ProductsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* <div className="p-6 h-[50vh] overflow-y-auto"> */}
               <div className="flex-1 overflow-y-auto p-6">
                 <form className="space-y-6">
                   <ProductFormSteps
@@ -2214,7 +2204,6 @@ const ProductsPage: React.FC = () => {
                     handleMediaUpload={handleMediaUpload}
                     watch={watch}
                     setValue={setValue}
-                    // ✅ NEW PROPS FIX
                     variantMediaPreviews={variantMediaPreviews}
                     setVariantMediaPreviews={setVariantMediaPreviews}
                     handleVariantMediaUpload={handleVariantMediaUpload}
@@ -2224,6 +2213,8 @@ const ProductsPage: React.FC = () => {
                     removeVariantAttribute={removeVariantAttribute}
                     updateVariantAttribute={updateVariantAttribute}
                     isEditProd={isEditProd}
+                    // ✅ pre-computed & memoized, no more recompute-on-every-render
+                    totalMediaSize={totalMediaSize}
                   />
 
                   <div className="sticky bottom-0 flex justify-between pt-6 bg-gradient-to-t from-white via-white to-transparent pb-4">
@@ -2324,7 +2315,6 @@ const ProductsPage: React.FC = () => {
 export default ProductsPage;
 
 export const normalizeVariantAttributes = (variant: any) => {
-  // if already proper record -> return
   if (
     variant?.attributes &&
     typeof variant.attributes === "object" &&
@@ -2333,7 +2323,6 @@ export const normalizeVariantAttributes = (variant: any) => {
     return variant.attributes;
   }
 
-  // if UI uses customAttributes array [{key,value}]
   const arr =
     variant?.customAttributes ??
     variant?.dynamicAttributes ??
