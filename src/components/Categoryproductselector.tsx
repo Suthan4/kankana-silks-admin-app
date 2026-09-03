@@ -1,255 +1,3 @@
-// import React, { useState, useMemo } from "react";
-// import { MultiSelectAutocomplete } from "./Multiselectautocomplete";
-// import { Tag, Package, Info } from "lucide-react";
-
-// interface Product {
-//   id: string;
-//   name: string;
-//   sellingPrice: number;
-//   media?: Array<{ url: string }>;
-//   category?: { id: string; name: string };
-// }
-
-// interface Category {
-//   id: string;
-//   name: string;
-//   children?: Array<{ id: string; name: string }>;
-// }
-
-// interface CategoryProductSelectorProps {
-//   products: Product[];
-//   categories: Category[];
-//   selectedProductIds: string[];
-//   selectedCategoryIds: string[];
-//   onProductsChange: (productIds: string[]) => void;
-//   onCategoriesChange: (categoryIds: string[]) => void;
-//   isLoading?: boolean;
-// }
-
-// type SelectionMode = "products" | "categories" | "both";
-
-// export const CategoryProductSelector: React.FC<
-//   CategoryProductSelectorProps
-// > = ({
-//   products,
-//   categories,
-//   selectedProductIds,
-//   selectedCategoryIds,
-//   onProductsChange,
-//   onCategoriesChange,
-//   isLoading = false,
-// }) => {
-//   const [selectionMode, setSelectionMode] = useState<SelectionMode>("both");
-
-//   // Get products filtered by selected categories
-//   const filteredProducts = useMemo(() => {
-//     if (selectedCategoryIds.length === 0) {
-//       return products;
-//     }
-
-//     return products.filter((product) =>
-//       selectedCategoryIds.includes(product.category?.id || "")
-//     );
-//   }, [products, selectedCategoryIds]);
-
-//   // Prepare options for autocomplete
-//   const productOptions = useMemo(() => {
-//     const productsToShow =
-//       selectionMode === "categories" ? filteredProducts : products;
-
-//     return productsToShow.map((product) => ({
-//       id: product.id,
-//       label: product.name,
-//       subtitle: `₹${product.sellingPrice} • ${
-//         product.category?.name || "No category"
-//       }`,
-//       imageUrl: product.media?.[0]?.url,
-//     }));
-//   }, [products, filteredProducts, selectionMode]);
-
-//   const categoryOptions = useMemo(() => {
-//     return categories.map((category) => ({
-//       id: category.id,
-//       label: category.name,
-//       subtitle:
-//         category.children && category.children.length > 0
-//           ? `${category.children.length} subcategories`
-//           : undefined,
-//     }));
-//   }, [categories]);
-
-//   // Auto-select products when categories are selected
-//   const handleCategoryChange = (categoryIds: string[]) => {
-//     onCategoriesChange(categoryIds);
-
-//     if (selectionMode === "categories") {
-//       // Auto-select all products from selected categories
-//       const categoryProductIds = products
-//         .filter((p) => categoryIds.includes(p.category?.id || ""))
-//         .map((p) => p.id);
-
-//       onProductsChange(categoryProductIds);
-//     }
-//   };
-
-//   // Get selected items info
-//   const selectedCategoriesCount = selectedCategoryIds.length;
-//   const selectedProductsCount = selectedProductIds.length;
-//   const categoryProductsCount = filteredProducts.length;
-
-//   return (
-//     <div className="space-y-6">
-//       {/* Selection Mode */}
-//       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-//         <label className="block text-sm font-semibold text-gray-700 mb-3">
-//           Selection Mode
-//         </label>
-//         <div className="grid grid-cols-3 gap-2">
-//           <button
-//             type="button"
-//             onClick={() => setSelectionMode("categories")}
-//             className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-//               selectionMode === "categories"
-//                 ? "border-blue-600 bg-blue-50 text-blue-700"
-//                 : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
-//             }`}
-//           >
-//             <Tag className="h-4 w-4 mx-auto mb-1" />
-//             Categories Only
-//           </button>
-//           <button
-//             type="button"
-//             onClick={() => setSelectionMode("products")}
-//             className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-//               selectionMode === "products"
-//                 ? "border-blue-600 bg-blue-50 text-blue-700"
-//                 : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
-//             }`}
-//           >
-//             <Package className="h-4 w-4 mx-auto mb-1" />
-//             Products Only
-//           </button>
-//           <button
-//             type="button"
-//             onClick={() => setSelectionMode("both")}
-//             className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-//               selectionMode === "both"
-//                 ? "border-blue-600 bg-blue-50 text-blue-700"
-//                 : "border-gray-300 bg-white text-gray-700 hover:border-gray-400"
-//             }`}
-//           >
-//             <Info className="h-4 w-4 mx-auto mb-1" />
-//             Both
-//           </button>
-//         </div>
-//         <div className="mt-3 text-xs text-gray-600">
-//           {selectionMode === "categories" && (
-//             <p>
-//               🎯 Select categories to automatically include all their products
-//             </p>
-//           )}
-//           {selectionMode === "products" && (
-//             <p>🎯 Manually select individual products</p>
-//           )}
-//           {selectionMode === "both" && (
-//             <p>🎯 Select categories first, then add specific products</p>
-//           )}
-//         </div>
-//       </div>
-
-//       {/* Categories Selection */}
-//       {(selectionMode === "categories" || selectionMode === "both") && (
-//         <div>
-//           <MultiSelectAutocomplete
-//             label="Categories"
-//             options={categoryOptions}
-//             value={selectedCategoryIds}
-//             onChange={handleCategoryChange}
-//             placeholder="Search categories..."
-//             isLoading={isLoading}
-//             emptyMessage="No categories available"
-//           />
-
-//           {selectedCategoriesCount > 0 && selectionMode === "categories" && (
-//             <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-//               <p className="text-sm text-blue-700">
-//                 ✨ {categoryProductsCount} products from{" "}
-//                 {selectedCategoriesCount} categor
-//                 {selectedCategoriesCount !== 1 ? "ies" : "y"} will be included
-//               </p>
-//             </div>
-//           )}
-//         </div>
-//       )}
-
-//       {/* Products Selection */}
-//       {(selectionMode === "products" || selectionMode === "both") && (
-//         <div>
-//           <MultiSelectAutocomplete
-//             label={
-//               selectionMode === "both" && selectedCategoryIds.length > 0
-//                 ? `Products (filtered by ${selectedCategoriesCount} categor${
-//                     selectedCategoriesCount !== 1 ? "ies" : "y"
-//                   })`
-//                 : "Products"
-//             }
-//             options={productOptions}
-//             value={selectedProductIds}
-//             onChange={onProductsChange}
-//             placeholder="Search products..."
-//             isLoading={isLoading}
-//             showImages={true}
-//             emptyMessage={
-//               selectedCategoryIds.length > 0 && selectionMode === "both"
-//                 ? "No products in selected categories"
-//                 : "No products available"
-//             }
-//           />
-
-//           {selectionMode === "both" &&
-//             selectedCategoryIds.length > 0 &&
-//             filteredProducts.length > 0 && (
-//               <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-//                 <p className="text-sm text-green-700">
-//                   ℹ️ Showing {categoryProductsCount} products from selected
-//                   categories
-//                 </p>
-//               </div>
-//             )}
-//         </div>
-//       )}
-
-//       {/* Summary */}
-//       {(selectedCategoriesCount > 0 || selectedProductsCount > 0) && (
-//         <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg border border-purple-200">
-//           <h4 className="text-sm font-semibold text-gray-900 mb-2">
-//             Selection Summary
-//           </h4>
-//           <div className="space-y-1 text-sm text-gray-700">
-//             {selectedCategoriesCount > 0 && (
-//               <p>
-//                 📁 {selectedCategoriesCount} categor
-//                 {selectedCategoriesCount !== 1 ? "ies" : "y"} selected
-//               </p>
-//             )}
-//             {selectedProductsCount > 0 && (
-//               <p>
-//                 📦 {selectedProductsCount} product
-//                 {selectedProductsCount !== 1 ? "s" : ""} selected
-//               </p>
-//             )}
-//             {selectionMode === "categories" && (
-//               <p className="text-xs text-gray-600 mt-2">
-//                 Note: Products are automatically included from selected
-//                 categories
-//               </p>
-//             )}
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
 import React, { useState, useMemo } from "react";
 import { MultiSelectAutocomplete } from "./Multiselectautocomplete";
 import { Tag, Package, Info, ChevronRight, ChevronDown } from "lucide-react";
@@ -266,7 +14,7 @@ interface Product {
 interface Category {
   id: string;
   name: string;
-parentId?: string | null;
+  parentId?: string | null;
   children?: Category[];
   _count?: {
     products: number;
@@ -302,9 +50,10 @@ const getAllDescendantIds = (category: Category): string[] => {
 const hasProducts = (category: Category, products: Product[]): boolean => {
   // Check if category itself has products
   const directProducts = products.some(
-    (p) => p.categoryId === category.id || p.category?.id === category.id
+    (p) => p.categoryId === category.id || p.category?.id === category.id,
   );
-
+  console.log("directProducts", directProducts);
+  console.log("category.children", category.children);
   if (directProducts) return true;
 
   // Check children recursively
@@ -318,11 +67,11 @@ const hasProducts = (category: Category, products: Product[]): boolean => {
 // Helper function to get product count for category and its descendants
 const getCategoryProductCount = (
   category: Category,
-  products: Product[]
+  products: Product[],
 ): number => {
   const allCategoryIds = getAllDescendantIds(category);
   return products.filter((p) =>
-    allCategoryIds.includes(p.categoryId || p.category?.id || "")
+    allCategoryIds.includes(p.categoryId || p.category?.id || ""),
   ).length;
 };
 
@@ -353,7 +102,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   // Check if all children are selected (for indeterminate state)
   const allDescendantIds = getAllDescendantIds(category);
   const selectedDescendantIds = allDescendantIds.filter((id) =>
-    selectedCategoryIds.includes(id)
+    selectedCategoryIds.includes(id),
   );
   const isIndeterminate =
     selectedDescendantIds.length > 0 &&
@@ -372,8 +121,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           isDisabled
             ? "opacity-50 cursor-not-allowed bg-gray-50"
             : isSelected
-            ? "bg-blue-50 hover:bg-blue-100"
-            : "hover:bg-gray-50 cursor-pointer"
+              ? "bg-blue-50 hover:bg-blue-100"
+              : "hover:bg-gray-50 cursor-pointer"
         }`}
         style={{ paddingLeft: `${level * 24 + 12}px` }}
       >
@@ -407,10 +156,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({
             isDisabled
               ? "border-gray-300 bg-gray-100 cursor-not-allowed"
               : isSelected
-              ? "bg-blue-600 border-blue-600"
-              : isIndeterminate
-              ? "bg-blue-200 border-blue-400"
-              : "border-gray-300 hover:border-blue-400"
+                ? "bg-blue-600 border-blue-600"
+                : isIndeterminate
+                  ? "bg-blue-200 border-blue-400"
+                  : "border-gray-300 hover:border-blue-400"
           }`}
         >
           {isSelected && (
@@ -442,8 +191,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 isDisabled
                   ? "text-gray-400"
                   : isSelected
-                  ? "text-blue-700"
-                  : "text-gray-900"
+                    ? "text-blue-700"
+                    : "text-gray-900"
               }`}
             >
               {category.name}
@@ -461,8 +210,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               isDisabled
                 ? "bg-gray-200 text-gray-500"
                 : productCount > 0
-                ? "bg-green-100 text-green-700"
-                : "bg-gray-200 text-gray-500"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-200 text-gray-500"
             }`}
           >
             {productCount} {productCount === 1 ? "product" : "products"}
@@ -500,7 +249,7 @@ export const CategoryProductSelector: React.FC<
   onCategoriesChange,
   isLoading = false,
 }) => {
-  const [selectionMode, setSelectionMode] = useState<SelectionMode>("both");
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>("products");
 
   // Get products filtered by selected categories
   const filteredProducts = useMemo(() => {
@@ -533,8 +282,8 @@ export const CategoryProductSelector: React.FC<
 
     return products.filter((product) =>
       allSelectedCategoryIds.has(
-        product.categoryId || product.category?.id || ""
-      )
+        product.categoryId || product.category?.id || "",
+      ),
     );
   }, [products, selectedCategoryIds, categories]);
 
@@ -575,7 +324,7 @@ export const CategoryProductSelector: React.FC<
     } else {
       // Remove all descendant IDs
       newSelectedIds = selectedCategoryIds.filter(
-        (id) => !validIds.includes(id)
+        (id) => !validIds.includes(id),
       );
     }
 
@@ -585,7 +334,7 @@ export const CategoryProductSelector: React.FC<
     if (selectionMode === "categories") {
       const categoryProductIds = products
         .filter((p) =>
-          newSelectedIds.includes(p.categoryId || p.category?.id || "")
+          newSelectedIds.includes(p.categoryId || p.category?.id || ""),
         )
         .map((p) => p.id);
       onProductsChange(categoryProductIds);
@@ -629,16 +378,16 @@ export const CategoryProductSelector: React.FC<
 
     collectChildIds(categories);
 
-      // 2) Remove categories that are already present as a child in the tree
-      const uniqueRoots = categories.filter((cat) => {
-        // prefer actual root (parentId null)
-        if (cat.parentId === null) return true;
+    // 2) Remove categories that are already present as a child in the tree
+    const uniqueRoots = categories.filter((cat) => {
+      // prefer actual root (parentId null)
+      if (cat.parentId === null) return true;
 
-        // if this category is already inside parent's children[] => don't show as root
-        if (childIds.has(cat.id)) return false;
+      // if this category is already inside parent's children[] => don't show as root
+      if (childIds.has(cat.id)) return false;
 
-        return true;
-      });
+      return true;
+    });
 
     // 3) Dedupe by ID (extra safety)
     const map = new Map<string, Category>();
@@ -646,7 +395,6 @@ export const CategoryProductSelector: React.FC<
 
     return Array.from(map.values());
   }, [categories]);
-
 
   return (
     <div className="space-y-6">
@@ -656,7 +404,7 @@ export const CategoryProductSelector: React.FC<
           Selection Mode
         </label>
         <div className="grid grid-cols-3 gap-2">
-          <button
+          {/* <button
             type="button"
             onClick={() => setSelectionMode("categories")}
             className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
@@ -667,7 +415,7 @@ export const CategoryProductSelector: React.FC<
           >
             <Tag className="h-4 w-4 mx-auto mb-1" />
             Categories Only
-          </button>
+          </button> */}
           <button
             type="button"
             onClick={() => setSelectionMode("products")}
@@ -678,9 +426,9 @@ export const CategoryProductSelector: React.FC<
             }`}
           >
             <Package className="h-4 w-4 mx-auto mb-1" />
-            Products Only
+            Products
           </button>
-          <button
+          {/* <button
             type="button"
             onClick={() => setSelectionMode("both")}
             className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
@@ -691,7 +439,7 @@ export const CategoryProductSelector: React.FC<
           >
             <Info className="h-4 w-4 mx-auto mb-1" />
             Both
-          </button>
+          </button> */}
         </div>
         <div className="mt-3 text-xs text-gray-600">
           {selectionMode === "categories" && (
