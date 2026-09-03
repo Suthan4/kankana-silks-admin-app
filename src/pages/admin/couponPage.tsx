@@ -16,7 +16,7 @@ import {
   Calendar,
   TrendingUp,
   Users,
-  DollarSign,
+  IndianRupee,
   Percent,
   Tag,
   AlertCircle,
@@ -217,7 +217,7 @@ const CouponCard: React.FC<{
             </div>
           ) : (
             <div className="flex items-center gap-1 text-green-600">
-              <DollarSign className="h-4 w-4" />
+              <IndianRupee className="h-4 w-4" />
               <span className="text-lg font-bold">₹{coupon.discountValue}</span>
             </div>
           )}
@@ -486,17 +486,18 @@ const CouponsPage: React.FC = () => {
       userEligibility,
       eligibleUserIds: selectedUserIds,
 
-      // ✅ convert null to undefined (important)
       newUserDays: newUserDays ?? undefined,
       maxDiscountAmount: maxDiscountAmount ?? undefined,
+
+      // Convert datetime-local → ISO datetime
+      validFrom: new Date(data.validFrom).toISOString(),
+      validUntil: new Date(data.validUntil).toISOString(),
     };
 
     if (editingCoupon) {
       const updatePayload: UpdateCouponData = {
         ...payload,
         discountType: payload.discountType as DiscountType,
-        validFrom: new Date(data.validFrom).toISOString(),
-        validUntil: new Date(data.validUntil).toISOString(),
       };
 
       updateMutation.mutate({
@@ -830,7 +831,7 @@ const CouponsPage: React.FC = () => {
                         {discountType === "PERCENTAGE" ? (
                           <Percent className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                         ) : (
-                          <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                         )}
                         <input
                           {...register("discountValue")}
