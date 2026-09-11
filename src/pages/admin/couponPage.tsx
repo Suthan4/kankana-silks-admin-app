@@ -419,6 +419,7 @@ const CouponsPage: React.FC = () => {
       toast.success("Coupon created successfully!");
     },
     onError: (error: any) => {
+      console.log("error", error);
       toast.error(error?.response?.data?.message || "Failed to create coupon");
     },
   });
@@ -487,8 +488,11 @@ const CouponsPage: React.FC = () => {
       eligibleUserIds: selectedUserIds,
 
       newUserDays: newUserDays ?? undefined,
-      maxDiscountAmount: maxDiscountAmount ?? undefined,
-
+      // 🔧 treat 0 as "no limit" so it's never sent as an invalid positive-only value
+      maxDiscountAmount:
+        maxDiscountAmount && maxDiscountAmount > 0
+          ? maxDiscountAmount
+          : undefined,
       // Convert datetime-local → ISO datetime
       validFrom: new Date(data.validFrom).toISOString(),
       validUntil: new Date(data.validUntil).toISOString(),

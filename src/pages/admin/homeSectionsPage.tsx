@@ -1764,7 +1764,7 @@ export const HomeSectionsPage: React.FC = () => {
                     accept={
                       currentMedia.type === "IMAGE" ? "image/*" : "video/*"
                     }
-                    maxSizeMB={currentMedia.type === "IMAGE" ? 10 : 50}
+                    maxSizeMB={currentMedia.type === "IMAGE" ? 20 : 60}
                   />
                 </div>
 
@@ -1779,7 +1779,7 @@ export const HomeSectionsPage: React.FC = () => {
                         setCurrentMedia({ ...currentMedia, file })
                       }
                       accept="image/*"
-                      maxSizeMB={40}
+                      maxSizeMB={60}
                     />
                   </div>
                 )}
