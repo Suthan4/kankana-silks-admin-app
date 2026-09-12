@@ -39,6 +39,11 @@ export const productApi = {
     return apiCall("GET", `/products/${id}`);
   },
 
+  // Alias getProductById
+  getProductById: async (id: string): Promise<ApiResponse<Product>> => {
+    return apiCall("GET", `/products/${id}`);
+  },
+
   // Get product by slug
   getProductBySlug: async (slug: string): Promise<ApiResponse<Product>> => {
     return apiCall("GET", `/products/slug/${slug}`);
@@ -57,6 +62,14 @@ export const productApi = {
     data: UpdateProductData
   ): Promise<ApiResponse<Product>> => {
     return apiCall("PUT", `/products/${id}`, data);
+  },
+
+  // Partial update product (Admin only)
+  patchProduct: async (
+    id: string,
+    data: any
+  ): Promise<ApiResponse<Product>> => {
+    return apiCall("PATCH", `/products/${id}`, data);
   },
 
   // Delete product (Admin only)

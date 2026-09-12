@@ -24,6 +24,12 @@ export interface DeleteResponse {
   message: string;
 }
 
+export interface PresignedUrlResponse {
+  uploadUrl: string;
+  publicUrl: string;
+}
+
+
 class S3Api {
   /**
    * Upload a single file to S3
@@ -97,6 +103,23 @@ class S3Api {
 
     return response.data;
   }
+
+  /**
+   * Request a presigned PUT URL for direct browser-to-storage upload.
+   * Returns { uploadUrl, publicUrl }.
+   */
+  async getPresignedUrl(
+    fileName: string,
+    fileType: string,
+    folder: string = "products",
+  ): Promise<PresignedUrlResponse> {
+    const response = await axios.post<{ data: PresignedUrlResponse }>(
+      `${API_BASE_URL}/presigned-url`,
+      { fileName, fileType, folder },
+    );
+    return response.data.data;
+  }
 }
+
 
 export const s3Api = new S3Api();

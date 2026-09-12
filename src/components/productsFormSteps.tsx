@@ -42,7 +42,7 @@ import {
   isColorAttribute,
 } from "@/lib/utils/colorValidation";
 import { s3Api } from "@/lib/api/s3.api";
-import { normalizeVariantAttributes } from "@/pages/admin/products/productsPage";
+import { normalizeVariantAttributes } from "@/lib/utils/productFormUtils";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import DOMPurify from "dompurify";
 import MediaEditorModal from "@/components/ui/Mediaeditormodal";
