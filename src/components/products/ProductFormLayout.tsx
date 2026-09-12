@@ -1,9 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  FormProvider,
-  useFieldArray,
-  useForm,
-} from "react-hook-form";
+import { FormProvider, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowLeft,
@@ -63,7 +59,7 @@ function isRealVariant(v: any): boolean {
   if (attrs && typeof attrs === "object") {
     const keys = Object.keys(attrs);
     const hasRealAttrs = keys.some(
-      (k) => k.toLowerCase() !== "default" && k.toLowerCase() !== "isdefault"
+      (k) => k.toLowerCase() !== "default" && k.toLowerCase() !== "isdefault",
     );
     if (hasRealAttrs) return true;
   }
@@ -78,7 +74,9 @@ function isRealVariant(v: any): boolean {
 }
 
 // Helper to extract real variant options from loaded variants
-function extractOptionsFromVariants(variantsList: any[]): { name: string; values: string[] }[] {
+function extractOptionsFromVariants(
+  variantsList: any[],
+): { name: string; values: string[] }[] {
   const optionsMap = new Map<string, Set<string>>();
 
   variantsList.forEach((v) => {
@@ -195,8 +193,13 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
   });
 
   // 2. Navigation Guard
-  const { isBlocked, confirmLeave, cancelLeave, guardedAction, guardedNavigate } =
-    useFormGuard(isDirty);
+  const {
+    isBlocked,
+    confirmLeave,
+    cancelLeave,
+    guardedAction,
+    guardedNavigate,
+  } = useFormGuard(isDirty);
 
   // 3. TanStack Query integration
   const { data: fetchedProductData, isLoading: isLoadingProduct } =
@@ -219,9 +222,12 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
     const variantsList = prod.variants || [];
     // Dynamic toggle condition: only true if prod.hasVariants is true AND product has real user-defined variants
     const realVariants = variantsList.filter(isRealVariant);
-    const hasExistingVariants = Boolean(prod.hasVariants) && realVariants.length > 0;
+    const hasExistingVariants =
+      Boolean(prod.hasVariants) && realVariants.length > 0;
     // Dynamically extract real options from real variants without dummy mock data
-    const extractedOptions = hasExistingVariants ? extractOptionsFromVariants(realVariants) : [];
+    const extractedOptions = hasExistingVariants
+      ? extractOptionsFromVariants(realVariants)
+      : [];
 
     reset({
       hasVariants: hasExistingVariants,
@@ -246,33 +252,110 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
         lowStockThreshold: Number(prod.stock?.[0]?.lowStockThreshold || 5),
       },
       options: extractedOptions,
-      variants: hasExistingVariants ? realVariants.map((v) => {
-        const vStock = prod.stock?.find((s) => s.variantId === v.id);
-        return {
-          id: v.id,
-          variantId: v.id,
-          sku: v.sku || "",
-          attributes: (v.attributes as Record<string, string>) || {},
-          basePrice: Number(v.basePrice || prod.basePrice || 0),
-          sellingPrice: Number(v.sellingPrice || prod.sellingPrice || 0),
-          price: Number(v.price || prod.sellingPrice || 0),
-          weight: Number(v.weight || prod.weight || 0.5),
-          length: Number(v.length || prod.length || 10),
-          breadth: Number(v.breadth || prod.breadth || 10),
-          height: Number(v.height || prod.height || 5),
-          media: (v.media || []).map((m: any) => ({
-            url: m.url,
-            type: m.type || "IMAGE",
-            order: m.order || 0,
-            isActive: true,
-          })),
-          stock: {
-            warehouseId: vStock?.warehouseId || warehouses[0]?.id || "",
-            quantity: Number(vStock?.quantity || 0),
-            lowStockThreshold: Number(vStock?.lowStockThreshold || 5),
-          },
-        };
-      }) : [],
+      variants: hasExistingVariants
+        ? realVariants.map((v, vIdx) => {
+            const vStock = prod.stock?.find((s) => s.variantId === v.id);
+
+            // Extract and normalize real attributes (merging dynamic attributes, color, size, fabric)
+            const mergedAttributes: Record<string, string> = {};
+            if (v.attributes && typeof v.attributes === "object") {
+              Object.entries(v.attributes).forEach(([key, val]) => {
+                const cleanKey = key?.trim();
+                if (
+                  cleanKey &&
+                  cleanKey.toLowerCase() !== "default" &&
+                  cleanKey.toLowerCase() !== "isdefault" &&
+                  val !== undefined &&
+                  val !== null &&
+                  val !== "" &&
+                  val !== true &&
+                  val !== false &&
+                  String(val).toLowerCase() !== "default"
+                ) {
+                  mergedAttributes[cleanKey] = String(val);
+                }
+              });
+            }
+            if (
+              v.color &&
+              v.color.toLowerCase() !== "default" &&
+              !mergedAttributes["Color"] &&
+              !mergedAttributes["color"]
+            ) {
+              mergedAttributes["Color"] = v.color;
+            }
+            if (
+              v.size &&
+              v.size.toLowerCase() !== "default" &&
+              !mergedAttributes["Size"] &&
+              !mergedAttributes["size"]
+            ) {
+              mergedAttributes["Size"] = v.size;
+            }
+            if (
+              v.fabric &&
+              v.fabric.toLowerCase() !== "default" &&
+              !mergedAttributes["Fabric"] &&
+              !mergedAttributes["fabric"]
+            ) {
+              mergedAttributes["Fabric"] = v.fabric;
+            }
+
+            // Determine default variant:
+            const hasExplicitDefault = realVariants.some(
+              (rv) =>
+                rv.isDefault ||
+                rv.attributes?.isDefault ||
+                (prod.defaultVariantId && rv.id === prod.defaultVariantId),
+            );
+            const isDefault = Boolean(
+              v.isDefault ||
+              v.attributes?.isDefault === true ||
+              (prod.defaultVariantId && v.id === prod.defaultVariantId) ||
+              (!hasExplicitDefault && vIdx === 0),
+            );
+
+            return {
+              id: v.id,
+              variantId: v.id,
+              sku: v.sku || "",
+              isDefault,
+              attributes: mergedAttributes,
+              size:
+                v.size || mergedAttributes["Size"] || mergedAttributes["size"],
+              color:
+                v.color ||
+                mergedAttributes["Color"] ||
+                mergedAttributes["color"],
+              fabric:
+                v.fabric ||
+                mergedAttributes["Fabric"] ||
+                mergedAttributes["fabric"],
+              basePrice: Number(v.basePrice || prod.basePrice || 0),
+              sellingPrice: Number(v.sellingPrice || prod.sellingPrice || 0),
+              price: Number(v.price || prod.sellingPrice || 0),
+              weight: Number(v.weight || prod.weight || 0.5),
+              length: Number(v.length || prod.length || 10),
+              breadth: Number(v.breadth || prod.breadth || 10),
+              height: Number(v.height || prod.height || 5),
+              media: (v.media || []).map((m: any, mIdx: number) => ({
+                id: m.id || crypto.randomUUID(),
+                url: m.url,
+                preview: m.url || m.thumbnailUrl,
+                type: m.type || "IMAGE",
+                order: m.order ?? mIdx,
+                isActive: m.isActive ?? true,
+                isPrimary: m.order === 0 || mIdx === 0,
+                altText: m.altText || "",
+              })),
+              stock: {
+                warehouseId: vStock?.warehouseId || warehouses[0]?.id || "",
+                quantity: Number(vStock?.quantity || 0),
+                lowStockThreshold: Number(vStock?.lowStockThreshold || 5),
+              },
+            };
+          })
+        : [],
       specifications: (prod.specifications || []).map((s) => ({
         key: s.key,
         value: s.value,
@@ -297,7 +380,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
 
     if (prod.specifications) {
       replaceSpecs(
-        prod.specifications.map((s) => ({ key: s.key, value: s.value }))
+        prod.specifications.map((s) => ({ key: s.key, value: s.value })),
       );
     }
   }, [productData, reset, replaceSpecs, warehouses]);
@@ -313,7 +396,9 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
       const pendingGlobalFiles = (data.media || []).filter((m: any) => m.file);
 
       if (pendingGlobalFiles.length > 0) {
-        uploadToastId = toast.loading(`Uploading ${pendingGlobalFiles.length} product photo(s)...`);
+        uploadToastId = toast.loading(
+          `Uploading ${pendingGlobalFiles.length} product photo(s)...`,
+        );
       }
 
       if (data.media && data.media.length > 0) {
@@ -336,7 +421,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
               altText: m.altText,
               isActive: true,
             };
-          })
+          }),
         );
       }
 
@@ -344,12 +429,15 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
       let finalVariants = data.variants || [];
       if (data.hasVariants && data.variants && data.variants.length > 0) {
         const totalPendingVariantFiles = data.variants.reduce(
-          (acc, v: any) => acc + (v.media || []).filter((m: any) => m.file).length,
-          0
+          (acc, v: any) =>
+            acc + (v.media || []).filter((m: any) => m.file).length,
+          0,
         );
 
         if (totalPendingVariantFiles > 0 && !uploadToastId) {
-          uploadToastId = toast.loading(`Uploading ${totalPendingVariantFiles} variant photo(s)...`);
+          uploadToastId = toast.loading(
+            `Uploading ${totalPendingVariantFiles} variant photo(s)...`,
+          );
         }
 
         finalVariants = await Promise.all(
@@ -358,7 +446,10 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
             const uploadedVMedia = await Promise.all(
               vMedia.map(async (m: any, mOrder: number) => {
                 if (m.file) {
-                  const publicUrl = await uploadFileToS3(m.file, "products/variants");
+                  const publicUrl = await uploadFileToS3(
+                    m.file,
+                    "products/variants",
+                  );
                   return {
                     type: m.type || "IMAGE",
                     url: publicUrl,
@@ -374,13 +465,13 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                   altText: m.altText,
                   isActive: true,
                 };
-              })
+              }),
             );
             return {
               ...v,
               media: uploadedVMedia,
             };
-          })
+          }),
         );
       }
 
@@ -394,7 +485,8 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
         description: data.description,
         categoryId: data.categoryId,
         basePrice: data.basePrice || data.variants?.[0]?.basePrice || 100,
-        sellingPrice: data.sellingPrice || data.variants?.[0]?.sellingPrice || 100,
+        sellingPrice:
+          data.sellingPrice || data.variants?.[0]?.sellingPrice || 100,
         sku: data.sku || undefined,
         isActive: data.isActive,
         hsnCode: data.hsnCode || undefined,
@@ -427,30 +519,49 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
           lowStockThreshold: Number(data.stock?.lowStockThreshold || 5),
         };
       } else {
-        payload.variants = finalVariants.map((v) => ({
-          attributes: v.attributes,
-          size: v.size,
-          color: v.color,
-          fabric: v.fabric,
-          basePrice: v.basePrice,
-          sellingPrice: v.sellingPrice,
-          price: v.price || v.sellingPrice || 100,
-          weight: v.weight,
-          length: v.length,
-          breadth: v.breadth,
-          height: v.height,
-          media: v.media?.map((m: any, order: number) => ({
-            type: m.type,
-            url: m.url,
-            order: m.order ?? order,
-            altText: m.altText,
-          })),
-          stock: {
-            warehouseId: v.stock?.warehouseId || warehouses[0]?.id || "",
-            quantity: Number(v.stock?.quantity || 0),
-            lowStockThreshold: Number(v.stock?.lowStockThreshold || 5),
-          },
-        }));
+        const defaultVar =
+          finalVariants.find((v: any) => v.isDefault) || finalVariants[0];
+        if (defaultVar) {
+          payload.defaultVariantId = defaultVar.id || defaultVar.variantId;
+          payload.defaultVariantSku = defaultVar.sku;
+        }
+
+        payload.variants = finalVariants.map((v) => {
+          const isThisDefault = Boolean(v.isDefault);
+          return {
+            id: v.id,
+            variantId: v.variantId || v.id,
+            sku: v.sku,
+            isDefault: isThisDefault,
+            attributes: {
+              ...v.attributes,
+              ...(isThisDefault ? { isDefault: true } : {}),
+            },
+            size: v.size || v.attributes?.["Size"] || v.attributes?.["size"],
+            color:
+              v.color || v.attributes?.["Color"] || v.attributes?.["color"],
+            fabric:
+              v.fabric || v.attributes?.["Fabric"] || v.attributes?.["fabric"],
+            basePrice: v.basePrice,
+            sellingPrice: v.sellingPrice,
+            price: v.price || v.sellingPrice || 100,
+            weight: v.weight,
+            length: v.length,
+            breadth: v.breadth,
+            height: v.height,
+            media: v.media?.map((m: any, order: number) => ({
+              type: m.type,
+              url: m.url,
+              order: m.order ?? order,
+              altText: m.altText,
+            })),
+            stock: {
+              warehouseId: v.stock?.warehouseId || warehouses[0]?.id || "",
+              quantity: Number(v.stock?.quantity || 0),
+              lowStockThreshold: Number(v.stock?.lowStockThreshold || 5),
+            },
+          };
+        });
       }
 
       if (isEditMode && activeProductId) {
@@ -466,7 +577,9 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
       onSuccess?.();
     } catch (err: any) {
       if (uploadToastId) {
-        toast.error(err?.message || "Failed to upload photos", { id: uploadToastId });
+        toast.error(err?.message || "Failed to upload photos", {
+          id: uploadToastId,
+        });
       }
       console.error("Submission failed:", err);
     } finally {
@@ -514,7 +627,9 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
             </button>
             <div>
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                {isEditMode ? (formValues.name || "Edit Product") : "Add New Product"}
+                {isEditMode
+                  ? formValues.name || "Edit Product"
+                  : "Add New Product"}
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
                 {isEditMode
@@ -536,7 +651,9 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
             </button>
             <button
               type="button"
-              onClick={handleSubmit((data) => onSubmit(data as ProductFormValues))}
+              onClick={handleSubmit((data) =>
+                onSubmit(data as ProductFormValues),
+              )}
               disabled={isProcessing}
               className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs inline-flex items-center gap-2 disabled:opacity-50"
             >
@@ -579,8 +696,9 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                       Product Variants
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
-                      Does this product come in multiple options like color, size, or fabric?
-                      Toggle on to manage customized SKUs, prices, and variant-specific photos.
+                      Does this product come in multiple options like color,
+                      size, or fabric? Toggle on to manage customized SKUs,
+                      prices, and variant-specific photos.
                     </p>
                   </div>
                 </div>
@@ -614,7 +732,8 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                 <div className="py-2 text-xs text-slate-500 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-slate-400" />
                   <span>
-                    Simple product mode is active. Retail pricing and inventory stock are managed in the sidebar on the right.
+                    Simple product mode is active. Retail pricing and inventory
+                    stock are managed in the sidebar on the right.
                   </span>
                 </div>
               )}
@@ -630,7 +749,8 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                       Product Specifications
                     </h3>
                     <p className="text-xs text-slate-500">
-                      Detailed craft and weave specifications displayed to customers
+                      Detailed craft and weave specifications displayed to
+                      customers
                     </p>
                   </div>
                 </div>
@@ -647,7 +767,8 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
 
               {specFields.length === 0 ? (
                 <p className="text-xs text-slate-400 py-3 text-center italic">
-                  No specifications added yet (e.g. Zari Type: Pure Gold Tested Zari, Loom: Traditional Handloom).
+                  No specifications added yet (e.g. Zari Type: Pure Gold Tested
+                  Zari, Loom: Traditional Handloom).
                 </p>
               ) : (
                 <div className="space-y-3">

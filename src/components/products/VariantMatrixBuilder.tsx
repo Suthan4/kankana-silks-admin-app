@@ -10,6 +10,7 @@ import {
   Plus,
   Save,
   Sparkles,
+  Star,
   Trash2,
   Warehouse as WarehouseIcon,
   X,
@@ -66,6 +67,64 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
   const watchedHeight = useWatch({ control, name: "height" }) || 5;
   const watchedBaseSku = useWatch({ control, name: "sku" }) || "SKU";
   const watchedVariants = useWatch({ control, name: "variants" }) || [];
+
+  // Helper to extract non-default attribute key-values and standard attributes for display
+  function getVariantAttributeEntries(
+    variant: any,
+  ): { key?: string; value: string }[] {
+    const entries: { key?: string; value: string }[] = [];
+    const seenValues = new Set<string>();
+
+    // 1. Dynamic attributes map
+    if (variant?.attributes && typeof variant.attributes === "object") {
+      Object.entries(variant.attributes).forEach(([k, v]) => {
+        const cleanKey = k?.trim();
+        const strVal = String(v ?? "").trim();
+        if (
+          cleanKey &&
+          cleanKey.toLowerCase() !== "default" &&
+          cleanKey.toLowerCase() !== "isdefault" &&
+          strVal !== "" &&
+          strVal.toLowerCase() !== "default" &&
+          strVal !== "true" &&
+          strVal !== "false"
+        ) {
+          entries.push({ key: cleanKey, value: strVal });
+          seenValues.add(strVal.toLowerCase());
+        }
+      });
+    }
+
+    // 2. Standard attributes: Color, Size, Fabric
+    if (
+      variant?.color &&
+      variant.color.toLowerCase() !== "default" &&
+      !seenValues.has(variant.color.toLowerCase())
+    ) {
+      entries.push({ key: "Color", value: variant.color });
+      seenValues.add(variant.color.toLowerCase());
+    }
+
+    if (
+      variant?.size &&
+      variant.size.toLowerCase() !== "default" &&
+      !seenValues.has(variant.size.toLowerCase())
+    ) {
+      entries.push({ key: "Size", value: variant.size });
+      seenValues.add(variant.size.toLowerCase());
+    }
+
+    if (
+      variant?.fabric &&
+      variant.fabric.toLowerCase() !== "default" &&
+      !seenValues.has(variant.fabric.toLowerCase())
+    ) {
+      entries.push({ key: "Fabric", value: variant.fabric });
+      seenValues.add(variant.fabric.toLowerCase());
+    }
+
+    return entries;
+  }
 
   // Helper to extract actual options from variant attributes (filtering out backend defaults)
   const extractOptions = useCallback((variantsList: any[]): VariantOption[] => {
@@ -143,6 +202,28 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
 
   // TanStack Query mutation for partial variant PATCH saves
   const patchMutation = usePatchProductMutation();
+
+  // Current default variant index (guaranteeing one is selected)
+  const defaultVariantIndex = useMemo(() => {
+    const idx = watchedVariants.findIndex((v) => Boolean(v.isDefault));
+    return idx >= 0 ? idx : 0;
+  }, [watchedVariants]);
+
+  // Set default variant across all rows
+  const handleSetDefaultVariant = useCallback(
+    (targetIdx: number) => {
+      variantFields.forEach((_, idx) => {
+        setValue(`variants.${idx}.isDefault`, idx === targetIdx, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      });
+      const targetSku =
+        watchedVariants[targetIdx]?.sku || `Variant #${targetIdx + 1}`;
+      toast.success(`Set ${targetSku} as the default variant`);
+    },
+    [variantFields, setValue, watchedVariants],
+  );
 
   // Duplicate SKU detection across variants
   const duplicateSkus = useMemo(() => {
@@ -277,7 +358,11 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
 
       return {
         sku: generatedSku,
+        isDefault: combo.length > 0 && combinations.indexOf(combo) === 0,
         attributes,
+        size: attributes["Size"] || attributes["size"],
+        color: attributes["Color"] || attributes["color"],
+        fabric: attributes["Fabric"] || attributes["fabric"],
         basePrice: watchedBasePrice || 100,
         sellingPrice: watchedSellingPrice || 100,
         price: watchedSellingPrice || 100,
@@ -384,6 +469,7 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
           variant: {
             variantId: targetVariantId,
             sku: variant.sku,
+            isDefault: Boolean(variant.isDefault),
             basePrice: Number(variant.basePrice),
             sellingPrice: Number(variant.sellingPrice),
             price: Number(variant.price || variant.sellingPrice),
@@ -432,7 +518,8 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
         <div className="mt-4 space-y-3">
           {options.length === 0 && (
             <p className="text-xs text-slate-400 italic py-1">
-              No options defined yet. Enter an option name below (e.g. Fabric, Color, Size) and click &quot;Add Option&quot;.
+              No options defined yet. Enter an option name below (e.g. Fabric,
+              Color, Size) and click &quot;Add Option&quot;.
             </p>
           )}
           {options.map((option, optIdx) => (
@@ -588,7 +675,7 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
 
       {/* 3. Variant Matrix Table with Variant Media Column */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+        <div className="px-5 py-3.5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
           <div>
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <WarehouseIcon className="h-4 w-4 text-slate-700" />
@@ -602,32 +689,63 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              appendVariant({
-                sku: `${watchedBaseSku || "PROD"}-CUSTOM-${variantFields.length + 1}`,
-                attributes: { Custom: `V${variantFields.length + 1}` },
-                basePrice: watchedBasePrice || 100,
-                sellingPrice: watchedSellingPrice || 100,
-                price: watchedSellingPrice || 100,
-                weight: watchedWeight,
-                length: watchedLength,
-                breadth: watchedBreadth,
-                height: watchedHeight,
-                media: [],
-                stock: {
-                  warehouseId: warehouses[0]?.id || "",
-                  quantity: 10,
-                  lowStockThreshold: 5,
-                },
-              })
-            }
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors shadow-2xs"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Row Manually
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {variantFields.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                <span className="text-3xs font-semibold text-slate-500 uppercase tracking-wide">
+                  Default:
+                </span>
+                <select
+                  value={defaultVariantIndex}
+                  onChange={(e) =>
+                    handleSetDefaultVariant(Number(e.target.value))
+                  }
+                  className="text-xs font-semibold text-indigo-700 bg-transparent focus:outline-hidden cursor-pointer"
+                >
+                  {variantFields.map((f, i) => {
+                    const v = watchedVariants[i] || {};
+                    const attrs = getVariantAttributeEntries(v)
+                      .map((a) => (a.key ? `${a.key}: ${a.value}` : a.value))
+                      .join(", ");
+                    const label = attrs || v.sku || `Variant ${i + 1}`;
+                    return (
+                      <option key={f.id} value={i}>
+                        {label} ({v.sku || `Row ${i + 1}`})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() =>
+                appendVariant({
+                  sku: `${watchedBaseSku || "PROD"}-CUSTOM-${variantFields.length + 1}`,
+                  isDefault: variantFields.length === 0,
+                  attributes: { Custom: `V${variantFields.length + 1}` },
+                  basePrice: watchedBasePrice || 100,
+                  sellingPrice: watchedSellingPrice || 100,
+                  price: watchedSellingPrice || 100,
+                  weight: watchedWeight,
+                  length: watchedLength,
+                  breadth: watchedBreadth,
+                  height: watchedHeight,
+                  media: [],
+                  stock: {
+                    warehouseId: warehouses[0]?.id || "",
+                    quantity: 10,
+                    lowStockThreshold: 5,
+                  },
+                })
+              }
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors shadow-2xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Row Manually
+            </button>
+          </div>
         </div>
 
         {variantFields.length === 0 ? (
@@ -648,6 +766,9 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
                 <tr>
                   <th scope="col" className="px-3.5 py-2.5 min-w-32">
                     Attributes
+                  </th>
+                  <th scope="col" className="px-3 py-2.5 text-center min-w-24">
+                    Default
                   </th>
                   <th scope="col" className="px-3.5 py-2.5 min-w-36">
                     Photos / Media
@@ -706,24 +827,64 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
                     >
                       {/* Attributes Summary */}
                       <td className="px-3.5 py-2.5">
-                        <div className="flex flex-wrap gap-1">
-                          {Object.entries(variant.attributes || {}).map(
-                            ([key, val], i) => (
-                              <span
-                                key={i}
-                                className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-medium text-3xs"
-                              >
-                                {key}: <strong>{String(val)}</strong>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {(() => {
+                            const attrEntries =
+                              getVariantAttributeEntries(variant);
+                            if (attrEntries.length > 0) {
+                              return attrEntries.map((attr, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-800 rounded font-medium text-3xs"
+                                >
+                                  {attr.key && (
+                                    <span className="text-slate-500 mr-1">
+                                      {attr.key}:
+                                    </span>
+                                  )}
+                                  <strong className="text-slate-900">
+                                    {attr.value}
+                                  </strong>
+                                </span>
+                              ));
+                            }
+                            // Strictly reserve "Default" for single-variant products with no custom attributes
+                            return (
+                              <span className="inline-flex items-center px-2 py-0.5 bg-slate-50 text-slate-400 italic rounded text-3xs border border-slate-200">
+                                Default
                               </span>
-                            ),
-                          )}
-                          {Object.keys(variant.attributes || {}).length ===
-                            0 && (
-                            <span className="text-slate-400 italic">
-                              Default
-                            </span>
-                          )}
+                            );
+                          })()}
                         </div>
+                      </td>
+
+                      {/* Default Variant Selection */}
+                      <td className="px-3 py-2.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleSetDefaultVariant(idx)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-3xs font-semibold transition-all cursor-pointer ${
+                            variant.isDefault
+                              ? "bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-200 font-bold"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200"
+                          }`}
+                          title={
+                            variant.isDefault
+                              ? "Current Default Variant (Primary display for customers)"
+                              : "Click to set this variant as default"
+                          }
+                        >
+                          <Star
+                            className={`h-3 w-3 ${
+                              variant.isDefault
+                                ? "fill-amber-300 text-amber-300"
+                                : "text-slate-400"
+                            }`}
+                          />
+                          <span>
+                            {variant.isDefault ? "Default" : "Set Default"}
+                          </span>
+                        </button>
                       </td>
 
                       {/* 🆕 Variant-Level Media Column */}

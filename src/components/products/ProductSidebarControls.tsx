@@ -383,6 +383,23 @@ export const ProductSidebarControls: React.FC<ProductSidebarControlsProps> = ({
         </div>
 
         <div className="space-y-3">
+          {/* Allow Out Of Stock Orders */}
+          <label className="flex items-center justify-between cursor-pointer select-none pb-2 border-b border-slate-100">
+            <div className="pr-2">
+              <span className="text-xs font-semibold text-slate-800 block">
+                Allow Out Of Stock Orders
+              </span>
+              <span className="text-3xs text-slate-500 block mt-0.5">
+                Continue selling when stock reaches 1
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              {...register("allowOutOfStockOrders")}
+              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+            />
+          </label>
+
           <label className="flex items-center gap-2.5 cursor-pointer">
             <input
               type="checkbox"

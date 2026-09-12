@@ -51,6 +51,9 @@ export interface ProductVariantMedia {
 export interface ProductVariant {
   id: string;
 
+  // Primary / Default variant indicator
+  isDefault?: boolean;
+
   // Dynamic attributes (flexible key-value pairs)
   attributes?: Record<string, any>;
 
@@ -108,6 +111,8 @@ export interface Product {
   sku: string;
   isActive: boolean;
   hasVariants: boolean;
+  defaultVariantId?: string;
+  defaultVariantSku?: string;
   hsnCode?: string;
 
   // Artisan Information
@@ -194,6 +199,7 @@ export interface CreateProductData {
   variants?: Array<{
     // Dynamic attributes
     attributes?: Record<string, any>;
+    isDefault?: boolean;
 
     // Legacy fields
     size?: string;
@@ -227,6 +233,9 @@ export interface CreateProductData {
     };
   }>;
 
+  defaultVariantId?: string;
+  defaultVariantSku?: string;
+
   // Simple product stock
   stock?: {
     warehouseId: string;
@@ -250,6 +259,11 @@ export interface UpdateProductData {
   artisanAbout?: string;
   artisanLocation?: string;
 
+  allowOutOfStockOrders?: boolean;
+  hasVideoConsultation?: boolean;
+  videoPurchasingEnabled?: boolean;
+  videoConsultationNote?: string;
+
   // Shipping Dimensions
   weight?: number;
   length?: number;
@@ -260,6 +274,24 @@ export interface UpdateProductData {
   metaTitle?: string;
   metaDesc?: string;
   schemaMarkup?: string;
+
+  specifications?: Array<{ key: string; value: string }>;
+  media?: Array<{
+    type?: MediaType;
+    url: string;
+    altText?: string;
+    order?: number;
+  }>;
+
+  hasVariants?: boolean;
+  defaultVariantId?: string;
+  defaultVariantSku?: string;
+  variants?: any[];
+  stock?: {
+    warehouseId: string;
+    quantity: number;
+    lowStockThreshold?: number;
+  };
 }
 
 export interface QueryProductParams {
