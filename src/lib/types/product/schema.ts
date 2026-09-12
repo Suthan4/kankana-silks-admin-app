@@ -75,6 +75,7 @@ export const VariantFormSchema = z.object({
   id: z.string().optional(),
   variantId: z.string().optional(),
   sku: z.string().min(1, "Variant SKU is required"),
+  isDefault: z.boolean().optional().default(false),
   attributes: z.record(z.string(), z.string()).optional().default({}),
   size: z.string().optional(),
   color: z.string().optional(),
@@ -94,6 +95,7 @@ export const VariantFormSchema = z.object({
 export const ProductFormSchema = z
   .object({
     hasVariants: z.boolean().default(false),
+    defaultVariantId: z.string().optional(),
     name: z.string().min(1, "Product name is required"),
     description: z.string().min(1, "Description is required"),
     categoryId: z.string().min(1, "Category is required"),
@@ -248,6 +250,7 @@ export const PatchVariantSchema = z.object({
   id: z.string().optional(),
   variantId: z.string().optional(),
   sku: z.string().optional(),
+  isDefault: z.boolean().optional(),
   basePrice: z.coerce.number().positive().optional(),
   sellingPrice: z.coerce.number().positive().optional(),
   price: z.coerce.number().positive().optional(),
