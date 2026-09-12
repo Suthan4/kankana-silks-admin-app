@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +24,8 @@ import {
   Loader2,
   ExternalLink,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { bannerApi, type Banner } from "@/lib/api/banner.api";
 import { s3Api } from "@/lib/api/s3.api";
@@ -38,177 +40,513 @@ const BANNER_WIDTH = 1920;
 const BANNER_HEIGHT = 1080;
 const BANNER_ASPECT_RATIO = "16 / 9";
 
-const BannerCard: React.FC<{
-  banner: Banner;
+interface BannerHeroCarouselProps {
+  banners: Banner[];
   onEdit: (banner: Banner) => void;
   onDelete: (banner: Banner) => void;
   canUpdate: boolean;
   canDelete: boolean;
-}> = ({ banner, onEdit, onDelete, canUpdate, canDelete }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = React.useRef<HTMLVideoElement>(null);
+}
 
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
+const BannerHeroCarousel: React.FC<BannerHeroCarouselProps> = ({
+  banners,
+  onEdit,
+  onDelete,
+  canUpdate,
+  canDelete,
+}) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [timerKey, setTimerKey] = useState(0);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [isPlayingVideo, setIsPlayingVideo] = useState(true);
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+
+  // Reset autoplay timer on manual interactions
+  const resetAutoplay = useCallback(() => {
+    setTimerKey((prev) => prev + 1);
+  }, []);
+
+  // Bounds check when banners array length changes
+  useEffect(() => {
+    if (banners.length === 0) {
+      setCurrentIndex(0);
+    } else if (currentIndex >= banners.length) {
+      setCurrentIndex(Math.max(0, banners.length - 1));
+    }
+  }, [banners.length, currentIndex]);
+
+  const handleNext = useCallback(() => {
+    if (banners.length <= 1) return;
+    setCurrentIndex((prev) => (prev + 1) % banners.length);
+  }, [banners.length]);
+
+  const handlePrev = useCallback(() => {
+    if (banners.length <= 1) return;
+    setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+  }, [banners.length]);
+
+  const handleNextManual = () => {
+    handleNext();
+    resetAutoplay();
+  };
+
+  const handlePrevManual = () => {
+    handlePrev();
+    resetAutoplay();
+  };
+
+  const handleDotClick = (index: number) => {
+    if (index === currentIndex || index < 0 || index >= banners.length) return;
+    setCurrentIndex(index);
+    resetAutoplay();
+  };
+
+  // Autoplay effect - 5 seconds interval, clears on unmount or reset
+  useEffect(() => {
+    if (banners.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % banners.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [banners.length, timerKey]);
+
+  // Keyboard navigation for accessibility
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (banners.length <= 1) return;
+      if (e.key === "ArrowLeft") handlePrevManual();
+      if (e.key === "ArrowRight") handleNextManual();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [banners.length, handleNextManual, handlePrevManual]);
+
+  const activeBanner = banners[currentIndex] || banners[0];
+  if (!activeBanner) return null;
+
+  const isMultiple = banners.length > 1;
+
+  const toggleVideoPlayback = (bannerId: string) => {
+    const video = videoRefs.current[bannerId];
+    if (video) {
+      if (video.paused) {
+        video.play();
+        setIsPlayingVideo(true);
       } else {
-        videoRef.current.play();
+        video.pause();
+        setIsPlayingVideo(false);
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 group">
-      {/* Media Section */}
+    <div className="space-y-6">
+      {/* Hero Section Carousel Frame */}
       <div
-        className="relative bg-[#f5f5f5]"
-        style={{ aspectRatio: BANNER_ASPECT_RATIO }}
+        className="relative w-full overflow-hidden rounded-2xl bg-gray-950 shadow-xl border border-gray-200 aspect-[16/9] sm:aspect-[21/9] lg:aspect-[16/5]"
+        role="region"
+        aria-roledescription="carousel"
+        aria-label="Promotional banners carousel"
       >
-        {banner.type === "VIDEO" ? (
-          <div className="relative w-full h-full">
-            <video
-              ref={videoRef}
-              src={banner.url}
-              poster={banner.thumbnailUrl}
-              className="w-full h-full object-contain bg-black"
-              loop
-              muted
-            />
+        {/* Slides Track */}
+        <div
+          className="flex h-full w-full transition-transform duration-500 ease-out motion-reduce:transition-none"
+          style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+        >
+          {banners.map((banner, index) => {
+            const hasError = imageErrors[banner.id];
+            const isActiveSlide = index === currentIndex;
+
+            return (
+              <div
+                key={banner.id}
+                className="relative h-full w-full flex-shrink-0 select-none overflow-hidden"
+                aria-hidden={!isActiveSlide}
+              >
+                {/* Media Section */}
+                {banner.type === "VIDEO" ? (
+                  <div className="relative w-full h-full bg-black">
+                    <video
+                      ref={(el) => {
+                        videoRefs.current[banner.id] = el;
+                      }}
+                      src={banner.url}
+                      poster={banner.thumbnailUrl}
+                      className="w-full h-full object-cover object-center"
+                      autoPlay={isActiveSlide}
+                      loop
+                      muted
+                      playsInline
+                    />
+                    {isActiveSlide && (
+                      <button
+                        type="button"
+                        onClick={() => toggleVideoPlayback(banner.id)}
+                        className="absolute bottom-5 right-5 z-20 p-2.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md transition-all"
+                        aria-label={
+                          isPlayingVideo ? "Pause video" : "Play video"
+                        }
+                      >
+                        {isPlayingVideo ? (
+                          <Pause className="h-4 w-4" />
+                        ) : (
+                          <Play className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ) : hasError ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 text-gray-400 p-6 text-center">
+                    <FileImage className="h-10 w-10 sm:h-12 sm:w-12 mb-2 text-gray-500" />
+                    <p className="text-sm font-medium text-gray-300">
+                      Banner Image Unavailable
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1 max-w-md truncate">
+                      {banner.url}
+                    </p>
+                  </div>
+                ) : (
+                  <img
+                    src={banner.url}
+                    alt={banner.title || "Promotional banner"}
+                    className="w-full h-full object-cover object-center"
+                    loading={index === 0 ? "eager" : "lazy"}
+                    onError={() =>
+                      setImageErrors((prev) => ({
+                        ...prev,
+                        [banner.id]: true,
+                      }))
+                    }
+                  />
+                )}
+
+                {/* Subtle gradient overlay for hero typography readability */}
+                <div
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/30"
+                  aria-hidden="true"
+                />
+
+                {/* Badges in top corners */}
+                <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-10 flex items-center gap-2">
+                  <span
+                    className={`px-2.5 py-1 text-xs font-bold rounded-full text-white flex items-center gap-1 shadow-sm backdrop-blur-sm ${
+                      banner.type === "VIDEO"
+                        ? "bg-purple-600/90"
+                        : "bg-blue-600/90"
+                    }`}
+                  >
+                    {banner.type === "VIDEO" ? (
+                      <Video className="h-3 w-3" />
+                    ) : (
+                      <ImageIcon className="h-3 w-3" />
+                    )}
+                    {banner.type}
+                  </span>
+
+                  <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-black/60 text-white backdrop-blur-sm border border-white/20 shadow-sm">
+                    Order: {banner.order}
+                  </span>
+                </div>
+
+                <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-10 flex items-center gap-2">
+                  <span
+                    className={`px-2.5 py-1 text-xs font-bold rounded-full flex items-center gap-1 shadow-sm backdrop-blur-sm ${
+                      banner.isActive
+                        ? "bg-green-500 text-white"
+                        : "bg-red-500 text-white"
+                    }`}
+                  >
+                    {banner.isActive ? (
+                      <>
+                        <Eye className="h-3 w-3" />
+                        LIVE
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="h-3 w-3" />
+                        DRAFT
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                {/* Hero typography content */}
+                <div className="absolute inset-x-0 bottom-8 sm:bottom-12 lg:bottom-14 z-10 px-6 sm:px-12 text-center flex flex-col items-center justify-center pointer-events-none">
+                  <h2 className="text-xl sm:text-3xl lg:text-4xl font-extrabold uppercase tracking-wider text-white drop-shadow-lg max-w-4xl line-clamp-1">
+                    {banner.title}
+                  </h2>
+                  {banner.text && (
+                    <p className="mt-2 text-xs sm:text-sm lg:text-base text-white/90 max-w-2xl font-light drop-shadow line-clamp-2">
+                      {banner.text}
+                    </p>
+                  )}
+                  {banner.link && (
+                    <a
+                      href={banner.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="pointer-events-auto mt-3 inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium uppercase tracking-wider text-white bg-white/20 hover:bg-white hover:text-gray-900 rounded-full backdrop-blur-md border border-white/40 transition-all shadow-sm"
+                    >
+                      <LinkIcon className="h-3 w-3" />
+                      Visit Link
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Previous & Next Arrow Controls (Multiple banners only) */}
+        {isMultiple && (
+          <>
             <button
-              onClick={togglePlay}
-              className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 group-hover:bg-opacity-50 transition-all"
+              type="button"
+              onClick={handlePrevManual}
+              aria-label="Previous banner"
+              className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-white/80 active:scale-95"
             >
-              {isPlaying ? (
-                <Pause className="h-12 w-12 text-white" />
-              ) : (
-                <Play className="h-12 w-12 text-white" />
-              )}
+              <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
-            <div className="absolute top-2 left-2 px-2 py-1 bg-purple-600 text-white text-xs font-bold rounded-full flex items-center gap-1">
-              <Video className="h-3 w-3" />
-              VIDEO
+
+            <button
+              type="button"
+              onClick={handleNextManual}
+              aria-label="Next banner"
+              className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-md border border-white/20 flex items-center justify-center shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-white/80 active:scale-95"
+            >
+              <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+            </button>
+
+            {/* Pagination Dots */}
+            <div
+              className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/85 backdrop-blur-md shadow-md border border-white/40"
+              role="tablist"
+              aria-label="Banner slides"
+            >
+              {banners.map((_, index) => {
+                const isActive = index === currentIndex;
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => handleDotClick(index)}
+                    aria-label={`Go to banner ${index + 1}`}
+                    aria-current={isActive ? "true" : undefined}
+                    className={`transition-all duration-300 rounded-full focus:outline-none focus:ring-2 focus:ring-black ${
+                      isActive
+                        ? "w-7 sm:w-8 h-2.5 bg-black"
+                        : "w-2.5 h-2.5 bg-gray-400 hover:bg-gray-700"
+                    }`}
+                  />
+                );
+              })}
             </div>
-          </div>
-        ) : (
-          <div className="relative w-full h-full">
-            <img
-              src={banner.url}
-              alt={banner.title}
-              className="h-full w-full object-cover bg-[#111] transition-transform duration-300"
-            />
-            <div className="absolute top-2 left-2 px-2 py-1 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center gap-1">
-              <ImageIcon className="h-3 w-3" />
-              IMAGE
-            </div>
-          </div>
+          </>
         )}
-
-        {/* Status Badge */}
-        <div className="absolute top-2 right-2">
-          <span
-            className={`px-2 py-1 text-xs font-bold rounded-full flex items-center gap-1 ${
-              banner.isActive
-                ? "bg-green-500 text-white"
-                : "bg-red-500 text-white"
-            }`}
-          >
-            {banner.isActive ? (
-              <>
-                <Eye className="h-3 w-3" />
-                LIVE
-              </>
-            ) : (
-              <>
-                <EyeOff className="h-3 w-3" />
-                DRAFT
-              </>
-            )}
-          </span>
-        </div>
-
-        {/* Order Badge */}
-        <div className="absolute bottom-2 left-2 px-2 py-1 bg-black bg-opacity-70 text-white text-xs font-bold rounded">
-          Order: {banner.order}
-        </div>
       </div>
 
-      {/* Content Section */}
-      <div className="p-4">
-        <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-1">
-          {banner.title}
-        </h3>
-
-        {banner.text && (
-          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-            {banner.text}
-          </p>
-        )}
-
-        {/* Meta Info */}
-        <div className="space-y-2 mb-4">
-          {banner.link && (
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <LinkIcon className="h-3 w-3" />
-              <a
-                href={banner.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="truncate hover:text-blue-600"
+      {/* Active Banner Management & Details Panel */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                Banner {currentIndex + 1} of {banners.length}
+              </span>
+              <span
+                className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                  activeBanner.isActive
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
               >
-                {banner.link}
-              </a>
-              <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                {activeBanner.isActive ? (
+                  <Eye className="h-3 w-3" />
+                ) : (
+                  <EyeOff className="h-3 w-3" />
+                )}
+                {activeBanner.isActive ? "LIVE" : "DRAFT"}
+              </span>
+              <span className="text-xs font-medium px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                Order: {activeBanner.order}
+              </span>
+              <span className="text-xs font-medium px-2 py-0.5 rounded bg-purple-50 text-purple-700">
+                {activeBanner.type}
+              </span>
+            </div>
+
+            <h3 className="text-lg font-bold text-gray-900">
+              {activeBanner.title}
+            </h3>
+
+            {activeBanner.text && (
+              <p className="text-sm text-gray-600 line-clamp-2">
+                {activeBanner.text}
+              </p>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          {(canUpdate || canDelete) && (
+            <div className="flex items-center gap-2 shrink-0">
+              {canUpdate && (
+                <button
+                  type="button"
+                  onClick={() => onEdit(activeBanner)}
+                  className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                >
+                  <Edit className="h-4 w-4" />
+                  Edit Banner
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(activeBanner)}
+                  className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              )}
             </div>
           )}
-
-          <div className="flex items-center gap-4 text-xs text-gray-500">
-            {banner.width && banner.height && (
-              <span className="flex items-center gap-1">
-                <FileImage className="h-3 w-3" />
-                {banner.width}×{banner.height}
-              </span>
-            )}
-            {banner.duration && (
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {banner.duration}s
-              </span>
-            )}
-            {banner.fileSize && (
-              <span className="flex items-center gap-1">
-                <Hash className="h-3 w-3" />
-                {(banner.fileSize / (1024 * 1024)).toFixed(2)}MB
-              </span>
-            )}
-          </div>
         </div>
 
-        {/* Actions */}
-        {(canUpdate || canDelete) && (
-          <div className="flex gap-2 pt-3 border-t border-gray-200">
-            {canUpdate && (
-              <button
-                onClick={() => onEdit(banner)}
-                className="flex-1 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+        {/* Technical Specs / Dimensions / File Info */}
+        <div className="flex flex-wrap items-center gap-4 pt-4 mt-4 border-t border-gray-100 text-xs text-gray-500">
+          {activeBanner.width && activeBanner.height && (
+            <span className="flex items-center gap-1">
+              <FileImage className="h-3.5 w-3.5 text-gray-400" />
+              Dimensions: {activeBanner.width}×{activeBanner.height}px
+            </span>
+          )}
+          {activeBanner.duration && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5 text-gray-400" />
+              Duration: {activeBanner.duration}s
+            </span>
+          )}
+          {activeBanner.fileSize && (
+            <span className="flex items-center gap-1">
+              <Hash className="h-3.5 w-3.5 text-gray-400" />
+              Size: {(activeBanner.fileSize / (1024 * 1024)).toFixed(2)} MB
+            </span>
+          )}
+          {activeBanner.link && (
+            <span className="flex items-center gap-1 truncate max-w-md">
+              <LinkIcon className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+              Link:{" "}
+              <a
+                href={activeBanner.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline truncate"
               >
-                <Edit className="h-4 w-4" />
-                Edit
-              </button>
-            )}
-            {canDelete && (
-              <button
-                onClick={() => onDelete(banner)}
-                className="flex-1 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </button>
-            )}
-          </div>
-        )}
+                {activeBanner.link}
+              </a>
+              <ExternalLink className="h-3 w-3 text-blue-600 flex-shrink-0" />
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Quick All-Banners Navigator & Management Strip (when multiple banners exist) */}
+      {isMultiple && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-bold text-gray-900">
+              All Banners ({banners.length})
+            </h4>
+            <span className="text-xs text-gray-500">
+              Click any slide to jump to preview
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {banners.map((banner, index) => {
+              const isSelected = index === currentIndex;
+              return (
+                <div
+                  key={banner.id}
+                  onClick={() => handleDotClick(index)}
+                  className={`cursor-pointer rounded-lg border p-3 transition-all flex items-center gap-3 ${
+                    isSelected
+                      ? "border-blue-600 bg-blue-50/50 shadow-sm ring-1 ring-blue-600"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="relative w-16 h-10 rounded overflow-hidden bg-gray-100 flex-shrink-0">
+                    <img
+                      src={
+                        banner.type === "VIDEO"
+                          ? banner.thumbnailUrl || banner.url
+                          : banner.url
+                      }
+                      alt={banner.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-gray-900 truncate">
+                      {banner.title}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                          banner.isActive
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {banner.isActive ? "LIVE" : "DRAFT"}
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        #{banner.order}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Direct action buttons */}
+                  {(canUpdate || canDelete) && (
+                    <div
+                      className="flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {canUpdate && (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(banner)}
+                          title="Edit Banner"
+                          className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(banner)}
+                          title="Delete Banner"
+                          className="p-1.5 text-red-600 hover:bg-red-100 rounded transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -623,18 +961,13 @@ const BannersPage: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {bannersData?.banners?.map((banner) => (
-              <BannerCard
-                key={banner.id}
-                banner={banner}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                canUpdate={canUpdate}
-                canDelete={canDelete}
-              />
-            ))}
-          </div>
+          <BannerHeroCarousel
+            banners={bannersData?.banners || []}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
+          />
         )}
 
         {/* Create/Edit Modal */}

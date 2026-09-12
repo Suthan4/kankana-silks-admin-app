@@ -1,5 +1,12 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import {
+  createBrowserRouter,
+  RouterProvider,
+  createRoutesFromElements,
+  Route,
+  Navigate,
+  Outlet,
+} from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./context/auth.context";
 import { LoginPage } from "./pages/auth/loginPage";
@@ -8,6 +15,7 @@ import { UnauthorizedPage } from "./components/unAuthorized";
 import { ProtectedRoute } from "./routes/protectedRoutes";
 import { AdminDashboard } from "./pages/admin/adminDashboard";
 import ProductsPage from "./pages/admin/products/productsPage";
+import ProductCreatePage from "./pages/admin/products/productCreatePage";
 import ReviewsPage from "./pages/admin/reviewsPage";
 import WarehousesPage from "./pages/admin/warehousesPage";
 import ReturnsPage from "./pages/admin/returnsPage";
@@ -24,10 +32,6 @@ import UserManagementPage from "./pages/admin/userManagement";
 import SuperAdminDashboard from "./pages/superAdmin/superAdminDashboard";
 import CouponsPage from "./pages/admin/couponPage";
 import ProductRequestsPage from "./pages/admin/productRequest";
-
-
-// Admin Pages
-
 
 // Create query client
 const queryClient = new QueryClient({
@@ -61,220 +65,256 @@ const RootRedirect: React.FC = () => {
   } else if (user.role === "ADMIN") {
     return <Navigate to="/dashboard" replace />;
   } else {
-    // Regular users not allowed in admin dashboard
     return <Navigate to="/unauthorized" replace />;
   }
 };
 
+// Root layout providing AuthContext and Toaster inside data router
+const RootLayout: React.FC = () => {
+  return (
+    <AuthProvider>
+      <Outlet />
+      <Toaster />
+    </AuthProvider>
+  );
+};
+
+// Data router enabling React Router v7 useBlocker and navigation guards
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<RootLayout />}>
+      {/* Public Routes */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+      {/* Admin Dashboard Routes */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN", "SUPER_ADMIN"]}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Admin Module Routes */}
+      <Route
+        path="/admin/products"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="products"
+            requiredPermission="canRead"
+          >
+            <ProductsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/products/new"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="products"
+            requiredPermission="canCreate"
+          >
+            <ProductCreatePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/products/:id/edit"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="products"
+            requiredPermission="canUpdate"
+          >
+            <ProductCreatePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/categories"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="categories"
+            requiredPermission="canRead"
+          >
+            <CategoriesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/orders"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="orders"
+            requiredPermission="canRead"
+          >
+            <OrdersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/warehouses"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="warehouses"
+            requiredPermission="canRead"
+          >
+            <WarehousesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/warehouses/:id"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="warehouses"
+            requiredPermission="canRead"
+          >
+            <WarehouseStockPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/home-sections"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="home-sections"
+            requiredPermission="canRead"
+          >
+            <HomeSectionsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/banner"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="banner"
+            requiredPermission="canRead"
+          >
+            <BannersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/consultations"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="consultations"
+            requiredPermission="canRead"
+          >
+            <ConsultationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/product-request"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="product-request"
+            requiredPermission="canRead"
+          >
+            <ProductRequestsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/coupons"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="coupons"
+            requiredPermission="canRead"
+          >
+            <CouponsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/reviews"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="reviews"
+            requiredPermission="canRead"
+          >
+            <ReviewsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/returns"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="returns"
+            requiredPermission="canRead"
+          >
+            <ReturnsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/shipments"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="shipments"
+            requiredPermission="canRead"
+          >
+            <ShipmentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/user-management"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="user-management"
+            requiredPermission="canRead"
+          >
+            <UserManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Super Admin Routes */}
+      <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
+            <SuperAdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Root Route - Redirect based on role */}
+      <Route path="/" element={<RootRedirect />} />
+
+      {/* Catch all - redirect to root */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Route>,
+  ),
+);
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/unauthorized" element={<UnauthorizedPage />} />
-
-            {/* Admin Dashboard Routes */}
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute allowedRoles={["ADMIN", "SUPER_ADMIN"]}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Admin Module Routes */}
-            <Route
-              path="/admin/products"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="products"
-                  requiredPermission="canRead"
-                >
-                  <ProductsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/categories"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="categories"
-                  requiredPermission="canRead"
-                >
-                  <CategoriesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/orders"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="orders"
-                  requiredPermission="canRead"
-                >
-                  <OrdersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/warehouses"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="warehouses"
-                  requiredPermission="canRead"
-                >
-                  <WarehousesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/warehouses/:id"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="warehouses"
-                  requiredPermission="canRead"
-                >
-                  <WarehouseStockPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/home-sections"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="home-sections"
-                  requiredPermission="canRead"
-                >
-                  <HomeSectionsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/banner"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="banner"
-                  requiredPermission="canRead"
-                >
-                  <BannersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/consultations"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="consultations"
-                  requiredPermission="canRead"
-                >
-                  <ConsultationsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/product-request"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="product-request"
-                  requiredPermission="canRead"
-                >
-                  <ProductRequestsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/coupons"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="coupons"
-                  requiredPermission="canRead"
-                >
-                  <CouponsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/reviews"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="reviews"
-                  requiredPermission="canRead"
-                >
-                  <ReviewsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/returns"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="returns"
-                  requiredPermission="canRead"
-                >
-                  <ReturnsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/shipments"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="shipments"
-                  requiredPermission="canRead"
-                >
-                  <ShipmentsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin/user-management"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMIN", "SUPER_ADMIN"]}
-                  requiredModule="user-management"
-                  requiredPermission="canRead"
-                >
-                  <UserManagementPage />
-                </ProtectedRoute>
-              }
-            />
-            {/* Super Admin Routes */}
-            <Route
-              path="/admin/dashboard"
-              element={
-                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
-                  <SuperAdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Root Route - Redirect based on role */}
-            <Route path="/" element={<RootRedirect />} />
-
-            {/* Catch all - redirect to root */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-          <Toaster />
-        </AuthProvider>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }
