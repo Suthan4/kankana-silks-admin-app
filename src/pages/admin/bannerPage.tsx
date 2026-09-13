@@ -802,7 +802,7 @@ const BannersPage: React.FC = () => {
 
       // ✅ Clean up old mobile media if replacing or clearing
       if (mediaType === "IMAGE") {
-        if (mobileMediaFile) {
+        if (mobileMediaFile && editingBanner?.mobileUrl) {
           try {
             await s3Api.deleteFileByUrl(editingBanner.mobileUrl);
           } catch (err) {
