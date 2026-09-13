@@ -37,6 +37,8 @@ import {
   ArrowUp,
   ArrowDown,
   Maximize2,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import { homeSectionApi } from "@/lib/api/homesection.api";
 import { productApi } from "@/lib/api/product.api";
@@ -371,6 +373,8 @@ export const HomeSectionsPage: React.FC = () => {
   const [currentMedia, setCurrentMedia] = useState<Partial<SectionMediaForm>>({
     type: "IMAGE",
     url: "",
+    mobileUrl: "",
+    mobileFile: null,
     order: 0,
     overlayPosition: "center",
   });
@@ -527,6 +531,10 @@ export const HomeSectionsPage: React.FC = () => {
                 await s3Api.deleteFileByUrl(m.url);
               }
 
+              if (m.mobileUrl) {
+                await s3Api.deleteFileByUrl(m.mobileUrl);
+              }
+
               // optional thumbnail support
               if ((m as any).thumbnailUrl) {
                 await s3Api.deleteFileByUrl((m as any).thumbnailUrl);
@@ -548,26 +556,153 @@ export const HomeSectionsPage: React.FC = () => {
     setIsUploadingImage(true);
     const uploadToast = toast.loading("Uploading image...");
     try {
+      // ✅ Clean up any removed media files from S3 while editing
+      if (editingSection?.media) {
+        for (const oldItem of editingSection.media) {
+          const isStillPresent = media.some(
+            (m) =>
+              (m.id && oldItem.id && m.id === oldItem.id) ||
+              (m.url && oldItem.url && m.url === oldItem.url),
+          );
+          if (!isStillPresent) {
+            if (oldItem.url) {
+              try {
+                await s3Api.deleteFileByUrl(oldItem.url);
+              } catch (err) {
+                console.error("Failed deleting removed section media:", err);
+              }
+            }
+            if (oldItem.mobileUrl) {
+              try {
+                await s3Api.deleteFileByUrl(oldItem.mobileUrl);
+              } catch (err) {
+                console.error(
+                  "Failed deleting removed section mobile media:",
+                  err,
+                );
+              }
+            }
+          }
+        }
+      }
+
+      const isDualImageLayout =
+        layout === "banner" || layout === "aesthetic-fullscreen";
+
       const uploadedMedia = await Promise.all(
         media.map(async (m, idx) => {
           let url = m.url ?? "";
+          let mobileUrl = m.mobileUrl ?? "";
+
+          const oldMediaItem =
+            editingSection?.media?.find(
+              (om) =>
+                (m.id && om.id && om.id === m.id) ||
+                (m.url && om.url && om.url === m.url),
+            ) || editingSection?.media?.[idx];
+
+          // Collect files to upload via uploadMultiple for this media item
+          const filesToUpload: { file: File; target: "desktop" | "mobile" }[] =
+            [];
+
           if (m.file) {
+            filesToUpload.push({ file: m.file, target: "desktop" });
             // ✅ delete old media while editing
-            if (editingSection?.media?.[idx]?.url) {
+            if (oldMediaItem?.url) {
               try {
-                await s3Api.deleteFileByUrl(editingSection.media[idx].url);
+                await s3Api.deleteFileByUrl(oldMediaItem.url);
               } catch (err) {
                 console.error("Failed deleting old section media:", err);
               }
             }
-
-            const res = await s3Api.uploadSingle(m.file, "home-sections");
-
-            url = res.url;
           }
+
+          if (isDualImageLayout) {
+            if (m.mobileFile) {
+              filesToUpload.push({ file: m.mobileFile, target: "mobile" });
+              // ✅ delete old mobile media while editing
+              if (oldMediaItem?.mobileUrl) {
+                try {
+                  await s3Api.deleteFileByUrl(oldMediaItem.mobileUrl);
+                } catch (err) {
+                  console.error(
+                    "Failed deleting old section mobile media:",
+                    err,
+                  );
+                }
+              }
+            } else if (!m.mobileUrl && oldMediaItem?.mobileUrl) {
+              try {
+                await s3Api.deleteFileByUrl(oldMediaItem.mobileUrl);
+              } catch (err) {
+                console.error(
+                  "Failed deleting removed section mobile media:",
+                  err,
+                );
+              }
+              mobileUrl = "";
+            }
+          } else {
+            // Non-dual layout: clean up obsolete mobile media if it existed
+            if (oldMediaItem?.mobileUrl) {
+              try {
+                await s3Api.deleteFileByUrl(oldMediaItem.mobileUrl);
+              } catch (err) {
+                console.error(
+                  "Failed deleting obsolete mobile media on layout switch:",
+                  err,
+                );
+              }
+            }
+            mobileUrl = "";
+          }
+
+          if (filesToUpload.length > 0) {
+            const res = await s3Api.uploadMultiple(
+              filesToUpload.map((f) => f.file),
+              "home-sections",
+            );
+
+            const extractUrls = (resp: any): string[] => {
+              if (Array.isArray(resp))
+                return resp.map((r) =>
+                  typeof r === "string" ? r : r.url || "",
+                );
+              if (Array.isArray(resp?.files))
+                return resp.files.map((r: any) =>
+                  typeof r === "string" ? r : r.url || "",
+                );
+              if (Array.isArray(resp?.data?.files))
+                return resp.data.files.map((r: any) =>
+                  typeof r === "string" ? r : r.url || "",
+                );
+              if (Array.isArray(resp?.data))
+                return resp.data.map((r: any) =>
+                  typeof r === "string" ? r : r.url || "",
+                );
+              if (Array.isArray(resp?.urls))
+                return resp.urls.map((r: any) =>
+                  typeof r === "string" ? r : r.url || "",
+                );
+              if (resp?.url) return [resp.url];
+              if (resp?.data?.url) return [resp.data.url];
+              return [];
+            };
+
+            const urls = extractUrls(res);
+            filesToUpload.forEach((item, i) => {
+              if (item.target === "desktop" && urls[i]) {
+                url = urls[i];
+              } else if (item.target === "mobile" && urls[i]) {
+                mobileUrl = urls[i];
+              }
+            });
+          }
+
           return {
             type: m.type,
             url,
+            mobileUrl: isDualImageLayout && mobileUrl ? mobileUrl : undefined,
             order: idx,
             overlayPosition: m.overlayPosition,
             overlayTitle: m.overlayTitle ?? "",
@@ -618,17 +753,19 @@ export const HomeSectionsPage: React.FC = () => {
   const handleAddMedia = () => {
     if (editingMediaIndex !== null) {
       const u = [...media];
-      u[editingMediaIndex] = currentMedia as SectionMedia;
+      u[editingMediaIndex] = currentMedia as SectionMediaForm;
       setMedia(u);
     } else
       setMedia([
         ...media,
-        { ...currentMedia, order: media.length } as SectionMedia,
+        { ...currentMedia, order: media.length } as SectionMediaForm,
       ]);
     setShowMediaModal(false);
     setCurrentMedia({
       type: "IMAGE",
       url: "",
+      mobileUrl: "",
+      mobileFile: null,
       order: 0,
       overlayPosition: "center",
     });
@@ -1005,6 +1142,8 @@ export const HomeSectionsPage: React.FC = () => {
                           setCurrentMedia({
                             type: "IMAGE",
                             url: "",
+                            mobileUrl: "",
+                            mobileFile: null,
                             order: media.length,
                             overlayPosition: "center",
                           });
@@ -1059,6 +1198,13 @@ export const HomeSectionsPage: React.FC = () => {
                                     : "🎥 Video"}{" "}
                                   #{i + 1}
                                 </span>
+                                {item.type === "IMAGE" &&
+                                  (item.mobileUrl || item.mobileFile) && (
+                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                                      <Smartphone className="h-2.5 w-2.5" />
+                                      Desktop + Mobile
+                                    </span>
+                                  )}
                                 {item.overlayTitle && (
                                   <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
                                     Has Overlay
@@ -1715,6 +1861,8 @@ export const HomeSectionsPage: React.FC = () => {
                     setCurrentMedia({
                       type: "IMAGE",
                       url: "",
+                      mobileUrl: "",
+                      mobileFile: null,
                       order: 0,
                       overlayPosition: "center",
                     });
@@ -1751,22 +1899,95 @@ export const HomeSectionsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                    {currentMedia.type === "IMAGE" ? "Image" : "Video"}{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <ImageUpload
-                    value={currentMedia.file || currentMedia.url}
-                    onChange={(file) =>
-                      setCurrentMedia({ ...currentMedia, file })
-                    }
-                    accept={
-                      currentMedia.type === "IMAGE" ? "image/*" : "video/*"
-                    }
-                    maxSizeMB={currentMedia.type === "IMAGE" ? 20 : 60}
-                  />
-                </div>
+                {currentMedia.type === "IMAGE" &&
+                (layout === "banner" || layout === "aesthetic-fullscreen") ? (
+                  <div className="space-y-3">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800 flex items-start gap-2">
+                      <Info className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold">Dual Image Mode Active</p>
+                        <p className="text-[11px] text-amber-700 mt-0.5">
+                          Upload separate images optimized for Desktop and
+                          Mobile viewports for{" "}
+                          {layout === "banner"
+                            ? "Banner"
+                            : "Aesthetic Fullscreen"}{" "}
+                          layout.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/30">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                        <Monitor className="h-3.5 w-3.5 text-blue-600" />
+                        <span>
+                          Desktop View Image{" "}
+                          <span className="text-red-500">*</span>
+                        </span>
+                        <span className="text-[10px] font-normal text-gray-500">
+                          (16:9 recommended)
+                        </span>
+                      </label>
+                      <ImageUpload
+                        value={currentMedia.file || currentMedia.url}
+                        onChange={(file) =>
+                          setCurrentMedia({
+                            ...currentMedia,
+                            file,
+                            url: file ? currentMedia.url : "",
+                          })
+                        }
+                        accept="image/*"
+                        maxSizeMB={20}
+                      />
+                    </div>
+
+                    <div className="border border-indigo-200 rounded-lg p-3 bg-indigo-50/30">
+                      <label className="block text-xs font-semibold text-indigo-900 mb-1.5 flex items-center gap-1.5">
+                        <Smartphone className="h-3.5 w-3.5 text-indigo-600" />
+                        <span>Mobile View Image</span>
+                        <span className="text-[10px] font-normal text-indigo-600">
+                          (9:16 recommended / Optional)
+                        </span>
+                      </label>
+                      <ImageUpload
+                        value={
+                          currentMedia.mobileFile || currentMedia.mobileUrl
+                        }
+                        onChange={(mobileFile) =>
+                          setCurrentMedia({
+                            ...currentMedia,
+                            mobileFile,
+                            mobileUrl: mobileFile ? currentMedia.mobileUrl : "",
+                          })
+                        }
+                        accept="image/*"
+                        maxSizeMB={20}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                      {currentMedia.type === "IMAGE" ? "Image" : "Video"}{" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <ImageUpload
+                      value={currentMedia.file || currentMedia.url}
+                      onChange={(file) =>
+                        setCurrentMedia({
+                          ...currentMedia,
+                          file,
+                          url: file ? currentMedia.url : "",
+                        })
+                      }
+                      accept={
+                        currentMedia.type === "IMAGE" ? "image/*" : "video/*"
+                      }
+                      maxSizeMB={currentMedia.type === "IMAGE" ? 20 : 60}
+                    />
+                  </div>
+                )}
 
                 {currentMedia.type === "VIDEO" && (
                   <div>
@@ -1897,6 +2118,8 @@ export const HomeSectionsPage: React.FC = () => {
                     setCurrentMedia({
                       type: "IMAGE",
                       url: "",
+                      mobileUrl: "",
+                      mobileFile: null,
                       order: 0,
                       overlayPosition: "center",
                     });
@@ -1909,7 +2132,7 @@ export const HomeSectionsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleAddMedia}
-                  disabled={!currentMedia.file?.name}
+                  disabled={!currentMedia.file && !currentMedia.url}
                   className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 font-medium transition-colors"
                 >
                   {editingMediaIndex !== null ? "Update" : "Add"} Media

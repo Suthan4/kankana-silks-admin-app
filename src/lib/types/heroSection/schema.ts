@@ -21,6 +21,11 @@ export const CTAStyleEnum = z.enum(["PRIMARY", "SECONDARY", "OUTLINE", "TEXT"]);
 export const SectionMediaSchema = z.object({
   type: MediaTypeEnum,
   url: z.string().url("Invalid media URL"),
+  mobileUrl: z
+    .string()
+    .url("Invalid mobile media URL")
+    .optional()
+    .or(z.literal("")),
   thumbnailUrl: z.string().url().optional(),
   altText: z.string().optional(),
   title: z.string().optional(),

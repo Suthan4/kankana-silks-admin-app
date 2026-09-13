@@ -5,6 +5,7 @@ export interface Banner {
   title: string;
   type: "IMAGE" | "VIDEO";
   url: string;
+  mobileUrl?: string;
   key?: string;
   thumbnailUrl?: string;
   link?: string;
@@ -24,6 +25,7 @@ export interface CreateBannerData {
   title: string;
   type?: "IMAGE" | "VIDEO";
   url: string;
+  mobileUrl?: string;
   key?: string;
   thumbnailUrl?: string;
   link?: string;
@@ -41,6 +43,7 @@ export interface UpdateBannerData {
   title?: string;
   type?: "IMAGE" | "VIDEO";
   url?: string;
+  mobileUrl?: string | null;
   key?: string;
   thumbnailUrl?: string | null;
   link?: string | null;

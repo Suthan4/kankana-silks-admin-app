@@ -35,6 +35,7 @@ export interface SectionMedia {
   id?: string;
   type: MediaType;
   url: string;
+  mobileUrl?: string;
   thumbnailUrl?: string;
   altText?: string;
   title?: string;
@@ -47,7 +48,9 @@ export interface SectionMedia {
 
 export interface SectionMediaForm extends Omit<SectionMedia, "url"> {
   url?: string; // optional during form
-  file?: File | null; // 👈 UI only
+  file?: File | null; // 👈 UI only (desktop view image)
+  mobileUrl?: string;
+  mobileFile?: File | null; // 👈 UI only (mobile view image for banner/aesthetic-fullscreen)
 }
 
 export interface SectionCTA {

@@ -6,7 +6,8 @@ export const createBannerSchema = z.object({
     .min(1, "Title is required")
     .max(200, "Title must be less than 200 characters"),
   type: z.enum(["IMAGE", "VIDEO"]).default("IMAGE"),
-  url: z.string().url("Invalid URL").optional(),
+  url: z.string().url("Invalid URL").optional().or(z.literal("")),
+  mobileUrl: z.string().url("Invalid mobile URL").optional().or(z.literal("")),
   key: z.string().optional(),
   thumbnailUrl: z
     .string()
@@ -37,7 +38,8 @@ export const updateBannerSchema = z.object({
     .max(200, "Title must be less than 200 characters")
     .optional(),
   type: z.enum(["IMAGE", "VIDEO"]).optional(),
-  url: z.string().url("Invalid URL").optional(),
+  url: z.string().url("Invalid URL").optional().or(z.literal("")),
+  mobileUrl: z.string().url("Invalid mobile URL").optional().nullable().or(z.literal("")),
   key: z.string().optional(),
   thumbnailUrl: z.string().url("Invalid thumbnail URL").optional().nullable(),
   link: z.string().url("Invalid link URL").optional().nullable(),
