@@ -26,6 +26,10 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  Monitor,
+  Smartphone,
+  Check,
+  Info,
 } from "lucide-react";
 import { bannerApi, type Banner } from "@/lib/api/banner.api";
 import { s3Api } from "@/lib/api/s3.api";
@@ -39,6 +43,9 @@ import { BackButton } from "@/components/ui/BackButton";
 const BANNER_WIDTH = 1920;
 const BANNER_HEIGHT = 1080;
 const BANNER_ASPECT_RATIO = "16 / 9";
+
+const MOBILE_BANNER_WIDTH = 1080;
+const MOBILE_BANNER_HEIGHT = 1920;
 
 interface BannerHeroCarouselProps {
   banners: Banner[];
@@ -125,6 +132,9 @@ const BannerHeroCarousel: React.FC<BannerHeroCarouselProps> = ({
   }, [banners.length, handleNextManual, handlePrevManual]);
 
   const activeBanner = banners[currentIndex] || banners[0];
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">(
+    "desktop",
+  );
   if (!activeBanner) return null;
 
   const isMultiple = banners.length > 1;
@@ -143,10 +153,65 @@ const BannerHeroCarousel: React.FC<BannerHeroCarouselProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Device Viewport Preview Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Preview Mode:
+          </span>
+          <button
+            type="button"
+            onClick={() => setPreviewMode("desktop")}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+              previewMode === "desktop"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+            }`}
+          >
+            <Monitor className="h-3.5 w-3.5" />
+            Desktop View (16:9)
+          </button>
+          <button
+            type="button"
+            onClick={() => setPreviewMode("mobile")}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+              previewMode === "mobile"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+            }`}
+          >
+            <Smartphone className="h-3.5 w-3.5" />
+            Mobile View (Portrait)
+          </button>
+        </div>
+
+        <div className="text-xs text-gray-500">
+          {previewMode === "mobile" ? (
+            activeBanner.mobileUrl ? (
+              <span className="text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+                ✓ Showing Dedicated Mobile Image
+              </span>
+            ) : (
+              <span className="text-amber-700 font-semibold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 flex items-center gap-1">
+                ⚠ No mobile image set — showing desktop fallback
+              </span>
+            )
+          ) : (
+            <span className="text-blue-700 font-semibold bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200 flex items-center gap-1">
+              ✓ Showing Desktop Landscape Image
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Hero Section Carousel Frame */}
       <div
-        className="relative w-full overflow-hidden rounded-2xl bg-gray-950 shadow-xl border border-gray-200 aspect-[16/9] sm:aspect-[21/9] lg:aspect-[16/5]"
+        className={`relative overflow-hidden bg-gray-950 shadow-xl transition-all duration-300 ${
+          previewMode === "mobile"
+            ? "w-full max-w-sm mx-auto rounded-3xl border-4 border-gray-800 aspect-[9/16]"
+            : "w-full rounded-2xl border border-gray-200 aspect-[16/9] sm:aspect-[21/9] lg:aspect-[16/5]"
+        }`}
         role="region"
         aria-roledescription="carousel"
         aria-label="Promotional banners carousel"
@@ -210,7 +275,11 @@ const BannerHeroCarousel: React.FC<BannerHeroCarouselProps> = ({
                   </div>
                 ) : (
                   <img
-                    src={banner.url}
+                    src={
+                      previewMode === "mobile" && banner.mobileUrl
+                        ? banner.mobileUrl
+                        : banner.url
+                    }
                     alt={banner.title || "Promotional banner"}
                     className="w-full h-full object-cover object-center"
                     loading={index === 0 ? "eager" : "lazy"}
@@ -245,6 +314,19 @@ const BannerHeroCarousel: React.FC<BannerHeroCarouselProps> = ({
                     )}
                     {banner.type}
                   </span>
+
+                  {previewMode === "mobile" && (
+                    <span
+                      className={`px-2 py-0.5 text-[10px] font-semibold rounded-full text-white backdrop-blur-sm shadow-sm flex items-center gap-1 ${
+                        banner.mobileUrl
+                          ? "bg-emerald-600/90"
+                          : "bg-amber-600/90"
+                      }`}
+                    >
+                      <Smartphone className="h-3 w-3" />
+                      {banner.mobileUrl ? "Mobile Asset" : "Desktop Fallback"}
+                    </span>
+                  )}
 
                   <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-black/60 text-white backdrop-blur-sm border border-white/20 shadow-sm">
                     Order: {banner.order}
@@ -378,6 +460,17 @@ const BannerHeroCarousel: React.FC<BannerHeroCarouselProps> = ({
               <span className="text-xs font-medium px-2 py-0.5 rounded bg-purple-50 text-purple-700">
                 {activeBanner.type}
               </span>
+              {activeBanner.mobileUrl ? (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <Smartphone className="h-3 w-3" />
+                  Mobile Ready
+                </span>
+              ) : (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                  <Smartphone className="h-3 w-3" />
+                  Desktop Only
+                </span>
+              )}
             </div>
 
             <h3 className="text-lg font-bold text-gray-900">
@@ -510,6 +603,12 @@ const BannerHeroCarousel: React.FC<BannerHeroCarouselProps> = ({
                       <span className="text-[10px] text-gray-500">
                         #{banner.order}
                       </span>
+                      {banner.mobileUrl && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                          <Smartphone className="h-2.5 w-2.5" />
+                          Mobile Ready
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -558,6 +657,8 @@ const BannersPage: React.FC = () => {
   const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string>("");
+  const [mobileMediaFile, setMobileMediaFile] = useState<File | null>(null);
+  const [mobileMediaPreview, setMobileMediaPreview] = useState<string>("");
   const [mediaType, setMediaType] = useState<"IMAGE" | "VIDEO">("IMAGE");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [filterType, setFilterType] = useState<"ALL" | "IMAGE" | "VIDEO">(
@@ -595,6 +696,8 @@ const BannersPage: React.FC = () => {
       reset();
       setMediaPreview("");
       setMediaFile(null);
+      setMobileMediaPreview("");
+      setMobileMediaFile(null);
       toast.success("Banner created successfully!");
     },
     onError: (error: any) => {
@@ -612,6 +715,8 @@ const BannersPage: React.FC = () => {
       reset();
       setMediaPreview("");
       setMediaFile(null);
+      setMobileMediaPreview("");
+      setMobileMediaFile(null);
       setShowCreateModal(false);
       toast.success("Banner updated successfully!");
     },
@@ -647,65 +752,124 @@ const BannersPage: React.FC = () => {
     },
   });
 
-  // Upload media to S3
-  const uploadMediaToS3 = async (): Promise<string | null> => {
-    if (!mediaFile) return null;
-
-    setIsUploadingMedia(true);
-    const uploadToast = toast.loading(
-      `Uploading ${mediaType.toLowerCase()}...`,
-    );
-
-    try {
-      const response = await s3Api.uploadSingle(mediaFile, "banners");
-
-      if (!response.success) {
-        throw new Error("Failed to upload media");
-      }
-
-      toast.success("Media uploaded successfully!", { id: uploadToast });
-      return response.url;
-    } catch (error: any) {
-      console.error("Media upload error:", error);
-      toast.error(error?.response?.data?.message || "Failed to upload media", {
-        id: uploadToast,
-      });
-      throw error;
-    } finally {
-      setIsUploadingMedia(false);
-    }
+  // Helper to extract URLs from upload response
+  const extractUrls = (res: any): string[] => {
+    if (Array.isArray(res))
+      return res.map((r) => (typeof r === "string" ? r : r.url || ""));
+    if (Array.isArray(res?.files))
+      return res.files.map((r: any) =>
+        typeof r === "string" ? r : r.url || "",
+      );
+    if (Array.isArray(res?.data?.files))
+      return res.data.files.map((r: any) =>
+        typeof r === "string" ? r : r.url || "",
+      );
+    if (Array.isArray(res?.data))
+      return res.data.map((r: any) =>
+        typeof r === "string" ? r : r.url || "",
+      );
+    if (Array.isArray(res?.urls))
+      return res.urls.map((r: any) =>
+        typeof r === "string" ? r : r.url || "",
+      );
+    if (res?.url) return [res.url];
+    if (res?.data?.url) return [res.data.url];
+    return [];
   };
 
   const onSubmit = async (data: CreateBannerFormData) => {
     try {
       let mediaUrl = data.url || "";
+      let mobileMediaUrl = data.mobileUrl || mobileMediaPreview || "";
 
-      // ✅ upload new media
+      // ✅ Clean up old desktop media if replacing
       if (mediaFile) {
-        // ✅ delete old media from S3 while editing
         if (editingBanner?.url) {
           try {
             await s3Api.deleteFileByUrl(editingBanner.url);
-
-            // optional thumbnail cleanup
-            if (editingBanner.thumbnailUrl) {
-              await s3Api.deleteFileByUrl(editingBanner.thumbnailUrl);
-            }
           } catch (err) {
             console.error("Failed to delete old banner media:", err);
           }
         }
+        if (editingBanner?.thumbnailUrl) {
+          try {
+            await s3Api.deleteFileByUrl(editingBanner.thumbnailUrl);
+          } catch (err) {
+            console.error("Failed to delete thumbnail:", err);
+          }
+        }
+      }
 
-        const uploadedUrl = await uploadMediaToS3();
+      // ✅ Clean up old mobile media if replacing or clearing
+      if (mediaType === "IMAGE") {
+        if (mobileMediaFile) {
+          try {
+            await s3Api.deleteFileByUrl(editingBanner.mobileUrl);
+          } catch (err) {
+            console.error("Failed to delete old mobile banner:", err);
+          }
+        }
+      } else if (!mobileMediaPreview && editingBanner?.mobileUrl) {
+        // mobile image was removed
+        try {
+          await s3Api.deleteFileByUrl(editingBanner.mobileUrl);
+        } catch (err) {
+          console.error("Failed deleting cleared mobile banner:", err);
+        }
+        mobileMediaUrl = "";
+      } else {
+        mobileMediaUrl = "";
+      }
 
-        if (uploadedUrl) {
-          mediaUrl = uploadedUrl;
+      // ✅ Collect files to upload via uploadMultiple
+      const filesToUpload: { file: File; target: "desktop" | "mobile" }[] = [];
+      if (mediaFile) {
+        filesToUpload.push({ file: mediaFile, target: "desktop" });
+      }
+      if (mediaType === "IMAGE" && mobileMediaFile) {
+        filesToUpload.push({ file: mobileMediaFile, target: "mobile" });
+      }
+
+      if (filesToUpload.length > 0) {
+        setIsUploadingMedia(true);
+        const uploadToast = toast.loading(
+          filesToUpload.length > 1
+            ? "Uploading desktop & mobile images..."
+            : `Uploading ${filesToUpload[0].target === "desktop" ? (mediaType === "IMAGE" ? "desktop image" : "video") : "mobile image"}...`,
+        );
+
+        try {
+          const response = await s3Api.uploadMultiple(
+            filesToUpload.map((item) => item.file),
+            "banners",
+          );
+
+          const urls = extractUrls(response);
+          filesToUpload.forEach((item, i) => {
+            if (item.target === "desktop" && urls[i]) {
+              mediaUrl = urls[i];
+            } else if (item.target === "mobile" && urls[i]) {
+              mobileMediaUrl = urls[i];
+            }
+          });
+
+          toast.success("Media uploaded successfully!", { id: uploadToast });
+        } catch (error: any) {
+          console.error("Banner media upload error:", error);
+          toast.error(
+            error?.response?.data?.message || "Failed to upload media",
+            { id: uploadToast },
+          );
+          throw error;
+        } finally {
+          setIsUploadingMedia(false);
         }
       }
 
       const submitData = {
         ...data,
         url: mediaUrl,
+        mobileUrl: mobileMediaUrl || undefined,
         type: mediaType,
         link: data.link || undefined,
         text: data.text || undefined,
@@ -730,6 +894,7 @@ const BannersPage: React.FC = () => {
     setValue("title", banner.title);
     setValue("type", banner.type);
     setValue("url", banner.url);
+    setValue("mobileUrl", banner.mobileUrl || "");
     setValue("link", banner.link || "");
     setValue("text", banner.text || "");
     setValue("thumbnailUrl", banner.thumbnailUrl || "");
@@ -738,8 +903,10 @@ const BannersPage: React.FC = () => {
     setMediaPreview(
       banner.type === "VIDEO" ? banner.thumbnailUrl || banner.url : banner.url,
     );
+    setMobileMediaPreview(banner.mobileUrl || "");
     setMediaType(banner.type);
     setMediaFile(null);
+    setMobileMediaFile(null);
     setShowCreateModal(true);
   };
 
@@ -758,6 +925,15 @@ const BannersPage: React.FC = () => {
         }
       }
 
+      // ✅ delete mobile banner media if exists
+      if (banner.mobileUrl) {
+        try {
+          await s3Api.deleteFileByUrl(banner.mobileUrl);
+        } catch (err) {
+          console.error("Failed deleting mobile banner:", err);
+        }
+      }
+
       // ✅ delete thumbnail too if exists
       if (banner.thumbnailUrl) {
         try {
@@ -773,11 +949,30 @@ const BannersPage: React.FC = () => {
     }
   };
 
-  // Handle media selection from MediaUploadManager
+  // Handle media selection from MediaUploadManager (Desktop)
   const handleMediaSelect = (file: File, preview: string) => {
     setMediaFile(file);
     setMediaPreview(preview);
     setValue("url", preview, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  };
+
+  // Handle mobile media selection from MediaUploadManager (Mobile)
+  const handleMobileMediaSelect = (file: File, preview: string) => {
+    setMobileMediaFile(file);
+    setMobileMediaPreview(preview);
+    setValue("mobileUrl", preview, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  };
+
+  const handleMobileMediaClear = () => {
+    setMobileMediaFile(null);
+    setMobileMediaPreview("");
+    setValue("mobileUrl", "", {
       shouldValidate: true,
       shouldDirty: true,
     });
@@ -819,6 +1014,7 @@ const BannersPage: React.FC = () => {
                   title: "",
                   type: "IMAGE",
                   url: "",
+                  mobileUrl: "",
                   link: "",
                   text: "",
                   thumbnailUrl: "",
@@ -827,6 +1023,8 @@ const BannersPage: React.FC = () => {
                 });
                 setMediaPreview("");
                 setMediaFile(null);
+                setMobileMediaPreview("");
+                setMobileMediaFile(null);
                 setMediaType("IMAGE");
                 setShowCreateModal(true);
               }}
@@ -985,6 +1183,8 @@ const BannersPage: React.FC = () => {
                     reset();
                     setMediaPreview("");
                     setMediaFile(null);
+                    setMobileMediaPreview("");
+                    setMobileMediaFile(null);
                   }}
                   className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors"
                   disabled={
@@ -1060,52 +1260,108 @@ const BannersPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Media Upload Manager */}
-                <MediaUploadManager
-                  mediaType={mediaType}
-                  onMediaSelect={handleMediaSelect}
-                  onMediaClear={() => {
-                    setMediaFile(null);
-                    setMediaPreview("");
-                    setValue("url", "", {
-                      shouldValidate: true,
-                      shouldDirty: true,
-                    });
-                  }}
-                  currentPreview={mediaPreview}
-                  targetWidth={BANNER_WIDTH}
-                  targetHeight={BANNER_HEIGHT}
-                  maxSizeMB={mediaType === "IMAGE" ? 30 : 50}
-                  maxOutputWidth={3840}
-                />
-                {/* Banner Requirements */}
-                {mediaType === "IMAGE" && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                    <h4 className="font-medium text-amber-900 mb-2">
-                      Banner Image Requirements
-                    </h4>
-
-                    <ul className="list-disc list-inside text-sm text-amber-800 space-y-1">
-                      <li>
-                        Upload a high-resolution landscape image and select the
-                        exact 16:9 area you want to show.
-                      </li>
-                      <li>Camera images such as 6000 × 4000 are supported.</li>
-                      <li>Minimum source size: 1920 × 1080 pixels.</li>
-                      <li>
-                        The selected crop is exported at high quality, up to
-                        3840 pixels wide, and is never enlarged.
-                      </li>
-                      <li>
-                        Keep faces, logos and important content away from the
-                        extreme edges because a full-screen hero can still trim
-                        small edges on unusually wide or tall screens.
-                      </li>
-                    </ul>
+                {/* Desktop / Main Media Upload Manager */}
+                <div className="space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <label className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                      <Monitor className="h-4 w-4 text-blue-600" />
+                      {mediaType === "IMAGE"
+                        ? "Desktop View Image *"
+                        : "Video Media *"}
+                    </label>
+                    {mediaType === "IMAGE" && (
+                      <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full w-fit">
+                        Landscape 16:9 ({BANNER_WIDTH} × {BANNER_HEIGHT})
+                      </span>
+                    )}
                   </div>
-                )}
-                {errors.url && (
-                  <p className="text-sm text-red-600">{errors.url.message}</p>
+
+                  <MediaUploadManager
+                    mediaType={mediaType}
+                    onMediaSelect={handleMediaSelect}
+                    onMediaClear={() => {
+                      setMediaFile(null);
+                      setMediaPreview("");
+                      setValue("url", "", {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      });
+                    }}
+                    currentPreview={mediaPreview}
+                    targetWidth={BANNER_WIDTH}
+                    targetHeight={BANNER_HEIGHT}
+                    maxSizeMB={mediaType === "IMAGE" ? 30 : 50}
+                    maxOutputWidth={3840}
+                  />
+
+                  {/* Desktop Banner Requirements */}
+                  {mediaType === "IMAGE" && (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs text-blue-900 space-y-1">
+                      <p className="font-semibold flex items-center gap-1 text-blue-900">
+                        <Info className="h-3.5 w-3.5 text-blue-600" /> Desktop
+                        Display Optimization:
+                      </p>
+                      <p className="text-blue-800">
+                        Select a wide 16:9 crop (1920 × 1080) for full-width
+                        desktop screens. Important subjects should be centered.
+                      </p>
+                    </div>
+                  )}
+
+                  {errors.url && (
+                    <p className="text-sm text-red-600">{errors.url.message}</p>
+                  )}
+                </div>
+
+                {/* Mobile View Image Upload Manager (For Images Only) */}
+                {mediaType === "IMAGE" && (
+                  <div className="space-y-2 pt-4 border-t border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                          <Smartphone className="h-4 w-4 text-purple-600" />
+                          Mobile View Image
+                          <span className="text-xs font-normal text-gray-500">
+                            (Optional / Recommended)
+                          </span>
+                        </label>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Automatically served to mobile visitors so the image
+                          fits phone screens naturally without edge trimming.
+                        </p>
+                      </div>
+                      <span className="text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-full w-fit">
+                        Portrait 9:16 ({MOBILE_BANNER_WIDTH} ×{" "}
+                        {MOBILE_BANNER_HEIGHT})
+                      </span>
+                    </div>
+
+                    <MediaUploadManager
+                      mediaType="IMAGE"
+                      onMediaSelect={handleMobileMediaSelect}
+                      onMediaClear={handleMobileMediaClear}
+                      currentPreview={mobileMediaPreview}
+                      targetWidth={MOBILE_BANNER_WIDTH}
+                      targetHeight={MOBILE_BANNER_HEIGHT}
+                      maxSizeMB={30}
+                      maxOutputWidth={2160}
+                    />
+
+                    {mobileMediaPreview ? (
+                      <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
+                        <Check className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                        <span>
+                          Dedicated mobile view image is set and will be used on
+                          phones.
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-gray-400 italic">
+                        If no mobile image is uploaded, mobile devices will fall
+                        back to displaying the desktop image.
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {/* Link */}
@@ -1198,6 +1454,8 @@ const BannersPage: React.FC = () => {
                       reset();
                       setMediaPreview("");
                       setMediaFile(null);
+                      setMobileMediaPreview("");
+                      setMobileMediaFile(null);
                     }}
                     disabled={
                       isUploadingMedia ||
