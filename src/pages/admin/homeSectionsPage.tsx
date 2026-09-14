@@ -601,12 +601,8 @@ export const HomeSectionsPage: React.FC = () => {
                 (m.url && om.url && om.url === m.url),
             ) || editingSection?.media?.[idx];
 
-          // Collect files to upload via uploadMultiple for this media item
-          const filesToUpload: { file: File; target: "desktop" | "mobile" }[] =
-            [];
-
+          // 1. Check if desktop media file exists, upload first and set into url
           if (m.file) {
-            filesToUpload.push({ file: m.file, target: "desktop" });
             // ✅ delete old media while editing
             if (oldMediaItem?.url) {
               try {
@@ -615,11 +611,22 @@ export const HomeSectionsPage: React.FC = () => {
                 console.error("Failed deleting old section media:", err);
               }
             }
+
+            const res = await s3Api.uploadSingle(m.file, "home-sections");
+            url = res.url;
+            const uploadedUrl =
+              res?.url ||
+              res?.data?.url ||
+              (typeof res?.data === "string" ? res.data : "") ||
+              "";
+            if (uploadedUrl) {
+              url = uploadedUrl;
+            }
           }
 
+          // 2. Check if mobile media file exists, upload and set into mobileUrl
           if (isDualImageLayout) {
             if (m.mobileFile) {
-              filesToUpload.push({ file: m.mobileFile, target: "mobile" });
               // ✅ delete old mobile media while editing
               if (oldMediaItem?.mobileUrl) {
                 try {
@@ -630,6 +637,21 @@ export const HomeSectionsPage: React.FC = () => {
                     err,
                   );
                 }
+              }
+
+              const res: any = await s3Api.uploadSingle(
+                m.mobileFile,
+                "home-sections",
+              );
+
+              mobileUrl = res.url;
+              const uploadedMobileUrl =
+                res?.url ||
+                res?.data?.url ||
+                (typeof res?.data === "string" ? res.data : "") ||
+                "";
+              if (uploadedMobileUrl) {
+                mobileUrl = uploadedMobileUrl;
               }
             } else if (!m.mobileUrl && oldMediaItem?.mobileUrl) {
               try {
@@ -655,48 +677,6 @@ export const HomeSectionsPage: React.FC = () => {
               }
             }
             mobileUrl = "";
-          }
-
-          if (filesToUpload.length > 0) {
-            const res = await s3Api.uploadMultiple(
-              filesToUpload.map((f) => f.file),
-              "home-sections",
-            );
-
-            const extractUrls = (resp: any): string[] => {
-              if (Array.isArray(resp))
-                return resp.map((r) =>
-                  typeof r === "string" ? r : r.url || "",
-                );
-              if (Array.isArray(resp?.files))
-                return resp.files.map((r: any) =>
-                  typeof r === "string" ? r : r.url || "",
-                );
-              if (Array.isArray(resp?.data?.files))
-                return resp.data.files.map((r: any) =>
-                  typeof r === "string" ? r : r.url || "",
-                );
-              if (Array.isArray(resp?.data))
-                return resp.data.map((r: any) =>
-                  typeof r === "string" ? r : r.url || "",
-                );
-              if (Array.isArray(resp?.urls))
-                return resp.urls.map((r: any) =>
-                  typeof r === "string" ? r : r.url || "",
-                );
-              if (resp?.url) return [resp.url];
-              if (resp?.data?.url) return [resp.data.url];
-              return [];
-            };
-
-            const urls = extractUrls(res);
-            filesToUpload.forEach((item, i) => {
-              if (item.target === "desktop" && urls[i]) {
-                url = urls[i];
-              } else if (item.target === "mobile" && urls[i]) {
-                mobileUrl = urls[i];
-              }
-            });
           }
 
           return {
