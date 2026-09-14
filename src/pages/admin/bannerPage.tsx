@@ -752,38 +752,14 @@ const BannersPage: React.FC = () => {
     },
   });
 
-  // Helper to extract URLs from upload response
-  const extractUrls = (res: any): string[] => {
-    if (Array.isArray(res))
-      return res.map((r) => (typeof r === "string" ? r : r.url || ""));
-    if (Array.isArray(res?.files))
-      return res.files.map((r: any) =>
-        typeof r === "string" ? r : r.url || "",
-      );
-    if (Array.isArray(res?.data?.files))
-      return res.data.files.map((r: any) =>
-        typeof r === "string" ? r : r.url || "",
-      );
-    if (Array.isArray(res?.data))
-      return res.data.map((r: any) =>
-        typeof r === "string" ? r : r.url || "",
-      );
-    if (Array.isArray(res?.urls))
-      return res.urls.map((r: any) =>
-        typeof r === "string" ? r : r.url || "",
-      );
-    if (res?.url) return [res.url];
-    if (res?.data?.url) return [res.data.url];
-    return [];
-  };
-
   const onSubmit = async (data: CreateBannerFormData) => {
     try {
       let mediaUrl = data.url || "";
       let mobileMediaUrl = data.mobileUrl || mobileMediaPreview || "";
 
-      // ✅ Clean up old desktop media if replacing
+      // 1. Check if desktop media file exists, upload first and set into url
       if (mediaFile) {
+        // Delete old media while editing
         if (editingBanner?.url) {
           try {
             await s3Api.deleteFileByUrl(editingBanner.url);
@@ -798,72 +774,94 @@ const BannersPage: React.FC = () => {
             console.error("Failed to delete thumbnail:", err);
           }
         }
-      }
 
-      // ✅ Clean up old mobile media if replacing or clearing
-      if (mediaType === "IMAGE") {
-        if (mobileMediaFile && editingBanner?.mobileUrl) {
-          try {
-            await s3Api.deleteFileByUrl(editingBanner.mobileUrl);
-          } catch (err) {
-            console.error("Failed to delete old mobile banner:", err);
-          }
-        }
-      } else if (!mobileMediaPreview && editingBanner?.mobileUrl) {
-        // mobile image was removed
-        try {
-          await s3Api.deleteFileByUrl(editingBanner.mobileUrl);
-        } catch (err) {
-          console.error("Failed deleting cleared mobile banner:", err);
-        }
-        mobileMediaUrl = "";
-      } else {
-        mobileMediaUrl = "";
-      }
-
-      // ✅ Collect files to upload via uploadMultiple
-      const filesToUpload: { file: File; target: "desktop" | "mobile" }[] = [];
-      if (mediaFile) {
-        filesToUpload.push({ file: mediaFile, target: "desktop" });
-      }
-      if (mediaType === "IMAGE" && mobileMediaFile) {
-        filesToUpload.push({ file: mobileMediaFile, target: "mobile" });
-      }
-
-      if (filesToUpload.length > 0) {
         setIsUploadingMedia(true);
         const uploadToast = toast.loading(
-          filesToUpload.length > 1
-            ? "Uploading desktop & mobile images..."
-            : `Uploading ${filesToUpload[0].target === "desktop" ? (mediaType === "IMAGE" ? "desktop image" : "video") : "mobile image"}...`,
+          `Uploading ${mediaType === "IMAGE" ? "desktop image" : "video"}...`,
         );
-
         try {
-          const response = await s3Api.uploadMultiple(
-            filesToUpload.map((item) => item.file),
-            "banners",
+          const res: any = await s3Api.uploadSingle(mediaFile, "banners");
+          const uploadedUrl =
+            res?.url ||
+            res?.data?.url ||
+            (typeof res?.data === "string" ? res.data : "") ||
+            "";
+
+          if (!uploadedUrl) {
+            throw new Error("No URL returned from server for desktop upload");
+          }
+
+          mediaUrl = uploadedUrl;
+          toast.success(
+            `${mediaType === "IMAGE" ? "Desktop image" : "Video"} uploaded successfully!`,
+            { id: uploadToast },
           );
-
-          const urls = extractUrls(response);
-          filesToUpload.forEach((item, i) => {
-            if (item.target === "desktop" && urls[i]) {
-              mediaUrl = urls[i];
-            } else if (item.target === "mobile" && urls[i]) {
-              mobileMediaUrl = urls[i];
-            }
-          });
-
-          toast.success("Media uploaded successfully!", { id: uploadToast });
         } catch (error: any) {
-          console.error("Banner media upload error:", error);
+          console.error("Desktop upload error:", error);
           toast.error(
-            error?.response?.data?.message || "Failed to upload media",
+            error?.response?.data?.message || "Failed to upload desktop media",
             { id: uploadToast },
           );
           throw error;
         } finally {
           setIsUploadingMedia(false);
         }
+      }
+
+      // 2. Check if mobile media file exists, upload and set into mobileUrl
+      if (mediaType === "IMAGE") {
+        if (mobileMediaFile) {
+          // Delete old mobile banner while editing
+          if (editingBanner?.mobileUrl) {
+            try {
+              await s3Api.deleteFileByUrl(editingBanner.mobileUrl);
+            } catch (err) {
+              console.error("Failed to delete old mobile banner:", err);
+            }
+          }
+
+          setIsUploadingMedia(true);
+          const uploadToast = toast.loading("Uploading mobile image...");
+          try {
+            const res: any = await s3Api.uploadSingle(
+              mobileMediaFile,
+              "banners",
+            );
+            const uploadedMobileUrl =
+              res?.url ||
+              res?.data?.url ||
+              (typeof res?.data === "string" ? res.data : "") ||
+              "";
+
+            if (!uploadedMobileUrl) {
+              throw new Error("No URL returned from server for mobile upload");
+            }
+
+            mobileMediaUrl = uploadedMobileUrl;
+            toast.success("Mobile image uploaded successfully!", {
+              id: uploadToast,
+            });
+          } catch (error: any) {
+            console.error("Mobile upload error:", error);
+            toast.error(
+              error?.response?.data?.message || "Failed to upload mobile image",
+              { id: uploadToast },
+            );
+            throw error;
+          } finally {
+            setIsUploadingMedia(false);
+          }
+        } else if (!mobileMediaPreview && editingBanner?.mobileUrl) {
+          // Mobile image was removed
+          try {
+            await s3Api.deleteFileByUrl(editingBanner.mobileUrl);
+          } catch (err) {
+            console.error("Failed deleting cleared mobile banner:", err);
+          }
+          mobileMediaUrl = "";
+        }
+      } else {
+        mobileMediaUrl = "";
       }
 
       const submitData = {
