@@ -295,10 +295,22 @@ const ShipmentsPage: React.FC = () => {
 
   // Handle Generate Manifest with validation
   const handleGenerateManifest = (order: Order) => {
-    if (!hasAwb(order)) {
-      toast.error("⚠️ Please generate AWB first before downloading manifest!");
-      return;
-    }
+    // Handle Generate Manifest with validation
+    const handleGenerateManifest = (order: Order) => {
+      if (!hasAwb(order)) {
+        toast.error(
+          "⚠️ Please generate AWB first before downloading manifest!",
+        );
+        return;
+      }
+      if (!hasPickup(order)) {
+        toast.error(
+          "⚠️ Please schedule pickup first before downloading manifest!",
+        );
+        return;
+      }
+      generateManifestMutation.mutate(order.id);
+    };
     generateManifestMutation.mutate(order.id);
   };
 
@@ -773,12 +785,19 @@ const ShipmentsPage: React.FC = () => {
                                               </button>
 
                                               {/* Print Manifest */}
+                                              {/* Print Manifest */}
                                               <button
                                                 onClick={() =>
                                                   handleGenerateManifest(order)
                                                 }
                                                 disabled={
-                                                  generateManifestMutation.isPending
+                                                  generateManifestMutation.isPending ||
+                                                  !hasPickup(order)
+                                                }
+                                                title={
+                                                  !hasPickup(order)
+                                                    ? "Schedule pickup first before downloading the manifest"
+                                                    : undefined
                                                 }
                                                 className="flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm disabled:opacity-50"
                                               >
