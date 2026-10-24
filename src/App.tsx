@@ -16,6 +16,7 @@ import { ProtectedRoute } from "./routes/protectedRoutes";
 import { AdminDashboard } from "./pages/admin/adminDashboard";
 import ProductsPage from "./pages/admin/products/productsPage";
 import ProductCreatePage from "./pages/admin/products/productCreatePage";
+import BulkProductUploadPage from "./pages/admin/products/bulkProductUploadPage";
 import ReviewsPage from "./pages/admin/reviewsPage";
 import WarehousesPage from "./pages/admin/warehousesPage";
 import ReturnsPage from "./pages/admin/returnsPage";
@@ -120,6 +121,18 @@ const router = createBrowserRouter(
             requiredPermission="canCreate"
           >
             <ProductCreatePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/products/bulk-upload"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="products"
+            requiredPermission="canCreate"
+          >
+            <BulkProductUploadPage />
           </ProtectedRoute>
         }
       />

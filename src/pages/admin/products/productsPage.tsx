@@ -26,6 +26,7 @@ import {
   User,
   Video,
   Play,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { productApi } from '@/lib/api/product.api';
 import { categoryApi } from '@/lib/api/category.api';
@@ -443,15 +444,26 @@ const ProductsPage: React.FC = () => {
             </div>
           </div>
           {canCreate && (
-            <button
-              onClick={() => navigate('/admin/products/new')}
-              disabled={!isLoadingWarehouses && !hasWarehouses}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium disabled:opacity-65 disabled:cursor-not-allowed"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span className="hidden sm:inline">Create Product</span>
-              <span className="sm:hidden">Create</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/admin/products/bulk-upload')}
+                disabled={!isLoadingWarehouses && !hasWarehouses}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition-all shadow-sm hover:shadow font-medium text-sm disabled:opacity-65 disabled:cursor-not-allowed"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                <span className="hidden sm:inline">Bulk Upload</span>
+                <span className="sm:hidden">Bulk</span>
+              </button>
+              <button
+                onClick={() => navigate('/admin/products/new')}
+                disabled={!isLoadingWarehouses && !hasWarehouses}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl font-medium text-sm disabled:opacity-65 disabled:cursor-not-allowed"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">Create Product</span>
+                <span className="sm:hidden">Create</span>
+              </button>
+            </div>
           )}
         </div>
 

@@ -9,10 +9,85 @@ import type {
   Stock,
   UpdateProductData,
 } from "../types/product/prodcut";
-import { apiCall, type ApiResponse } from "./api.base.service";
+import apiClient, { apiCall, type ApiResponse } from "./api.base.service";
+import type {
+  BulkCategoryNode,
+  BulkCategoryLookup,
+  BulkValidationResponse,
+  BulkImportResponse,
+} from "../types/product/bulkProduct";
 
-// Product API with Enhanced Variant Support
+// Product API with Enhanced Variant and Bulk Support
 export const productApi = {
+  // ==========================================
+  // BULK PRODUCT IMPORT ENDPOINTS
+  // ==========================================
+
+  getBulkCategoryTree: async (): Promise<
+    ApiResponse<{
+      tree: BulkCategoryNode[];
+      flatList: BulkCategoryLookup[];
+    }>
+  > => {
+    return apiCall("GET", "/products/bulk/categories-tree");
+  },
+
+  downloadBulkTemplate: async (categoryIds?: string[]): Promise<Blob> => {
+    const params =
+      categoryIds && categoryIds.length > 0
+        ? { categoryIds: categoryIds.join(",") }
+        : undefined;
+    const response = await apiClient.get("/products/bulk/template", {
+      params,
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  exportBulkProducts: async (
+    products: any[],
+    categoryIds?: string[]
+  ): Promise<Blob> => {
+    const response = await apiClient.post(
+      "/products/bulk/export",
+      { products, categoryIds },
+      { responseType: "blob" }
+    );
+    return response.data;
+  },
+
+  validateBulkFile: async (
+    file: File
+  ): Promise<ApiResponse<BulkValidationResponse>> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiCall("POST", "/products/bulk/validate", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  validateBulkProducts: async (
+    products: any[]
+  ): Promise<ApiResponse<BulkValidationResponse>> => {
+    return apiCall("POST", "/products/bulk/validate", { products });
+  },
+
+  importBulkFile: async (
+    file: File
+  ): Promise<ApiResponse<BulkImportResponse>> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiCall("POST", "/products/bulk/import", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  importBulkProducts: async (
+    products: any[]
+  ): Promise<ApiResponse<BulkImportResponse>> => {
+    return apiCall("POST", "/products/bulk/import", { products });
+  },
+
   // ==========================================
   // PRODUCT ENDPOINTS
   // ==========================================
@@ -137,7 +212,7 @@ export const productApi = {
   },
 
   // ==========================================
-  // 🆕 VARIANT ENDPOINTS (ENHANCED)
+  // VARIANT ENDPOINTS (ENHANCED)
   // ==========================================
 
   // Add variant (with media, pricing, dimensions)
@@ -183,7 +258,7 @@ export const productApi = {
     return apiCall("POST", `/products/${productId}/variants`, data);
   },
 
-  // 🆕 Get variant by ID
+  // Get variant by ID
   getVariant: async (
     productId: string,
     variantId: string
@@ -191,7 +266,7 @@ export const productApi = {
     return apiCall("GET", `/products/${productId}/variants/${variantId}`);
   },
 
-  // 🆕 Update variant (with pricing, dimensions, attributes)
+  // Update variant (with pricing, dimensions, attributes)
   updateVariant: async (
     productId: string,
     variantId: string,
@@ -221,7 +296,7 @@ export const productApi = {
   },
 
   // ==========================================
-  // 🆕 VARIANT MEDIA ENDPOINTS (NEW)
+  // VARIANT MEDIA ENDPOINTS (NEW)
   // ==========================================
 
   // Add media to variant
