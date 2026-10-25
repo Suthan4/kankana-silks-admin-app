@@ -9,10 +9,94 @@ import type {
   Stock,
   UpdateProductData,
 } from "../types/product/prodcut";
-import { apiCall, type ApiResponse } from "./api.base.service";
+import apiClient, { apiCall, type ApiResponse } from "./api.base.service";
+import type {
+  BulkCategoryNode,
+  BulkCategoryLookup,
+  BulkValidationResponse,
+  BulkImportResponse,
+  BulkImportDraft,
+  BulkImportJob,
+  ImageMatchResult,
+  DriveFolder,
+  BulkWarehouse,
+} from "../types/product/bulkProduct";
 
-// Product API with Enhanced Variant Support
+// Product API with Enhanced Variant and Bulk Support
 export const productApi = {
+  // ==========================================
+  // BULK PRODUCT IMPORT ENDPOINTS
+  // ==========================================
+
+  getBulkCategoryTree: async (): Promise<
+    ApiResponse<{
+      tree: BulkCategoryNode[];
+      flatList: BulkCategoryLookup[];
+    }>
+  > => {
+    return apiCall("GET", "/products/bulk/categories-tree");
+  },
+
+  getWarehouses: async (): Promise<ApiResponse<{ warehouses: BulkWarehouse[] }>> => {
+    return apiCall("GET", "/products/bulk/warehouses");
+  },
+
+  downloadBulkTemplate: async (categoryIds?: string[]): Promise<Blob> => {
+    const params =
+      categoryIds && categoryIds.length > 0
+        ? { categoryIds: categoryIds.join(",") }
+        : undefined;
+    const response = await apiClient.get("/products/bulk/template", {
+      params,
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
+  exportBulkProducts: async (
+    products: any[],
+    categoryIds?: string[]
+  ): Promise<Blob> => {
+    const response = await apiClient.post(
+      "/products/bulk/export",
+      { products, categoryIds },
+      { responseType: "blob" }
+    );
+    return response.data;
+  },
+
+  validateBulkFile: async (
+    file: File
+  ): Promise<ApiResponse<BulkValidationResponse>> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiCall("POST", "/products/bulk/validate", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  validateBulkProducts: async (
+    products: any[]
+  ): Promise<ApiResponse<BulkValidationResponse>> => {
+    return apiCall("POST", "/products/bulk/validate", { products });
+  },
+
+  importBulkFile: async (
+    file: File
+  ): Promise<ApiResponse<BulkImportResponse>> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiCall("POST", "/products/bulk/import", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  importBulkProducts: async (
+    products: any[]
+  ): Promise<ApiResponse<BulkImportResponse>> => {
+    return apiCall("POST", "/products/bulk/import", { products });
+  },
+
   // ==========================================
   // PRODUCT ENDPOINTS
   // ==========================================
@@ -137,7 +221,7 @@ export const productApi = {
   },
 
   // ==========================================
-  // 🆕 VARIANT ENDPOINTS (ENHANCED)
+  // VARIANT ENDPOINTS (ENHANCED)
   // ==========================================
 
   // Add variant (with media, pricing, dimensions)
@@ -183,7 +267,7 @@ export const productApi = {
     return apiCall("POST", `/products/${productId}/variants`, data);
   },
 
-  // 🆕 Get variant by ID
+  // Get variant by ID
   getVariant: async (
     productId: string,
     variantId: string
@@ -191,7 +275,7 @@ export const productApi = {
     return apiCall("GET", `/products/${productId}/variants/${variantId}`);
   },
 
-  // 🆕 Update variant (with pricing, dimensions, attributes)
+  // Update variant (with pricing, dimensions, attributes)
   updateVariant: async (
     productId: string,
     variantId: string,
@@ -221,7 +305,7 @@ export const productApi = {
   },
 
   // ==========================================
-  // 🆕 VARIANT MEDIA ENDPOINTS (NEW)
+  // VARIANT MEDIA ENDPOINTS (NEW)
   // ==========================================
 
   // Add media to variant
@@ -283,5 +367,115 @@ export const productApi = {
     }
   ): Promise<ApiResponse<Stock>> => {
     return apiCall("PUT", `/products/${productId}/stock`, data);
+  },
+
+  // ==========================================
+  // BULK IMPORT DRAFT ENDPOINTS
+  // ==========================================
+
+  createDraft: async (rawInput: string): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("POST", "/products/bulk/draft", { rawInput });
+  },
+
+  listDrafts: async (): Promise<ApiResponse<BulkImportDraft[]>> => {
+    return apiCall("GET", "/products/bulk/draft");
+  },
+
+  getDraft: async (id: string): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("GET", `/products/bulk/draft/${id}`);
+  },
+
+  updateDraft: async (
+    id: string,
+    data: {
+      rawInput?: string;
+      confirmedAssignments?: Record<string, string>;
+      parsedData?: any;
+      status?: string;
+    }
+  ): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("PATCH", `/products/bulk/draft/${id}`, data);
+  },
+
+  deleteDraft: async (id: string): Promise<ApiResponse<void>> => {
+    return apiCall("DELETE", `/products/bulk/draft/${id}`);
+  },
+
+  parseDraftFile: async (id: string, file: File): Promise<ApiResponse<BulkImportDraft>> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiCall("POST", `/products/bulk/draft/${id}/parse`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  parseDraftText: async (id: string, rawInput: string): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("POST", `/products/bulk/draft/${id}/parse`, { rawInput });
+  },
+
+  matchDriveImages: async (
+    id: string,
+    folderId: string
+  ): Promise<ApiResponse<BulkImportDraft | ImageMatchResult>> => {
+    return apiCall("POST", `/products/bulk/draft/${id}/match-drive`, { folderId });
+  },
+
+  confirmDriveAssignment: async (
+    id: string,
+    assignments: Record<string, string>
+  ): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("PATCH", `/products/bulk/draft/${id}`, {
+      confirmedAssignments: assignments,
+    });
+  },
+
+  // ==========================================
+  // GOOGLE DRIVE ENDPOINTS
+  // ==========================================
+
+  /**
+   * Check whether the current admin user has an active Google Drive connection.
+   * Returns { connected: boolean, connectUrl: string | null }
+   */
+  getDriveStatus: async (
+    draftId?: string
+  ): Promise<ApiResponse<{ connected: boolean; connectUrl: string | null }>> => {
+    return apiCall("GET", "/auth/drive/status", undefined, {
+      params: draftId ? { draftId } : undefined,
+    });
+  },
+
+  listDriveFolders: async (
+    parentId?: string
+  ): Promise<ApiResponse<DriveFolder[] | { folders: DriveFolder[] }>> => {
+    return apiCall("GET", "/products/bulk/drive/folders", undefined, {
+      params: parentId ? { parentId } : undefined,
+    });
+  },
+
+  getDriveProxyUrl: (fileId: string): string => {
+    const token = localStorage.getItem("accessToken");
+    const base = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+    return `${base}/products/bulk/drive-proxy/${fileId}?token=${token}`;
+  },
+
+  // ==========================================
+  // BACKGROUND IMPORT JOB ENDPOINTS
+  // ==========================================
+
+  startDraftImport: async (draftId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("POST", `/products/bulk/draft/${draftId}/import`);
+  },
+
+  startImportJob: async (draftId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("POST", "/products/bulk/import-job", { draftId });
+  },
+
+  getJobStatus: async (jobId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("GET", `/products/bulk/job/${jobId}`);
+  },
+
+  retryJob: async (jobId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("POST", `/products/bulk/job/${jobId}/retry`);
   },
 };
