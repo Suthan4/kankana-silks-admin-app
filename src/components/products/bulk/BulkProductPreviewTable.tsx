@@ -19,34 +19,56 @@ import {
   Truck,
   Video,
   Info,
+  Square,
+  Check,
 } from "lucide-react";
 import type {
   BulkParsedProduct,
   BulkParsedVariant,
   BulkValidationError,
   BulkValidationSummary,
+  BulkCategoryLookup,
+  BulkCategoryNode,
 } from "@/lib/types/product/bulkProduct";
+import { BulkCategoryAssignModal } from "./BulkCategoryAssignModal";
 
 interface BulkProductPreviewTableProps {
   products: BulkParsedProduct[];
   summary?: BulkValidationSummary;
   errors: BulkValidationError[];
+  filterStatus?: "all" | "valid" | "error" | "warning";
+  onFilterChange?: (filter: "all" | "valid" | "error" | "warning") => void;
   onUpdateProduct: (updated: BulkParsedProduct) => void;
   onDeleteProduct: (productGroupId: string) => void;
   onAddProduct: () => void;
   onDownloadErrorReport: () => void;
+  onEditProduct?: (product: BulkParsedProduct) => void;
+  flatCategories?: BulkCategoryLookup[];
+  categoriesTree?: BulkCategoryNode[];
+  onBulkUpdateProducts?: (updatedProducts: BulkParsedProduct[]) => void;
 }
 
 export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = ({
   products,
   summary,
   errors,
+  filterStatus: externalFilterStatus,
+  onFilterChange: externalOnFilterChange,
   onUpdateProduct,
   onDeleteProduct,
   onAddProduct,
   onDownloadErrorReport,
+  onEditProduct,
+  flatCategories,
+  categoriesTree,
+  onBulkUpdateProducts,
 }) => {
-  const [filterStatus, setFilterStatus] = useState<"all" | "valid" | "error" | "warning">("all");
+  const [internalFilterStatus, setInternalFilterStatus] = useState<"all" | "valid" | "error" | "warning">("all");
+  const filterStatus = externalFilterStatus ?? internalFilterStatus;
+  const setFilterStatus = (s: "all" | "valid" | "error" | "warning") => {
+    setInternalFilterStatus(s);
+    externalOnFilterChange?.(s);
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
@@ -122,6 +144,70 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
     setEditFormData(null);
   };
 
+  // Selection state for bulk operations
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkCategoryModal, setShowBulkCategoryModal] = useState(false);
+
+  const isAllSelected =
+    filteredProducts.length > 0 &&
+    filteredProducts.every((p) => selectedIds.has(p.productGroupId));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredProducts.map((p) => p.productGroupId)));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkApplyCategory = (
+    categoryId: string,
+    categoryPath: string,
+    onlyUnassigned: boolean
+  ) => {
+    const updated = products.map((p) => {
+      if (!selectedIds.has(p.productGroupId)) return p;
+      if (onlyUnassigned && (p.categoryId || p.categoryPath?.trim())) {
+        return p;
+      }
+      return {
+        ...p,
+        categoryId,
+        categoryPath,
+      };
+    });
+    if (onBulkUpdateProducts) {
+      onBulkUpdateProducts(updated);
+    } else {
+      updated.forEach((p) => onUpdateProduct(p));
+    }
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${selectedIds.size} selected product(s)?`
+      )
+    ) {
+      return;
+    }
+    selectedIds.forEach((id) => onDeleteProduct(id));
+    setSelectedIds(new Set());
+  };
+
   return (
     <div className="space-y-4">
       {/* Top Controls & Filter Tabs */}
@@ -194,6 +280,22 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
 
           <button
             type="button"
+            onClick={toggleSelectAll}
+            className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition ${
+              isAllSelected
+                ? "bg-indigo-600 text-white shadow-2xs"
+                : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+            }`}
+          >
+            {isAllSelected ? (
+              <Check className="h-3.5 w-3.5 stroke-[3]" />
+            ) : (
+              <Square className="h-3.5 w-3.5 text-slate-400" />
+            )}
+            {isAllSelected ? "Deselect All" : "Select All"}
+          </button>
+          <button
+            type="button"
             onClick={expandAll}
             className="px-2.5 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition"
           >
@@ -228,6 +330,44 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
           </button>
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-indigo-900 px-2.5 py-1 bg-white rounded-md border border-indigo-200 shadow-2xs">
+              {selectedIds.size} of {filteredProducts.length} selected
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-indigo-700 hover:underline font-medium"
+            >
+              Clear selection
+            </button>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {flatCategories && flatCategories.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowBulkCategoryModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-xs transition"
+              >
+                <Layers className="h-3.5 w-3.5" />
+                Assign Category
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-xs font-semibold rounded-lg transition"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete Selected ({selectedIds.size})
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Products List / Cards */}
       {filteredProducts.length === 0 ? (
@@ -271,6 +411,23 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                   onClick={() => toggleExpand(product.productGroupId)}
                 >
                   <div className="flex items-start md:items-center gap-3 flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectOne(product.productGroupId);
+                      }}
+                      className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition"
+                      title={selectedIds.has(product.productGroupId) ? "Deselect" : "Select"}
+                    >
+                      {selectedIds.has(product.productGroupId) ? (
+                        <div className="w-4 h-4 rounded bg-indigo-600 text-white flex items-center justify-center shadow-2xs">
+                          <Check className="h-3 w-3 stroke-[3]" />
+                        </div>
+                      ) : (
+                        <Square className="h-4 w-4 text-slate-300 hover:text-slate-500" />
+                      )}
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -332,12 +489,34 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         )}
                       </div>
 
-                      <p className="text-xs text-slate-500 mt-1 truncate">
-                        <span className="text-slate-700 font-medium">{product.categoryPath}</span>
-                        {product.artisanName && (
-                          <span className="ml-2 text-slate-400">· Artisan: {product.artisanName}</span>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
+                        {product.categoryPath ? (
+                          <div className="inline-flex items-center gap-1 flex-wrap bg-slate-50 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
+                            <Tag className="h-3 w-3 text-indigo-500 shrink-0" />
+                            {product.categoryPath.split(/[>→]/).map((seg, i, arr) => (
+                              <React.Fragment key={i}>
+                                {i > 0 && <ChevronRight className="h-3 w-3 text-slate-400 shrink-0" />}
+                                <span className={i === arr.length - 1 ? "font-semibold text-indigo-900" : "text-slate-600"}>
+                                  {seg.trim()}
+                                </span>
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-medium">
+                            No category assigned
+                          </span>
                         )}
-                      </p>
+                        {(product.seo?.metaTitle || product.seo?.metaDesc) && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded font-medium">
+                            <Globe className="h-3 w-3 text-purple-500 shrink-0" />
+                            SEO Ready
+                          </span>
+                        )}
+                        {product.artisanName && (
+                          <span className="text-slate-400 text-[11px]">· Artisan: {product.artisanName}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -374,7 +553,13 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => handleStartEdit(product)}
+                        onClick={() => {
+                          if (onEditProduct) {
+                            onEditProduct(product);
+                          } else {
+                            handleStartEdit(product);
+                          }
+                        }}
                         title="Edit Product"
                         className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 transition"
                       >
@@ -509,6 +694,157 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                       </div>
                     </div>
 
+                    {/* Variant editing for variable products */}
+                    {editFormData.productType === "variable" && (
+                      <div className="mt-4 pt-3 border-t border-blue-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+                            Edit Variants ({editFormData.variants?.length || 0})
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newVariants = [...(editFormData.variants || [])];
+                              newVariants.push({
+                                sku: `${editFormData.sku || editFormData.productGroupId}-VAR-${newVariants.length + 1}`,
+                                size: "Free Size",
+                                color: "New Colour",
+                                fabric: "Pure Silk",
+                                sellingPrice: editFormData.sellingPrice,
+                                stock: { warehouseId: "1", warehouseCode: "DEFAULT", quantity: 1, lowStockThreshold: 5 },
+                              });
+                              setEditFormData({ ...editFormData, variants: newVariants });
+                            }}
+                            className="px-2.5 py-1 text-[11px] bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center gap-1 shadow-xs"
+                          >
+                            <Plus className="h-3 w-3" /> Add Variant
+                          </button>
+                        </div>
+                        <div className="overflow-x-auto bg-white rounded-lg border border-blue-200">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-blue-50/60 text-blue-900 font-semibold border-b border-blue-100">
+                              <tr>
+                                <th className="py-2 px-2.5">Variant SKU</th>
+                                <th className="py-2 px-2.5">Size</th>
+                                <th className="py-2 px-2.5">Colour</th>
+                                <th className="py-2 px-2.5">Fabric</th>
+                                <th className="py-2 px-2.5 text-right">Price (₹)</th>
+                                <th className="py-2 px-2.5 text-right">Stock</th>
+                                <th className="py-2 px-2.5 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-blue-50">
+                              {editFormData.variants?.map((v, vIdx) => (
+                                <tr key={vIdx} className="hover:bg-blue-50/20">
+                                  <td className="p-1.5">
+                                    <input
+                                      type="text"
+                                      value={v.sku || ""}
+                                      onChange={(e) => {
+                                        const nextVariants = [...(editFormData.variants || [])];
+                                        nextVariants[vIdx] = { ...nextVariants[vIdx], sku: e.target.value };
+                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                      }}
+                                      className="w-full px-2 py-1 border border-slate-300 rounded font-mono text-xs bg-white"
+                                      placeholder="SKU"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="text"
+                                      value={v.size || ""}
+                                      onChange={(e) => {
+                                        const nextVariants = [...(editFormData.variants || [])];
+                                        nextVariants[vIdx] = { ...nextVariants[vIdx], size: e.target.value };
+                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                      }}
+                                      className="w-20 px-2 py-1 border border-slate-300 rounded text-xs bg-white"
+                                      placeholder="Size"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="text"
+                                      value={v.color || ""}
+                                      onChange={(e) => {
+                                        const nextVariants = [...(editFormData.variants || [])];
+                                        nextVariants[vIdx] = { ...nextVariants[vIdx], color: e.target.value };
+                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                      }}
+                                      className="w-24 px-2 py-1 border border-slate-300 rounded text-xs bg-white"
+                                      placeholder="Colour"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="text"
+                                      value={v.fabric || ""}
+                                      onChange={(e) => {
+                                        const nextVariants = [...(editFormData.variants || [])];
+                                        nextVariants[vIdx] = { ...nextVariants[vIdx], fabric: e.target.value };
+                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                      }}
+                                      className="w-28 px-2 py-1 border border-slate-300 rounded text-xs bg-white"
+                                      placeholder="Fabric"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="number"
+                                      value={v.sellingPrice ?? ""}
+                                      onChange={(e) => {
+                                        const nextVariants = [...(editFormData.variants || [])];
+                                        nextVariants[vIdx] = {
+                                          ...nextVariants[vIdx],
+                                          sellingPrice: e.target.value ? parseFloat(e.target.value) : undefined,
+                                        };
+                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                      }}
+                                      className="w-24 px-2 py-1 border border-slate-300 rounded text-xs text-right bg-white"
+                                      placeholder="Inherit"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="number"
+                                      value={v.stock?.quantity ?? 0}
+                                      onChange={(e) => {
+                                        const nextVariants = [...(editFormData.variants || [])];
+                                        nextVariants[vIdx] = {
+                                          ...nextVariants[vIdx],
+                                          stock: {
+                                            warehouseId: nextVariants[vIdx].stock?.warehouseId || "1",
+                                            warehouseCode: nextVariants[vIdx].stock?.warehouseCode || "DEFAULT",
+                                            quantity: parseInt(e.target.value, 10) || 0,
+                                          },
+                                        };
+                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                      }}
+                                      className="w-20 px-2 py-1 border border-slate-300 rounded text-xs text-right bg-white"
+                                      placeholder="Stock"
+                                    />
+                                  </td>
+                                  <td className="p-1.5 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextVariants = editFormData.variants?.filter((_, i) => i !== vIdx) || [];
+                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                                      title="Remove variant"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex justify-end gap-2 pt-2">
                       <button
                         type="button"
@@ -628,6 +964,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                   <th className="py-2.5 px-3">Size</th>
                                   <th className="py-2.5 px-3">Color</th>
                                   <th className="py-2.5 px-3">Fabric</th>
+                                  <th className="py-2.5 px-3">Photos</th>
                                   <th className="py-2.5 px-3">Other Attributes</th>
                                   <th className="py-2.5 px-3 text-right">Price Override</th>
                                   <th className="py-2.5 px-3 text-right">Stock</th>
@@ -635,37 +972,65 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
-                                {product.variants.map((v, idx) => (
-                                  <tr key={idx} className="hover:bg-slate-50/50">
-                                    <td className="py-2 px-3 font-mono font-medium text-slate-800">
-                                      {v.sku || <span className="text-slate-400 italic">auto-generated</span>}
-                                    </td>
-                                    <td className="py-2 px-3 text-slate-700">{v.size || "—"}</td>
-                                    <td className="py-2 px-3 text-slate-700">{v.color || "—"}</td>
-                                    <td className="py-2 px-3 text-slate-700">{v.fabric || "—"}</td>
-                                    <td className="py-2 px-3 text-slate-600">
-                                      {v.attributes
-                                        ? Object.entries(v.attributes)
-                                            .filter(([k]) => !["Size", "Color", "Fabric"].includes(k))
-                                            .map(([k, val]) => `${k}: ${val}`)
-                                            .join(", ") || "—"
-                                        : "—"}
-                                    </td>
-                                    <td className="py-2 px-3 text-right font-medium text-slate-900">
-                                      {v.sellingPrice ? (
-                                        <span>₹{v.sellingPrice.toLocaleString()}</span>
-                                      ) : (
-                                        <span className="text-slate-400 italic">Inherits parent</span>
-                                      )}
-                                    </td>
-                                    <td className="py-2 px-3 text-right font-bold text-slate-800">
-                                      {v.stock?.quantity ?? 0}
-                                    </td>
-                                    <td className="py-2 px-3 text-slate-600">
-                                      {v.stock?.warehouseCode || "Default"}
-                                    </td>
-                                  </tr>
-                                ))}
+                                {product.variants.map((v, idx) => {
+                                  const isDuplicateColor = Boolean(
+                                    v.color &&
+                                    (product.variants || []).filter(
+                                      (other) => other.color?.trim().toLowerCase() === v.color?.trim().toLowerCase()
+                                    ).length > 1
+                                  );
+                                  const variantMedia = product.media?.filter(
+                                    (m) => m.variantSku === v.sku || (!v.sku && m.variantSku === String(idx + 1))
+                                  ) || [];
+
+                                  return (
+                                    <tr key={idx} className="hover:bg-slate-50/50">
+                                      <td className="py-2 px-3 font-mono font-medium text-slate-800">
+                                        {v.sku || <span className="text-slate-400 italic">auto-generated</span>}
+                                      </td>
+                                      <td className="py-2 px-3 text-slate-700">{v.size || "—"}</td>
+                                      <td className="py-2 px-3 text-slate-700">
+                                        <span>{v.color || "—"}</span>
+                                        {isDuplicateColor && (
+                                          <span className="ml-1.5 inline-flex items-center text-[10px] bg-rose-100 text-rose-700 border border-rose-300 font-bold px-1.5 py-0.2 rounded">
+                                            Duplicate
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-3 text-slate-700">{v.fabric || "—"}</td>
+                                      <td className="py-2 px-3">
+                                        {variantMedia.length > 0 ? (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold text-[10px]">
+                                            <ImageIcon className="h-3 w-3" /> {variantMedia.length} photo{variantMedia.length !== 1 ? "s" : ""}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-400 italic text-[11px]">None</span>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-3 text-slate-600">
+                                        {v.attributes
+                                          ? Object.entries(v.attributes)
+                                              .filter(([k]) => !["Size", "Color", "Fabric"].includes(k))
+                                              .map(([k, val]) => `${k}: ${val}`)
+                                              .join(", ") || "—"
+                                          : "—"}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-medium text-slate-900">
+                                        {v.sellingPrice ? (
+                                          <span>₹{v.sellingPrice.toLocaleString()}</span>
+                                        ) : (
+                                          <span className="text-slate-400 italic">Inherits parent</span>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-bold text-slate-800">
+                                        {v.stock?.quantity ?? 0}
+                                      </td>
+                                      <td className="py-2 px-3 text-slate-600">
+                                        {v.stock?.warehouseCode || "Default"}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -708,9 +1073,45 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                     }}
                                   />
                                 )}
-                                <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[9px] px-1 py-0.5 truncate text-center">
-                                  {m.variantSku ? `SKU: ${m.variantSku}` : `Order #${m.order ?? 0}`}
-                                </div>
+                                  <div className="absolute top-1 left-1">
+                                    {(m.order === 0 || mIdx === 0) ? (
+                                      <span className="bg-amber-500 text-white font-bold text-[9px] px-1 py-0.5 rounded shadow">
+                                        ★ Primary
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextMedia = [...(product.media || [])];
+                                          const [chosen] = nextMedia.splice(mIdx, 1);
+                                          nextMedia.unshift({ ...chosen, order: 0 });
+                                          // re-index order
+                                          const reindexed = nextMedia.map((item, idx) => ({ ...item, order: idx }));
+                                          onUpdateProduct({ ...product, media: reindexed });
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 bg-slate-900/80 hover:bg-blue-600 text-white text-[9px] px-1 py-0.5 rounded transition shadow"
+                                        title="Set as primary image"
+                                      >
+                                        Set Primary
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextMedia = (product.media || []).filter((_, i) => i !== mIdx);
+                                        onUpdateProduct({ ...product, media: nextMedia });
+                                      }}
+                                      className="p-1 rounded bg-slate-900/80 hover:bg-rose-600 text-white shadow"
+                                      title="Remove photo"
+                                    >
+                                      <Trash2 className="h-2.5 w-2.5" />
+                                    </button>
+                                  </div>
+                                  <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[9px] px-1 py-0.5 truncate text-center">
+                                    {m.variantSku ? `SKU: ${m.variantSku}` : `Order #${m.order ?? mIdx}`}
+                                  </div>
                               </div>
                             ))}
                           </div>
@@ -751,6 +1152,18 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
             );
           })}
         </div>
+      )}
+
+      {/* Bulk Category Assign Modal */}
+      {showBulkCategoryModal && flatCategories && (
+        <BulkCategoryAssignModal
+          isOpen={showBulkCategoryModal}
+          onClose={() => setShowBulkCategoryModal(false)}
+          selectedProducts={products.filter((p) => selectedIds.has(p.productGroupId))}
+          flatCategories={flatCategories}
+          categoriesTree={categoriesTree || []}
+          onApplyCategory={handleBulkApplyCategory}
+        />
       )}
     </div>
   );

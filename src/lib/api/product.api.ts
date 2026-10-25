@@ -15,6 +15,11 @@ import type {
   BulkCategoryLookup,
   BulkValidationResponse,
   BulkImportResponse,
+  BulkImportDraft,
+  BulkImportJob,
+  ImageMatchResult,
+  DriveFolder,
+  BulkWarehouse,
 } from "../types/product/bulkProduct";
 
 // Product API with Enhanced Variant and Bulk Support
@@ -30,6 +35,10 @@ export const productApi = {
     }>
   > => {
     return apiCall("GET", "/products/bulk/categories-tree");
+  },
+
+  getWarehouses: async (): Promise<ApiResponse<{ warehouses: BulkWarehouse[] }>> => {
+    return apiCall("GET", "/products/bulk/warehouses");
   },
 
   downloadBulkTemplate: async (categoryIds?: string[]): Promise<Blob> => {
@@ -358,5 +367,115 @@ export const productApi = {
     }
   ): Promise<ApiResponse<Stock>> => {
     return apiCall("PUT", `/products/${productId}/stock`, data);
+  },
+
+  // ==========================================
+  // BULK IMPORT DRAFT ENDPOINTS
+  // ==========================================
+
+  createDraft: async (rawInput: string): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("POST", "/products/bulk/draft", { rawInput });
+  },
+
+  listDrafts: async (): Promise<ApiResponse<BulkImportDraft[]>> => {
+    return apiCall("GET", "/products/bulk/draft");
+  },
+
+  getDraft: async (id: string): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("GET", `/products/bulk/draft/${id}`);
+  },
+
+  updateDraft: async (
+    id: string,
+    data: {
+      rawInput?: string;
+      confirmedAssignments?: Record<string, string>;
+      parsedData?: any;
+      status?: string;
+    }
+  ): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("PATCH", `/products/bulk/draft/${id}`, data);
+  },
+
+  deleteDraft: async (id: string): Promise<ApiResponse<void>> => {
+    return apiCall("DELETE", `/products/bulk/draft/${id}`);
+  },
+
+  parseDraftFile: async (id: string, file: File): Promise<ApiResponse<BulkImportDraft>> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiCall("POST", `/products/bulk/draft/${id}/parse`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  parseDraftText: async (id: string, rawInput: string): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("POST", `/products/bulk/draft/${id}/parse`, { rawInput });
+  },
+
+  matchDriveImages: async (
+    id: string,
+    folderId: string
+  ): Promise<ApiResponse<BulkImportDraft | ImageMatchResult>> => {
+    return apiCall("POST", `/products/bulk/draft/${id}/match-drive`, { folderId });
+  },
+
+  confirmDriveAssignment: async (
+    id: string,
+    assignments: Record<string, string>
+  ): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("PATCH", `/products/bulk/draft/${id}`, {
+      confirmedAssignments: assignments,
+    });
+  },
+
+  // ==========================================
+  // GOOGLE DRIVE ENDPOINTS
+  // ==========================================
+
+  /**
+   * Check whether the current admin user has an active Google Drive connection.
+   * Returns { connected: boolean, connectUrl: string | null }
+   */
+  getDriveStatus: async (
+    draftId?: string
+  ): Promise<ApiResponse<{ connected: boolean; connectUrl: string | null }>> => {
+    return apiCall("GET", "/auth/drive/status", undefined, {
+      params: draftId ? { draftId } : undefined,
+    });
+  },
+
+  listDriveFolders: async (
+    parentId?: string
+  ): Promise<ApiResponse<DriveFolder[] | { folders: DriveFolder[] }>> => {
+    return apiCall("GET", "/products/bulk/drive/folders", undefined, {
+      params: parentId ? { parentId } : undefined,
+    });
+  },
+
+  getDriveProxyUrl: (fileId: string): string => {
+    const token = localStorage.getItem("accessToken");
+    const base = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+    return `${base}/products/bulk/drive-proxy/${fileId}?token=${token}`;
+  },
+
+  // ==========================================
+  // BACKGROUND IMPORT JOB ENDPOINTS
+  // ==========================================
+
+  startDraftImport: async (draftId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("POST", `/products/bulk/draft/${draftId}/import`);
+  },
+
+  startImportJob: async (draftId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("POST", "/products/bulk/import-job", { draftId });
+  },
+
+  getJobStatus: async (jobId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("GET", `/products/bulk/job/${jobId}`);
+  },
+
+  retryJob: async (jobId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("POST", `/products/bulk/job/${jobId}/retry`);
   },
 };

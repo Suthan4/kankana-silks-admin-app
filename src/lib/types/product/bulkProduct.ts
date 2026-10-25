@@ -1,3 +1,11 @@
+export interface BulkWarehouse {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+  isDefaultPickup: boolean;
+}
+
 export interface BulkCategoryNode {
   id: string;
   name: string;
@@ -37,6 +45,7 @@ export interface BulkParsedVariant {
   length?: number;
   breadth?: number;
   height?: number;
+  media?: BulkParsedMedia[];
   errors?: string[];
 }
 
@@ -140,5 +149,111 @@ export interface BulkImportResponse {
   failed: number;
   skipped: number;
   results: BulkImportItemResult[];
+}
+
+// ==========================================
+// DRAFT & JOB TYPES (Persistent Bulk Import)
+// ==========================================
+
+export type DraftStatus =
+  | "DRAFT"
+  | "READY_FOR_IMPORT"
+  | "IMPORTING"
+  | "COMPLETED"
+  | "FAILED";
+
+export interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+  thumbnailLink?: string;
+  webContentLink?: string;
+  webViewLink?: string;
+}
+
+export interface DriveFolder {
+  id: string;
+  name: string;
+  mimeType: string;
+}
+
+export interface MatchedEntry {
+  reference: string;
+  file: DriveFile;
+  mediaIndex: number;
+  productGroupId?: string;
+  variantSku?: string;
+}
+
+export interface MissingEntry {
+  reference: string;
+  mediaIndex: number;
+  productGroupId?: string;
+  variantSku?: string;
+}
+
+export interface AmbiguousEntry {
+  reference: string;
+  candidates: DriveFile[];
+  mediaIndex: number;
+  productGroupId?: string;
+  variantSku?: string;
+}
+
+export interface DuplicateEntry {
+  reference: string;
+  mediaIndex: number;
+  productGroupId?: string;
+  variantSku?: string;
+}
+
+export interface ImageMatchResult {
+  matched: MatchedEntry[];
+  missing: MissingEntry[];
+  ambiguous: AmbiguousEntry[];
+  duplicates: DuplicateEntry[];
+  totalMedia: number;
+}
+
+export interface BulkImportDraft {
+  id: string;
+  status: DraftStatus;
+  rawInput: string;
+  parsedData: BulkParsedProduct[] | BulkValidationResponse | any;
+  imageMatches: ImageMatchResult | null;
+  confirmedAssignments: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BulkImportJobItemResult {
+  productGroupId: string;
+  name: string;
+  status: "success" | "failed" | "skipped";
+  productId?: string;
+  error?: string;
+}
+
+export type BulkImportJobStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface BulkImportJob {
+  jobId: string;
+  draftId: string;
+  status: BulkImportJobStatus;
+  progress: number;
+  total: number;
+  processed: number;
+  successful: number;
+  failed: number;
+  results: BulkImportJobItemResult[];
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
 }
 
