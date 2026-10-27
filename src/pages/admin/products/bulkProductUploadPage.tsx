@@ -1753,6 +1753,43 @@ const BulkProductUploadPage: React.FC = () => {
       let finalMatches = matches;
       const uploadedByDriveId = new Map<string, { url: string; key?: string }>();
 
+      const toStorageMedia = (media: BulkParsedMedia): BulkParsedMedia => {
+        if (!media.key) return media;
+        const stored = uploadedByDriveId.get(media.key);
+        if (!stored || !media.url.includes("/products/bulk/drive-proxy/")) return media;
+        return { ...media, url: stored.url, thumbnailUrl: stored.url, key: stored.key };
+      };
+
+      const applyUploadedUrls = (sourceProducts: BulkParsedProduct[]): BulkParsedProduct[] =>
+        sourceProducts.map((product) => {
+          const nextMedia = (product.media ?? []).map(toStorageMedia);
+          const nextVariants = (product.variants ?? []).map((variant) => ({
+            ...variant,
+            media: variant.media?.map(toStorageMedia),
+          }));
+          const allImages: BulkParsedMedia[] = [
+            ...nextMedia.map((media) => ({ ...media, source: "product" as const })),
+            ...nextVariants.flatMap((variant) =>
+              (variant.media ?? []).map((media) => ({
+                ...media,
+                source: "variant" as const,
+                variantSku: variant.sku,
+              })),
+            ),
+          ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          return { ...product, media: nextMedia, variants: nextVariants, allImages };
+        });
+
+      // Show matched thumbnails immediately; each preview is replaced with its
+      // canonical S3 URL as that original finishes uploading.
+      const previewProducts = matches.matched.length
+        ? applyDriveMatchesToProducts(products, matches, productApi.getDriveProxyUrl)
+        : products;
+      if (matches.matched.length) {
+        setProducts(previewProducts);
+        setImageMatches(matches);
+      }
+
       // Only download files the matcher confirmed. Never download the entire Drive folder.
       for (const entry of matches.matched) {
         if (uploadedByDriveId.has(entry.file.id)) continue;
@@ -1773,6 +1810,7 @@ const BulkProductUploadPage: React.FC = () => {
             throw new Error("Storage did not return a valid HTTPS URL for " + entry.file.name);
           }
           uploadedByDriveId.set(entry.file.id, { url: storage.url, key: storage.key });
+          setProducts(applyUploadedUrls(previewProducts));
         } catch {
           // Failed transfers are turned back into missing references below.
         }
@@ -1803,30 +1841,7 @@ const BulkProductUploadPage: React.FC = () => {
           finalMatches,
           productApi.getDriveProxyUrl,
         );
-        const toStorageMedia = (media: BulkParsedMedia): BulkParsedMedia => {
-          if (!media.key) return media;
-          const stored = uploadedByDriveId.get(media.key);
-          if (!stored || !media.url.includes("/products/bulk/drive-proxy/")) return media;
-          return { ...media, url: stored.url, thumbnailUrl: stored.url, key: stored.key };
-        };
-        const updatedWithImages = matchedProducts.map((product) => {
-          const nextMedia = (product.media ?? []).map(toStorageMedia);
-          const nextVariants = (product.variants ?? []).map((variant) => ({
-            ...variant,
-            media: variant.media?.map(toStorageMedia),
-          }));
-          const allImages: BulkParsedMedia[] = [
-            ...nextMedia.map((media) => ({ ...media, source: "product" as const })),
-            ...nextVariants.flatMap((variant) =>
-              (variant.media ?? []).map((media) => ({
-                ...media,
-                source: "variant" as const,
-                variantSku: variant.sku,
-              })),
-            ),
-          ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-          return { ...product, media: nextMedia, variants: nextVariants, allImages };
-        });
+        const updatedWithImages = applyUploadedUrls(matchedProducts);
         setProducts(updatedWithImages);
         const serialized = JSON.stringify(updatedWithImages, null, 2);
         setRawInput(serialized);
