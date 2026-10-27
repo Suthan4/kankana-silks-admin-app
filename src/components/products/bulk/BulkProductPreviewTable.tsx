@@ -1876,10 +1876,22 @@ export const BulkProductPreviewTable: React.FC<
           const selectedPreviewVariant = previewProduct.variants?.find(
             (variant) => variant.sku === storefrontSelectedVariantSku,
           );
-          const previewImages = getStorefrontPreviewMedia(
+          // Use the exact same matched Drive entries shown in the Matched images
+          // panel. Raw references in the product JSON (e.g. NAVO2845) are not URLs.
+          const matchedPreviewImages = getMatchedStorefrontPreviewMedia(
             previewProduct,
+            imageMatches,
             storefrontSelectedVariantSku,
+            getDriveProxyUrl,
+            getDriveThumbnailUrl,
           );
+          const previewImages =
+            matchedPreviewImages.length > 0
+              ? matchedPreviewImages
+              : getStorefrontPreviewMedia(
+                  previewProduct,
+                  storefrontSelectedVariantSku,
+                );
           const activeIndex = Math.min(
             storefrontPreviewImageIndex,
             Math.max(0, previewImages.length - 1),
