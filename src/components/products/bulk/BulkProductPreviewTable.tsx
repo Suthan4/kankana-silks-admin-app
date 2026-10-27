@@ -101,8 +101,23 @@ function getMatchedStorefrontPreviewMedia(
   if (!groupMatches.length) return [];
 
   const existingProductMedia = getStorefrontPreviewMedia(product, selectedVariantSku);
-  const normalizeLabel = (value?: string) =>
-    (value || "").trim().toLocaleLowerCase("en-US").replace(/\.[^.]+$/, "");
+  const normalizeLabel = (value?: string) => {
+    let name = (value || "").trim();
+    const proxy = name.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+    if (proxy?.[1]) {
+      try { name = decodeURIComponent(proxy[1]); } catch { name = proxy[1]; }
+    } else {
+      try {
+        const url = new URL(name);
+        name = decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() || name);
+      } catch {
+        name = name.split(/[?#]/, 1)[0].split(/[\\/]/).pop() || name;
+      }
+    }
+    name = name.toLocaleLowerCase("en-US").replace(/\.[^.]+$/, "");
+    const cameraRef = name.match(/^([a-z]{2,5})[o0](\d{4,})$/);
+    return cameraRef ? cameraRef[1] + "0" + cameraRef[2] : name;
+  };
   const isPermanentStorageUrl = (value?: string) =>
     /^https:\/\//i.test(value || "") &&
     !/drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\//i.test(value || "");
@@ -111,8 +126,14 @@ function getMatchedStorefrontPreviewMedia(
     .map((entry, index) => {
       const fileId = entry.file.id;
       const matchedName = normalizeLabel(entry.file.name);
+      const matchedReference = normalizeLabel(entry.reference);
       const storedMedia = existingProductMedia.find((media) =>
-        [media.title, media.altText].some((label) => normalizeLabel(label) === matchedName),
+        media.sourceDriveFileId === fileId ||
+        media.key === fileId ||
+        [media.url, media.title, media.altText].some((label) => {
+          const normalized = normalizeLabel(label);
+          return normalized === matchedName || normalized === matchedReference;
+        }),
       );
       const storedUrl = isPermanentStorageUrl(storedMedia?.url) ? storedMedia?.url : undefined;
       const originalUrl =
@@ -132,16 +153,18 @@ function getMatchedStorefrontPreviewMedia(
         url: originalUrl,
         thumbnailUrl,
         key: storedMedia?.key || fileId,
+        sourceDriveFileId: fileId,
         altText: storedMedia?.altText || entry.file.name,
         title: storedMedia?.title || entry.file.name,
-        order: index,
+        order: storedMedia?.order ?? index,
         isActive: true,
         source: entry.variantSku ? ("variant" as const) : ("product" as const),
         variantSku: entry.variantSku,
         productGroupId: product.productGroupId,
       };
     })
-    .filter((media) => Boolean(media.url));
+    .filter((media) => Boolean(media.url))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
 interface BulkProductPreviewTableProps {
@@ -1915,10 +1938,18 @@ export const BulkProductPreviewTable: React.FC<
             previewProduct,
             storefrontSelectedVariantSku,
           );
-          const previewImages =
-            retainedProductImages.length > 0
-              ? retainedProductImages
-              : matchedPreviewImages;
+          const hasExplicitlyClearedGallery =
+            Array.isArray(previewProduct.allImages) &&
+            previewProduct.allImages.length === 0 &&
+            !(previewProduct.media || []).some((media) => media.type === "IMAGE") &&
+            !(previewProduct.variants || []).some((variant) =>
+              (variant.media || []).some((media) => media.type === "IMAGE"),
+            );
+          const previewImages = hasExplicitlyClearedGallery
+            ? []
+            : matchedPreviewImages.length > 0
+              ? matchedPreviewImages
+              : retainedProductImages;
           const activeIndex = Math.min(
             storefrontPreviewImageIndex,
             Math.max(0, previewImages.length - 1),
