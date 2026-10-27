@@ -801,6 +801,8 @@ export const BulkProductPreviewTable: React.FC<
                           );
                           setStorefrontPreviewImageIndex(0);
                           setFailedStorefrontImageUrl(null);
+                          setSelectedStorefrontImageKeys(new Set());
+                          setStorefrontDraggedImageIndex(null);
                         }}
                         title="Preview as customer"
                         aria-label={`Preview ${product.name} as a customer`}
@@ -2079,7 +2081,11 @@ export const BulkProductPreviewTable: React.FC<
               role="dialog"
               aria-modal="true"
               aria-label={`Customer storefront preview for ${previewProduct.name}`}
-              onClick={() => setStorefrontPreviewProduct(null)}
+              onClick={() => {
+                setStorefrontPreviewProduct(null);
+                setSelectedStorefrontImageKeys(new Set());
+                setStorefrontDraggedImageIndex(null);
+              }}
             >
               <div
                 className="flex max-h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
@@ -2092,7 +2098,7 @@ export const BulkProductPreviewTable: React.FC<
                         Storefront preview
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        Admin-only · read-only
+                        Admin-only · image changes update the draft
                       </span>
                     </div>
                     <p className="mt-1 truncate text-sm font-semibold text-slate-900">
@@ -2101,7 +2107,11 @@ export const BulkProductPreviewTable: React.FC<
                   </div>
                   <button
                     type="button"
-                    onClick={() => setStorefrontPreviewProduct(null)}
+                    onClick={() => {
+                      setStorefrontPreviewProduct(null);
+                      setSelectedStorefrontImageKeys(new Set());
+                      setStorefrontDraggedImageIndex(null);
+                    }}
                     className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                     aria-label="Close storefront preview"
                   >
