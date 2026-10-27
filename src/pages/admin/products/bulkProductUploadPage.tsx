@@ -2254,6 +2254,15 @@ const BulkProductUploadPage: React.FC = () => {
         const res = await productApi.getDraft(targetId);
         if (isCancelled) return;
         if (res.data) {
+          // A stale localStorage ID from an older deployment must not reopen a
+          // completed batch after refresh. Explicit URL selection is allowed
+          // so admins can still inspect completed draft history intentionally.
+          if (!queryDraftId && res.data.status === "COMPLETED") {
+            localStorage.removeItem("active_bulk_draft_id");
+            loadedDraftIdRef.current = "__completed_import__";
+            syncDraftUrl(null);
+            return;
+          }
           loadDraft(res.data);
           return;
         }
