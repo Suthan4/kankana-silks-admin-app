@@ -442,7 +442,9 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
         toast.error("Invalid image matching response from server.");
         return;
       }
-      await productApi.confirmDriveAssignment(draftId, pendingAssignments);
+      if (Object.keys(pendingAssignments).length > 0) {
+        await productApi.confirmDriveAssignment(draftId, pendingAssignments);
+      }
       const completedMatches = await onMatchComplete(
         result,
         pendingAssignments,
@@ -2573,8 +2575,10 @@ const BulkProductUploadPage: React.FC = () => {
       matches: ImageMatchResult,
       assignments: Record<string, string>,
     ): Promise<ImageMatchResult> => {
-      // Matching is intentionally metadata-only. Do not download original
-      // Drive photos or upload to S3 here; that happens only when Import is clicked.
+      // Matching only decorates the in-memory product preview with Drive URLs.
+      // No source image is downloaded and no S3 upload or second draft-save
+      // request runs here. The backend match endpoint has already saved matches;
+      // permanent URLs are written to the draft only when Import is clicked.
       const matchedProducts = matches.matched.length
         ? applyDriveMatchesToProducts(
             products,
@@ -2587,28 +2591,9 @@ const BulkProductUploadPage: React.FC = () => {
       setProducts(matchedProducts);
       setImageMatches(matches);
       setConfirmedAssignments(assignments);
-
-      if (matchedProducts.length > 0) {
-        const serialized = JSON.stringify(matchedProducts, null, 2);
-        setRawInput(serialized);
-        setIsDirty(true);
-
-        if (draftId) {
-          try {
-            await productApi.updateDraft(draftId, {
-              rawInput: serialized,
-              parsedData: matchedProducts,
-              confirmedAssignments: assignments,
-            });
-          } catch {
-            // Keep the current page state; the user can save the draft explicitly.
-          }
-        }
-      }
-
       return matches;
     },
-    [products, draftId],
+    [products],
   );
 
   const handleAssignProductMedia = useCallback(
