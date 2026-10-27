@@ -1960,7 +1960,18 @@ export const BulkProductPreviewTable: React.FC<
             previewProduct,
             storefrontSelectedVariantSku,
           );
+          const hasRemainingMatchForCurrentGallery = (imageMatches?.matched || []).some(
+            (entry) =>
+              entry.productGroupId === previewProduct.productGroupId &&
+              (
+                storefrontSelectedVariantSku
+                  ? (entry.variantSku || "").trim().toLocaleLowerCase("en-US") ===
+                    storefrontSelectedVariantSku.trim().toLocaleLowerCase("en-US")
+                  : !entry.variantSku
+              ),
+          );
           const hasExplicitlyClearedGallery =
+            !hasRemainingMatchForCurrentGallery &&
             Array.isArray(previewProduct.allImages) &&
             previewProduct.allImages.length === 0 &&
             !(previewProduct.media || []).some((media) => media.type === "IMAGE") &&
