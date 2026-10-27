@@ -32,7 +32,7 @@ export const ImagePreviewGrid: React.FC<ImagePreviewGridProps> = ({
     <div className={`grid ${colClass[columns] ?? colClass[5]} gap-3 pt-2`}>
       {items.map((item, idx) => {
         const isCover = idx === 0;
-        const displayUrl = item.preview || item.url || item.localUrl;
+        const displayUrl = item.preview || item.thumbnailUrl || item.url || item.localUrl;
 
         return (
           <div
