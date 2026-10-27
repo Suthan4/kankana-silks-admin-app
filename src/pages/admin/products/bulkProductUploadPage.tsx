@@ -141,7 +141,7 @@ function summaryFromProducts(
   };
 }
 
-const POLLING_INTERVAL = 1000; // ms - refresh background image/product progress promptly
+const POLLING_INTERVAL = 5000; // Avoid excessive status traffic; backend work continues independently.
 
 // ─── Draft Selector modal ────────────────────────────────────────────────────
 
@@ -1962,6 +1962,13 @@ const BulkProductUploadPage: React.FC = () => {
             ? "Import is already running."
             : null;
 
+  // Restore the background job after navigating away and returning to this page.
+  useEffect(() => {
+    if (jobId) return;
+    const savedJobId = localStorage.getItem("active_bulk_job_id");
+    if (savedJobId) setJobId(savedJobId);
+  }, [jobId]);
+
   // ─ Poll job status ───────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -1969,9 +1976,13 @@ const BulkProductUploadPage: React.FC = () => {
       return;
 
     let disposed = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let requestInFlight = false;
 
+    // Recursive timeout prevents overlapping status requests when the API is slow.
     const refreshJob = async () => {
+      if (disposed || requestInFlight) return;
+      requestInFlight = true;
       try {
         const res = await productApi.getJobStatus(jobId);
         if (disposed || !res.data) return;
@@ -2033,6 +2044,7 @@ const BulkProductUploadPage: React.FC = () => {
           setIsDirty(false);
           setJobId(null);
           loadedDraftIdRef.current = "__completed_import__";
+          localStorage.removeItem("active_bulk_job_id");
           localStorage.removeItem("active_bulk_draft_id");
           setSearchParams(
             (previous) => {
@@ -2053,16 +2065,20 @@ const BulkProductUploadPage: React.FC = () => {
         }
       } catch {
         // Polling is the realtime fallback if a transient network request fails.
+      } finally {
+        requestInFlight = false;
+        if (!disposed) {
+          timer = setTimeout(() => { void refreshJob(); }, POLLING_INTERVAL);
+        }
       }
     };
 
     void refreshJob();
-    timer = setInterval(() => { void refreshJob(); }, POLLING_INTERVAL);
     return () => {
       disposed = true;
-      if (timer) clearInterval(timer);
+      if (timer) clearTimeout(timer);
     };
-  }, [jobId, job?.status, draftId, rawInput, queryClient, setSearchParams]);
+  }, [jobId, job?.status, draftId, queryClient, setSearchParams]);
 
   // ─ Prompt on unsaved changes ─────────────────────────────────────────────
 
@@ -2237,6 +2253,14 @@ const BulkProductUploadPage: React.FC = () => {
     let isCancelled = false;
 
     const initDraft = async () => {
+      // An active background job owns the workspace. Restore its status first;
+      // do not fetch/reload the draft on every navigation back to this page.
+      const activeJobId = localStorage.getItem("active_bulk_job_id");
+      if (activeJobId) {
+        setJobId((current) => current || activeJobId);
+        return;
+      }
+
       const queryDraftId = searchParams.get("draftId");
       const targetId =
         queryDraftId || localStorage.getItem("active_bulk_draft_id");
@@ -2639,6 +2663,7 @@ const BulkProductUploadPage: React.FC = () => {
       };
       setJob(normalizedJob);
       setJobId(resolvedJobId);
+      localStorage.setItem("active_bulk_job_id", resolvedJobId);
       setDraftStatus("IMPORTING");
       toast.success("Background job queued. Images will upload to S3 in batches; you can keep using the admin app.", { id: tid });
     } catch (err) {
@@ -2683,6 +2708,7 @@ const BulkProductUploadPage: React.FC = () => {
         } as BulkImportJob;
         setJob(normalizedJob);
         setJobId(nextJobId);
+        localStorage.setItem("active_bulk_job_id", nextJobId);
         setDraftStatus("IMPORTING");
         toast.success("Retry job queued for the remaining failed images.");
       } catch (err) {
