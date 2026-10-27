@@ -273,7 +273,12 @@ export function sanitizeProductsForStorage(
     const url = (media.url || "").trim();
     const isTemporaryUrl =
       /drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\/|[?&]token=/i.test(url);
-    if (!isTemporaryUrl) return media;
+    const hasTemporaryThumbnail = /drive\.google\.com|docs\.google\.com|googleusercontent\.com|[?&]token=/i.test(
+      media.thumbnailUrl || "",
+    );
+    if (!isTemporaryUrl) {
+      return hasTemporaryThumbnail ? { ...media, thumbnailUrl: undefined } : media;
+    }
 
     const proxyId = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/)?.[1];
     let driveId = media.sourceDriveFileId || media.key || "";
