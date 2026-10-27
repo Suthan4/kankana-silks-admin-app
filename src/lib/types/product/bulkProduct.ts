@@ -257,6 +257,7 @@ export interface BulkImportDraft {
 export interface BulkImportJobItemResult {
   productGroupId: string;
   name: string;
+  sku?: string;
   status: "success" | "failed" | "skipped";
   productId?: string;
   error?: string;
@@ -269,18 +270,47 @@ export type BulkImportJobStatus =
   | "failed"
   | "cancelled";
 
+export type BulkImportJobStage =
+  | "preparing_images"
+  | "uploading_images"
+  | "images_failed"
+  | "importing_products"
+  | "completed"
+  | "failed";
+
+export interface BulkImportImageResult {
+  fileId: string;
+  name: string;
+  status: "success" | "failed";
+  url?: string;
+  key?: string;
+  error?: string;
+}
+
 export interface BulkImportJob {
+  /** Backend identifier (the API also aliases this to jobId). */
+  id?: string;
   jobId: string;
   draftId: string;
   status: BulkImportJobStatus;
+  stage?: BulkImportJobStage;
   progress: number;
   total: number;
   processed: number;
   successful: number;
   failed: number;
+  skipped?: number;
   results: BulkImportJobItemResult[];
+  imagesTotal?: number;
+  imagesProcessed?: number;
+  imagesUploaded?: number;
+  imagesFailed?: number;
+  currentFile?: string;
+  imageResults?: BulkImportImageResult[];
   error?: string;
   startedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
   completedAt?: string;
 }
 
