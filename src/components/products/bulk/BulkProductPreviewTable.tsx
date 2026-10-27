@@ -1224,9 +1224,21 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                           }}
                                           className="w-full h-full object-cover cursor-zoom-in"
                                           onError={(e) => {
-                                            // A failed thumbnail stays a placeholder. Do not fall back
-                                            // to loading the full-size Drive original into the grid.
                                             const target = e.currentTarget;
+                                            const canonicalStorageUrl = /(?:cloudfront\.net|amazonaws\.com|localhost:4566)/i.test(m.url || "");
+                                            const isDriveThumbnail = (m.thumbnailUrl || "").includes("/products/bulk/drive-thumbnail/");
+                                            if (
+                                              canonicalStorageUrl &&
+                                              isDriveThumbnail &&
+                                              !target.dataset.storageFallback &&
+                                              !m.url.includes("/products/bulk/drive-proxy/")
+                                            ) {
+                                              // The stored S3/CloudFront image has already passed the backend
+                                              // optimizer. It is a safe fallback; never use the Drive original here.
+                                              target.dataset.storageFallback = "true";
+                                              target.src = m.url;
+                                              return;
+                                            }
                                             target.dataset.thumbnailFailed = "true";
                                             target.src =
                                               "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
