@@ -1153,6 +1153,7 @@ const BulkProductUploadPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDriveMatching, setIsDriveMatching] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
   const [showDraftSelector, setShowDraftSelector] = useState(false);
@@ -1202,14 +1203,17 @@ const BulkProductUploadPage: React.FC = () => {
   const hasBlockers = (summary?.errorCount ?? 0) > 0;
   const canImport =
     !hasBlockers &&
+    !isDriveMatching &&
     products.length > 0 &&
     !!draftId &&
     job?.status !== "processing" &&
     job?.status !== "pending";
 
-  const importDisabledReason = !draftId
-    ? "Create or open a draft first."
-    : products.length === 0
+  const importDisabledReason = isDriveMatching
+    ? "Wait for Google Drive matching and image uploads to finish."
+    : !draftId
+      ? "Create or open a draft first."
+      : products.length === 0
       ? "Parse products first."
       : hasBlockers
         ? `Fix ${summary!.errorCount} error(s) before importing.`
@@ -2024,7 +2028,7 @@ const BulkProductUploadPage: React.FC = () => {
                 <button
                   onClick={handleSaveDraft}
                   disabled={
-                    isSaving || (!rawInput.trim() && products.length === 0)
+                    isSaving || isDriveMatching || (!rawInput.trim() && products.length === 0)
                   }
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
                 >
@@ -2050,7 +2054,7 @@ const BulkProductUploadPage: React.FC = () => {
                 <div className="relative group">
                   <button
                     onClick={handleImport}
-                    disabled={!canImport || isImporting}
+                    disabled={!canImport || isImporting || isDriveMatching}
                     className={classNames(
                       "flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors",
                       canImport
@@ -2215,6 +2219,7 @@ const BulkProductUploadPage: React.FC = () => {
                 imageMatches={imageMatches}
                 confirmedAssignments={confirmedAssignments}
                 onMatchComplete={handleMatchComplete}
+                onMatchingChange={setIsDriveMatching}
                 onAssignMedia={handleAssignProductMedia}
                 getDriveProxyUrl={productApi.getDriveProxyUrl}
                 onPrepareDraft={async () => {
