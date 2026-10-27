@@ -1912,8 +1912,15 @@ export const BulkProductPreviewTable: React.FC<
           );
           const activeImage = previewImages[activeIndex];
           const currentImageUrl = activeImage?.url || "";
-          const detailImageUrl = /^(https?:\/\/|\/)/i.test(currentImageUrl)
-            ? currentImageUrl
+          const isDriveOriginalProxy = currentImageUrl.includes("/products/bulk/drive-proxy/");
+          // Before Import, show the lightweight thumbnail in the large preview area.
+          // This lets admins inspect the complete photo without downloading a 40+ MB original.
+          const previewSourceUrl =
+            isDriveOriginalProxy && activeImage?.thumbnailUrl
+              ? activeImage.thumbnailUrl
+              : currentImageUrl;
+          const detailImageUrl = /^(https?:\/\/|\/)/i.test(previewSourceUrl)
+            ? previewSourceUrl
             : "";
           const previewSellingPrice = Number(
             selectedPreviewVariant?.sellingPrice ??
@@ -1987,9 +1994,26 @@ export const BulkProductPreviewTable: React.FC<
                             loading="eager"
                             decoding="async"
                             className="h-full w-full object-contain"
-                            onError={() =>
-                              setFailedStorefrontImageUrl(detailImageUrl)
-                            }
+                            onError={(event) => {
+                              const target = event.currentTarget;
+                              const proxyMatch = currentImageUrl.match(/\\/products\\/bulk\\/drive-proxy\\/([^/?#]+)/);
+                              if (
+                                isDriveOriginalProxy &&
+                                proxyMatch?.[1] &&
+                                getDriveThumbnailUrl &&
+                                !target.dataset.thumbnailFallback
+                              ) {
+                                let fileId = proxyMatch[1];
+                                try { fileId = decodeURIComponent(fileId); } catch { /* keep encoded ID */ }
+                                const fallback = getDriveThumbnailUrl(fileId);
+                                if (fallback && target.src !== fallback) {
+                                  target.dataset.thumbnailFallback = "true";
+                                  target.src = fallback;
+                                  return;
+                                }
+                              }
+                              setFailedStorefrontImageUrl(detailImageUrl);
+                            }}
                           />
                         ) : (
                           <div className="flex max-w-sm flex-col items-center gap-2 p-8 text-center text-slate-500">
