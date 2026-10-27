@@ -1207,9 +1207,24 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                           alt={m.altText || product.name}
                                           className="w-full h-full object-cover"
                                           onError={(e) => {
-                                            (e.currentTarget as any).src =
-                                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
-                                          }}
+                                            const target = e.currentTarget;
+                                            const proxyFallback = m.url?.includes("/products/bulk/drive-proxy/")
+                                              ? m.url
+                                              : undefined;
+                                            if (
+                                              proxyFallback &&
+                                              target.dataset.driveProxyFallback !== "true" &&
+                                              target.src !== proxyFallback
+                                            ) {
+                                              // Drive thumbnail URLs may expire or be inaccessible
+                                              // to an <img> request. Fall back to the authenticated proxy.
+                                              target.dataset.driveProxyFallback = "true";
+                                              target.src = proxyFallback;
+                                              return;
+                                            }
+                                            target.src =
+                                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
+                                          }}                               }}
                                         />
                                       ) : (
                                         <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 p-2 text-center text-slate-400">
