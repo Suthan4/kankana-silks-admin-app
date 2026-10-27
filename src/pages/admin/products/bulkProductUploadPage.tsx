@@ -61,6 +61,8 @@ import {
 import {
   applyDriveMatchesToProducts,
   filterImageMatchesToProductMedia,
+  sanitizeProductsForStorage,
+  sanitizeBulkRawInput,
 } from "@/lib/utils/bulkImageUtils";
 import type {
   BulkImportDraft,
@@ -1621,6 +1623,19 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
     job.stage === "failed" ? "Failed" :
     isRunning ? "Queued…" : job.status;
 
+  const progressNote =
+    job.status === "completed"
+      ? "The import finished successfully. Required images were stored and the products were created."
+      : job.stage === "images_failed"
+        ? "Product creation was stopped because one or more images could not be stored. Your draft is kept so you can retry the failed images."
+        : job.status === "failed"
+          ? "Some products need attention. Your draft is kept, and the failed items below can be corrected and retried."
+          : job.stage === "importing_products"
+            ? "Image preparation passed. Products are being created now; any failed product will be listed below."
+            : job.stage === "uploading_images" || job.stage === "preparing_images"
+              ? "The server is downloading selected Drive images and saving them to permanent storage. Product creation starts only after all required images succeed."
+              : "Your import is queued on the server. Progress refreshes automatically, so do not click Import again.";
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm mt-4">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -1673,6 +1688,21 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
               style={{ width: `${pct}%` }}
             />
           </div>
+        </div>
+
+        <div
+          role="status"
+          aria-live="polite"
+          className={classNames(
+            "rounded-lg border px-3 py-2 text-xs leading-relaxed",
+            job.status === "failed"
+              ? "border-amber-200 bg-amber-50 text-amber-900"
+              : job.status === "completed"
+                ? "border-green-200 bg-green-50 text-green-800"
+                : "border-blue-100 bg-blue-50 text-blue-900",
+          )}
+        >
+          {progressNote}
         </div>
 
         {(job.imagesTotal ?? 0) > 0 && (
@@ -1849,6 +1879,7 @@ const BulkProductUploadPage: React.FC = () => {
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<BulkImportJob | null>(null);
+  const completedJobIdsRef = useRef<Set<string>>(new Set());
 
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -1898,10 +1929,15 @@ const BulkProductUploadPage: React.FC = () => {
 
   // ─ Computed ─────────────────────────────────────────────────────────────
 
+  const isJobRunning = job?.status === "pending" || job?.status === "processing";
+  const isWorkspaceLocked =
+    isJobRunning || job?.status === "completed" || draftStatus === "COMPLETED";
+
   const summary =
     products.length > 0 ? summaryFromProducts(products) : undefined;
   const hasBlockers = (summary?.errorCount ?? 0) > 0;
   const canImport =
+    draftStatus !== "COMPLETED" &&
     !hasBlockers &&
     !isDriveMatching &&
     job?.stage !== "images_failed" &&
@@ -1910,11 +1946,13 @@ const BulkProductUploadPage: React.FC = () => {
     job?.status !== "processing" &&
     job?.status !== "pending";
 
-  const importDisabledReason = isDriveMatching
-    ? "Wait for Google Drive reference matching to finish."
-    : job?.stage === "images_failed"
-      ? "Use Retry Failed Images in Import Progress; successful image uploads are already saved."
-      : !draftId
+  const importDisabledReason = draftStatus === "COMPLETED"
+    ? "This draft has already been imported. Start a new import to create another batch."
+    : isDriveMatching
+      ? "Wait for Google Drive reference matching to finish."
+      : job?.stage === "images_failed"
+        ? "Use Retry Failed Images in Import Progress; successful image uploads are already saved."
+        : !draftId
       ? "Create or open a draft first."
       : products.length === 0
         ? "Parse products first."
@@ -1955,10 +1993,62 @@ const BulkProductUploadPage: React.FC = () => {
         setJob(normalized);
 
         if (normalized.status === "completed") {
-          toast.success("Import job completed. " + normalized.successful + " product(s) created.");
+          // Polls can overlap while the final draft snapshot is being fetched.
+          // Handle the terminal state only once per job.
+          if (completedJobIdsRef.current.has(resolvedId)) return;
+          completedJobIdsRef.current.add(resolvedId);
+
+          const completedDraftId = normalized.draftId || draftId;
+          // Reload the server's final product payload. The backend must have
+          // replaced all matched Drive references with permanent storage URLs.
+          if (completedDraftId) {
+            try {
+              const completedDraftRes = await productApi.getDraft(completedDraftId);
+              if (completedDraftRes.data) {
+                const completedProducts = normalizeProducts(
+                  extractProducts(completedDraftRes.data.parsedData),
+                  flatCategoriesRef.current,
+                  warehousesRef.current,
+                );
+                setProducts(completedProducts);
+                setRawInput(
+                  JSON.stringify(sanitizeProductsForStorage(completedProducts), null, 2),
+                );
+                setValidationErrors(completedProducts.flatMap((product) => product.errors || []));
+              }
+            } catch (draftRefreshError) {
+              // Keep the completed job results visible even if the product snapshot cannot reload.
+              console.warn("Could not refresh completed bulk draft:", draftRefreshError);
+              setRawInput(sanitizeBulkRawInput(rawInput));
+            }
+          }
+
+          // Close this draft as the active workspace, but keep the completed
+          // record in server history. The job result panel remains available
+          // until the admin chooses Start New Import.
+          setDraftId(null);
+          setDraftStatus("COMPLETED");
+          setImageMatches(null);
+          setConfirmedAssignments({});
+          setIsDirty(false);
+          setJobId(null);
+          loadedDraftIdRef.current = "__completed_import__";
+          localStorage.removeItem("active_bulk_draft_id");
+          setSearchParams(
+            (previous) => {
+              const next = new URLSearchParams(previous);
+              next.delete("draftId");
+              return next;
+            },
+            { replace: true },
+          );
+          toast.success(
+            `Import finished: ${normalized.successful} product(s) created, ${normalized.failed} failed.`,
+          );
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         } else if (normalized.status === "failed") {
-          toast.error(normalized.error || "Import failed. See image/product error details below.");
+          setDraftStatus("DRAFT");
+          toast.error(normalized.error || "Import failed. Review the image/product errors below, fix the listed issues, and retry.");
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         }
       } catch {
@@ -1972,7 +2062,7 @@ const BulkProductUploadPage: React.FC = () => {
       disposed = true;
       if (timer) clearInterval(timer);
     };
-  }, [jobId, job?.status, draftId, queryClient]);
+  }, [jobId, job?.status, draftId, rawInput, queryClient, setSearchParams]);
 
   // ─ Prompt on unsaved changes ─────────────────────────────────────────────
 
@@ -2040,10 +2130,12 @@ const BulkProductUploadPage: React.FC = () => {
           : normalized;
       setProducts(productsWithDriveMedia);
       setRawInput(
-        draft.rawInput ??
-          (productsWithDriveMedia.length > 0
-            ? JSON.stringify(productsWithDriveMedia, null, 2)
-            : ""),
+        sanitizeBulkRawInput(
+          draft.rawInput ??
+            (productsWithDriveMedia.length > 0
+              ? JSON.stringify(productsWithDriveMedia, null, 2)
+              : ""),
+        ),
       );
       setImageMatches(savedImageMatches);
       setConfirmedAssignments(draft.confirmedAssignments ?? {});
@@ -2065,7 +2157,7 @@ const BulkProductUploadPage: React.FC = () => {
   );
 
   const handleReloadDraft = useCallback(async () => {
-    if (!draftId) return;
+    if (!draftId || isJobRunning || draftStatus === "COMPLETED") return;
     const tid = toast.loading(`Reloading draft #${draftId.slice(-8)}…`);
     try {
       const res = await productApi.getDraft(draftId);
@@ -2076,7 +2168,7 @@ const BulkProductUploadPage: React.FC = () => {
     } catch (err) {
       toast.error(humanError(err), { id: tid });
     }
-  }, [draftId, loadDraft]);
+  }, [draftId, loadDraft, isJobRunning, draftStatus]);
 
   // ─ Auto-enrich in-memory products when categories/warehouses load ──────────
   useEffect(() => {
@@ -2157,8 +2249,9 @@ const BulkProductUploadPage: React.FC = () => {
           if (isCancelled) return;
           const drafts = res.data ?? [];
           if (drafts.length > 0) {
-            const activeDraft =
-              drafts.find((d) => d.status !== "COMPLETED") || drafts[0];
+            // Never auto-open a completed draft after a refresh. Completed
+            // batches stay in history and the workspace starts clean.
+            const activeDraft = drafts.find((d) => d.status !== "COMPLETED");
             if (
               activeDraft &&
               !isCancelled &&
@@ -2189,6 +2282,15 @@ const BulkProductUploadPage: React.FC = () => {
         const res = await productApi.getDraft(targetId);
         if (isCancelled) return;
         if (res.data) {
+          // A stale localStorage ID from an older deployment must not reopen a
+          // completed batch after refresh. Explicit URL selection is allowed
+          // so admins can still inspect completed draft history intentionally.
+          if (!queryDraftId && res.data.status === "COMPLETED") {
+            localStorage.removeItem("active_bulk_draft_id");
+            loadedDraftIdRef.current = "__completed_import__";
+            syncDraftUrl(null);
+            return;
+          }
           loadDraft(res.data);
           return;
         }
@@ -2215,8 +2317,9 @@ const BulkProductUploadPage: React.FC = () => {
           if (isCancelled) return;
           const drafts = listRes.data ?? [];
           if (drafts.length > 0) {
-            const activeDraft =
-              drafts.find((d) => d.status !== "COMPLETED") || drafts[0];
+            // Never auto-open a completed draft after a refresh. Completed
+            // batches stay in history and the workspace starts clean.
+            const activeDraft = drafts.find((d) => d.status !== "COMPLETED");
             if (
               activeDraft &&
               !isCancelled &&
@@ -2243,9 +2346,11 @@ const BulkProductUploadPage: React.FC = () => {
   }, [searchParams, loadDraft, syncDraftUrl]);
 
   const handleSaveDraft = async () => {
+    if (isJobRunning || draftStatus === "COMPLETED") return;
+    const safeProducts = sanitizeProductsForStorage(products);
     const serializedProducts =
-      products.length > 0 ? JSON.stringify(products, null, 2) : "";
-    const effectiveInput = serializedProducts || rawInput.trim();
+      products.length > 0 ? JSON.stringify(safeProducts, null, 2) : "";
+    const effectiveInput = serializedProducts || sanitizeBulkRawInput(rawInput).trim();
     if (!effectiveInput && products.length === 0) {
       toast.error("Nothing to save — enter product data first.");
       return;
@@ -2259,7 +2364,7 @@ const BulkProductUploadPage: React.FC = () => {
         );
         const res = await productApi.updateDraft(draftId, {
           rawInput: effectiveInput,
-          parsedData: products.length > 0 ? products : undefined,
+          parsedData: products.length > 0 ? safeProducts : undefined,
           confirmedAssignments,
           imageMatches: currentImageMatches,
         });
@@ -2281,8 +2386,9 @@ const BulkProductUploadPage: React.FC = () => {
           setRawInput(effectiveInput);
           if (products.length > 0) {
             await productApi.updateDraft(res.data.id, {
-              parsedData: products,
+              parsedData: safeProducts,
               confirmedAssignments,
+              imageMatches: filterImageMatchesToProductMedia(imageMatches, safeProducts),
             });
           }
           localStorage.setItem("active_bulk_draft_id", res.data.id);
@@ -2442,7 +2548,7 @@ const BulkProductUploadPage: React.FC = () => {
   };
 
   const handleDeleteDraft = async () => {
-    if (!draftId) return;
+    if (!draftId || isJobRunning || draftStatus === "COMPLETED") return;
     try {
       await productApi.deleteDraft(draftId);
       loadedDraftIdRef.current = null;
@@ -2488,18 +2594,20 @@ const BulkProductUploadPage: React.FC = () => {
             productApi.getDriveThumbnailUrl,
           )
         : products;
+      const safeProductsForImport = sanitizeProductsForStorage(productsForImport);
       const importImageMatches = filterImageMatchesToProductMedia(
         retainedMatches,
-        productsForImport,
+        safeProductsForImport,
       );
 
-      const serialized = JSON.stringify(productsForImport, null, 2);
+      const serialized = JSON.stringify(safeProductsForImport, null, 2);
       await productApi.updateDraft(draftId, {
         rawInput: serialized,
-        parsedData: productsForImport,
+        parsedData: safeProductsForImport,
         confirmedAssignments,
         imageMatches: importImageMatches,
       });
+      // Keep signed proxy URLs only in memory for rendering; never persist them.
       setProducts(productsForImport);
       setRawInput(serialized);
       setImageMatches(importImageMatches);
@@ -2546,11 +2654,12 @@ const BulkProductUploadPage: React.FC = () => {
       // reappear from a stale draft snapshot.
       setIsImporting(true);
       try {
-        const retainedMatches = filterImageMatchesToProductMedia(imageMatches, products);
-        const serialized = JSON.stringify(products, null, 2);
+        const safeProducts = sanitizeProductsForStorage(products);
+        const retainedMatches = filterImageMatchesToProductMedia(imageMatches, safeProducts);
+        const serialized = JSON.stringify(safeProducts, null, 2);
         await productApi.updateDraft(draftId, {
           rawInput: serialized,
-          parsedData: products,
+          parsedData: safeProducts,
           confirmedAssignments,
           imageMatches: retainedMatches,
         });
@@ -2662,7 +2771,7 @@ const BulkProductUploadPage: React.FC = () => {
         return { ...product, media: nextMedia, allImages: nextAllImages };
       });
       setProducts(updatedProducts);
-      setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setRawInput(JSON.stringify(sanitizeProductsForStorage(updatedProducts), null, 2));
       setImageMatches((current) =>
         filterImageMatchesToProductMedia(current, updatedProducts),
       );
@@ -2684,7 +2793,7 @@ const BulkProductUploadPage: React.FC = () => {
       p.productGroupId === updated.productGroupId ? updated : p,
     );
     setProducts(nextProducts);
-    setRawInput(JSON.stringify(nextProducts, null, 2));
+    setRawInput(JSON.stringify(sanitizeProductsForStorage(nextProducts), null, 2));
 
     // Remove stale match entries as soon as an admin deletes media. The saved
     // draft and subsequent background job must use this filtered set.
@@ -2703,7 +2812,7 @@ const BulkProductUploadPage: React.FC = () => {
   const handleDeleteProduct = useCallback((productGroupId: string) => {
     const nextProducts = products.filter((p) => p.productGroupId !== productGroupId);
     setProducts(nextProducts);
-    setRawInput(JSON.stringify(nextProducts, null, 2));
+    setRawInput(JSON.stringify(sanitizeProductsForStorage(nextProducts), null, 2));
     setImageMatches((current) =>
       filterImageMatchesToProductMedia(current, nextProducts),
     );
@@ -2716,7 +2825,7 @@ const BulkProductUploadPage: React.FC = () => {
   const handleBulkUpdateProducts = useCallback(
     (updatedProducts: BulkParsedProduct[]) => {
       setProducts(updatedProducts);
-      setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setRawInput(JSON.stringify(sanitizeProductsForStorage(updatedProducts), null, 2));
       setImageMatches((current) =>
         filterImageMatchesToProductMedia(current, updatedProducts),
       );
@@ -2745,7 +2854,7 @@ const BulkProductUploadPage: React.FC = () => {
       };
       setProducts((prev) => {
         const next = [...prev, withErrors];
-        setRawInput(JSON.stringify(next, null, 2));
+        setRawInput(JSON.stringify(sanitizeProductsForStorage(next), null, 2));
         return next;
       });
       setValidationErrors((prev) => [...prev, ...valErrors]);
@@ -2754,6 +2863,34 @@ const BulkProductUploadPage: React.FC = () => {
     },
     [flatCategories, warehouses],
   );
+
+  const handleStartNewImport = () => {
+    // Keep the completed job's result visible until this button is clicked.
+    loadedDraftIdRef.current = "__new_import__";
+    inFlightDraftIdRef.current = null;
+    localStorage.removeItem("active_bulk_draft_id");
+    setDraftId(null);
+    setDraftStatus("DRAFT");
+    setRawInput("");
+    setProducts([]);
+    setValidationErrors([]);
+    setImageMatches(null);
+    setConfirmedAssignments({});
+    setJob(null);
+    setJobId(null);
+    setIsDirty(false);
+    setShowDraftSelector(false);
+    setProductFilter("all");
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("draftId");
+        return next;
+      },
+      { replace: true },
+    );
+    toast.success("Ready for a new bulk import. Upload or paste your next product batch.");
+  };
 
   // ─ Render ────────────────────────────────────────────────────────────────
 
@@ -2774,12 +2911,17 @@ const BulkProductUploadPage: React.FC = () => {
                   </h1>
                   <p className="text-xs text-gray-500">
                     Prepare, preview, and import multiple products at once.
-                    {draftId && (
+                    {isJobRunning ? (
+                      <span className="ml-2 inline-flex items-center gap-1.5 font-semibold text-indigo-700">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Import running in background · editing paused
+                      </span>
+                    ) : draftId ? (
                       <span className="ml-2 text-indigo-600 font-medium">
                         Draft #{draftId.slice(-8)}
                         {isDirty && " · unsaved changes"}
                       </span>
-                    )}
+                    ) : null}
                   </p>
                 </div>
               </div>
@@ -2802,19 +2944,20 @@ const BulkProductUploadPage: React.FC = () => {
                               : "bg-gray-100 text-gray-600",
                     )}
                   >
-                    {draftStatus}
+                    {isJobRunning ? "IN PROGRESS" : draftStatus}
                   </span>
                 )}
 
                 <button
                   onClick={() => setShowDraftSelector(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  disabled={isJobRunning}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                 >
                   <FolderOpen className="w-4 h-4" />
                   Open Draft
                 </button>
 
-                {draftId && (
+                {draftId && draftStatus !== "COMPLETED" && !isJobRunning && (
                   <button
                     onClick={handleReloadDraft}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
@@ -2825,9 +2968,11 @@ const BulkProductUploadPage: React.FC = () => {
                   </button>
                 )}
 
+                {draftStatus !== "COMPLETED" && !isJobRunning && !(job?.status === "completed" && !draftId) && (
                 <button
                   onClick={handleSaveDraft}
                   disabled={
+                    isJobRunning ||
                     isSaving ||
                     isDriveMatching ||
                     (!rawInput.trim() && products.length === 0)
@@ -2841,8 +2986,9 @@ const BulkProductUploadPage: React.FC = () => {
                   )}
                   Save Draft
                 </button>
+                )}
 
-                {draftId && (
+                {draftId && draftStatus !== "COMPLETED" && !isJobRunning && (
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
                     className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -2852,31 +2998,42 @@ const BulkProductUploadPage: React.FC = () => {
                   </button>
                 )}
 
-                {/* Primary import button */}
-                <div className="relative group">
+                {/* Primary action: a completed job starts a fresh workspace, never re-imports stale products. */}
+                {draftStatus === "COMPLETED" || (job?.status === "completed" && !draftId) ? (
                   <button
-                    onClick={handleImport}
-                    disabled={!canImport || isImporting || isDriveMatching}
-                    className={classNames(
-                      "flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors",
-                      canImport
-                        ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                        : "bg-gray-200 text-gray-400 cursor-not-allowed",
-                    )}
+                    type="button"
+                    onClick={handleStartNewImport}
+                    className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
                   >
-                    {isImporting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <UploadCloud className="w-4 h-4" />
-                    )}
-                    Import Products
+                    <Plus className="h-4 w-4" />
+                    Start New Import
                   </button>
-                  {importDisabledReason && (
-                    <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg">
-                      {importDisabledReason}
-                    </div>
-                  )}
-                </div>
+                ) : (
+                  <div className="relative group">
+                    <button
+                      onClick={handleImport}
+                      disabled={!canImport || isImporting || isDriveMatching}
+                      className={classNames(
+                        "flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors",
+                        canImport
+                          ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                          : "bg-gray-200 text-gray-400 cursor-not-allowed",
+                      )}
+                    >
+                      {isImporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <UploadCloud className="w-4 h-4" />
+                      )}
+                      Import Products
+                    </button>
+                    {importDisabledReason && (
+                      <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg">
+                        {importDisabledReason}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2919,12 +3076,28 @@ const BulkProductUploadPage: React.FC = () => {
                 )}
                 {job.currentFile && <span className="max-w-full truncate">Current: {job.currentFile}</span>}
               </div>
+              <p className="text-[11px] font-medium text-indigo-800">
+                This import is running in the background. Editing, saving, draft switching, and draft deletion are paused until the job finishes.
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {job.stage === "preparing_images"
+                  ? "Checking which selected photos are still attached to these products. Nothing is published yet."
+                  : job.stage === "uploading_images"
+                    ? "Images are being prepared in the background and saved to storage. Products will not be created until required image uploads succeed."
+                    : "Image preparation is finished. Product records are now being saved; you can keep using this admin app."}
+              </p>
             </div>
           </div>
         )}
 
         {/* ── Body ───────────────────────────────────────────────────────────── */}
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div
+          aria-busy={isJobRunning}
+          className={classNames(
+            "max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-opacity",
+            isWorkspaceLocked ? "pointer-events-none select-none opacity-75" : "",
+          )}
+        >
           <div className="flex flex-col xl:flex-row gap-6">
             {/* ── Left column (input + products) ─────────────────────────────── */}
             <div className="flex-1 min-w-0 space-y-5">
@@ -3070,10 +3243,12 @@ const BulkProductUploadPage: React.FC = () => {
                 getDriveThumbnailUrl={productApi.getDriveThumbnailUrl}
                 onPrepareDraft={async () => {
                   if (draftId && products.length > 0) {
+                    const safeProducts = sanitizeProductsForStorage(products);
                     await productApi.updateDraft(draftId, {
-                      rawInput: JSON.stringify(products, null, 2),
-                      parsedData: products,
+                      rawInput: JSON.stringify(safeProducts, null, 2),
+                      parsedData: safeProducts,
                       confirmedAssignments,
+                      imageMatches: filterImageMatchesToProductMedia(imageMatches, safeProducts),
                     });
                   }
                 }}
@@ -3142,7 +3317,7 @@ const BulkProductUploadPage: React.FC = () => {
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(
-                            JSON.stringify(products, null, 2),
+                            JSON.stringify(sanitizeProductsForStorage(products), null, 2),
                           );
                           toast.success("JSON copied to clipboard!");
                         }}
@@ -3153,7 +3328,7 @@ const BulkProductUploadPage: React.FC = () => {
                       </button>
                     </div>
                     <pre className="text-[10px] font-mono leading-relaxed max-h-72 overflow-auto text-emerald-400">
-                      {JSON.stringify(products, null, 2)}
+                      {JSON.stringify(sanitizeProductsForStorage(products), null, 2)}
                     </pre>
                   </div>
                 )}

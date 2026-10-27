@@ -907,6 +907,19 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
                                     src={m.preview || m.url}
                                     alt="Variant Thumbnail"
                                     className="inline-block h-8 w-8 rounded-md object-cover ring-2 ring-white border border-slate-200"
+                                    onError={(event) => {
+                                      const image = event.currentTarget;
+                                      if (
+                                        m.url &&
+                                        (m.preview || m.url) !== m.url &&
+                                        image.dataset.urlFallback !== "true"
+                                      ) {
+                                        image.dataset.urlFallback = "true";
+                                        image.src = m.url;
+                                        return;
+                                      }
+                                      image.style.visibility = "hidden";
+                                    }}
                                   />
                                 ))}
                             </div>
