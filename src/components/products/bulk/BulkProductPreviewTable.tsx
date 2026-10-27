@@ -98,15 +98,29 @@ function getMatchedStorefrontPreviewMedia(
 
   if (!groupMatches.length) return [];
 
+  const existingProductMedia = getStorefrontPreviewMedia(product, selectedVariantSku);
+  const normalizeLabel = (value?: string) =>
+    (value || "").trim().toLocaleLowerCase("en-US").replace(/\\.[^.]+$/, "");
+  const isPermanentStorageUrl = (value?: string) =>
+    /^https:\/\//i.test(value || "") &&
+    !/drive\\.google\\.com|docs\\.google\\.com|googleusercontent\\.com|\\/products\\/bulk\\/drive-proxy\\//i.test(value || "");
+
   return groupMatches
     .map((entry, index) => {
       const fileId = entry.file.id;
+      const matchedName = normalizeLabel(entry.file.name);
+      const storedMedia = existingProductMedia.find((media) =>
+        [media.title, media.altText].some((label) => normalizeLabel(label) === matchedName),
+      );
+      const storedUrl = isPermanentStorageUrl(storedMedia?.url) ? storedMedia?.url : undefined;
       const originalUrl =
+        storedUrl ||
         getDriveProxyUrl?.(fileId) ||
         entry.file.previewUrl ||
         entry.file.webContentLink ||
         "";
       const thumbnailUrl =
+        storedUrl ||
         entry.file.thumbnailLink ||
         getDriveThumbnailUrl?.(fileId) ||
         originalUrl;
@@ -115,9 +129,9 @@ function getMatchedStorefrontPreviewMedia(
         type: "IMAGE" as const,
         url: originalUrl,
         thumbnailUrl,
-        key: fileId,
-        altText: entry.file.name,
-        title: entry.file.name,
+        key: storedMedia?.key || fileId,
+        altText: storedMedia?.altText || entry.file.name,
+        title: storedMedia?.title || entry.file.name,
         order: index,
         isActive: true,
         source: entry.variantSku ? ("variant" as const) : ("product" as const),
