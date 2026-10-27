@@ -181,6 +181,25 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
   const hasVariants = watch("hasVariants");
   const formValues = watch();
 
+  const hasTemporaryDriveMedia = [
+    ...(formValues.media || []),
+    ...((formValues.variants || []).flatMap((variant: any) => variant.media || [])),
+  ].some((media: any) =>
+    /drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\/|[?&]token=/i.test(
+      String(media?.url || ""),
+    ),
+  );
+
+  const submitProductForm = (data: ProductFormValues) => {
+    if (hasTemporaryDriveMedia) {
+      toast.error(
+        "This product still contains temporary Google Drive image URLs. Remove and re-upload those photos using Add Media Files before saving; product images must use permanent storage URLs.",
+      );
+      return;
+    }
+    onSubmit(data);
+  };
+
   // Specifications field array
   const {
     fields: specFields,
@@ -652,7 +671,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
             <button
               type="button"
               onClick={handleSubmit((data) =>
-                onSubmit(data as ProductFormValues),
+                submitProductForm(data as ProductFormValues),
               )}
               disabled={isProcessing}
               className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs inline-flex items-center gap-2 disabled:opacity-50"
@@ -682,6 +701,17 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
             <BasicProductInfoCard />
 
             {/* 2. Product Photos & Media (Always visible for main product photography) */}
+            {hasTemporaryDriveMedia && (
+              <div
+                role="alert"
+                className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"
+              >
+                <p className="font-semibold">Some images use temporary Google Drive links</p>
+                <p className="mt-1">
+                  These are not permanent S3/storage URLs. Their thumbnails may still be visible, but saving is blocked until you remove and re-upload those images using <strong>Add Media Files</strong>. This prevents broken images and temporary access tokens from being saved into product media.
+                </p>
+              </div>
+            )}
             <GlobalMediaUploader />
 
             {/* 3. Variants Section Card with Inline Toggle */}
@@ -865,7 +895,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
           isDirty={isDirty}
           isSubmitting={isProcessing}
           onDiscard={handleDiscard}
-          onSave={handleSubmit((data) => onSubmit(data as ProductFormValues))}
+          onSave={handleSubmit((data) => submitProductForm(data as ProductFormValues))}
           saveLabel={isEditMode ? "Save Changes" : "Publish Product"}
         />
 
