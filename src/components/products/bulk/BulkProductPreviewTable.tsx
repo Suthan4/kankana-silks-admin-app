@@ -93,6 +93,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
     images: BulkParsedMedia[];
     index: number;
   } | null>(null);
+  const [failedDetailImageUrl, setFailedDetailImageUrl] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(null);
 
@@ -1217,7 +1218,11 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                           loading="lazy"
                                           decoding="async"
                                           title="Click to view full-size"
-                                          onClick={() => setImageGallery({ productName: product.name, images: displayMedia, index: mIdx })}
+                                          onClick={() => {
+                                            setFailedDetailImageUrl(null);
+                                            setFailedDetailImageUrl(null);
+                                        setImageGallery({ productName: product.name, images: displayMedia, index: mIdx });
+                                          }}
                                           className="w-full h-full object-cover cursor-zoom-in"
                                           onError={(e) => {
                                             // A failed thumbnail stays a placeholder. Do not fall back
@@ -1274,7 +1279,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         </button>
                                       )}
                                     </div>
-                                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
+                                    <div className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition">
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1457,22 +1462,24 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
               {(() => {
                 const active = imageGallery.images[imageGallery.index];
                 const detailSrc = /^(https?:\/\/|\/)/i.test(active.url || "") ? active.url : undefined;
-                return detailSrc && active.type !== "VIDEO" ? (
+                return detailSrc && active.type !== "VIDEO" && failedDetailImageUrl !== detailSrc ? (
                   <img
                     src={detailSrc}
                     alt={active.altText || active.title || imageGallery.productName}
                     loading="eager"
                     decoding="async"
                     className="max-h-[72vh] max-w-full object-contain"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
+                    onError={() => setFailedDetailImageUrl(detailSrc)}
                   />
                 ) : (
                   <div className="flex max-w-md flex-col items-center gap-2 px-6 py-12 text-center text-white">
                     <ImageIcon className="h-10 w-10 text-slate-400" />
-                    <p className="text-sm font-medium">A full-size image URL is not available for this item.</p>
-                    <p className="text-xs text-slate-400">Re-run image matching or select an image manually to preview it.</p>
+                    <p className="text-sm font-medium">
+                      {failedDetailImageUrl === detailSrc
+                        ? "This image could not be loaded."
+                        : "A full-size image URL is not available for this item."}
+                    </p>
+                    <p className="text-xs text-slate-400">Check that this image was uploaded or run Drive matching again.</p>
                   </div>
                 );
               })()}
