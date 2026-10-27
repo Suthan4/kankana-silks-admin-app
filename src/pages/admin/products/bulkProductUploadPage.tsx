@@ -2872,6 +2872,7 @@ const BulkProductUploadPage: React.FC = () => {
                     flatCategories={flatCategories}
                     categoriesTree={categoriesTree}
                     onBulkUpdateProducts={handleBulkUpdateProducts}
+                    imageMatches={imageMatches}
                     getDriveProxyUrl={productApi.getDriveProxyUrl}
                     getDriveThumbnailUrl={productApi.getDriveThumbnailUrl}
                     onDownloadErrorReport={() => {
