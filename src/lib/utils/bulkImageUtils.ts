@@ -38,9 +38,12 @@ export function extractDriveFileId(input?: string): string | null {
 export function resolveImageUrl(
   url?: string,
   thumbnailUrl?: string,
-  getDriveProxyUrl?: (fileId: string) => string
+  getDriveProxyUrl?: (fileId: string) => string | undefined,
+  getDriveThumbnailUrl?: (fileId: string) => string | undefined
 ): string | undefined {
-  // 1. If a valid external or blob/data thumbnailUrl is provided, prioritize it
+  // Prefer a known thumbnail URL first; Drive match results may expose
+  // an already-accessible googleusercontent thumbnail for the selected file.
+  // This is small preview data, not the original image content.
   if (thumbnailUrl && typeof thumbnailUrl === "string") {
     const trimmedThumb = thumbnailUrl.trim();
     if (
@@ -50,12 +53,24 @@ export function resolveImageUrl(
       trimmedThumb.startsWith("blob:") ||
       trimmedThumb.startsWith("/")
     ) {
-      // Check if it's a private Google Drive web link that won't load in <img>
-      const driveId = extractDriveFileId(trimmedThumb);
-      if (driveId && getDriveProxyUrl && trimmedThumb.includes("drive.google.com")) {
-        return getDriveProxyUrl(driveId);
+      const thumbDriveId = extractDriveFileId(trimmedThumb);
+      if (thumbDriveId && getDriveProxyUrl && trimmedThumb.includes("drive.google.com")) {
+        return getDriveProxyUrl(thumbDriveId);
       }
       return trimmedThumb;
+    }
+  }
+
+  // If no known thumbnail URL exists, use the backend's authenticated thumbnail
+  // endpoint for URLs that point to Drive originals. Never load the original in a grid.
+  if (url && getDriveThumbnailUrl) {
+    const proxyMatch = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+    if (proxyMatch?.[1]) {
+      try {
+        return getDriveThumbnailUrl(decodeURIComponent(proxyMatch[1]));
+      } catch {
+        return getDriveThumbnailUrl(proxyMatch[1]);
+      }
     }
   }
 
@@ -102,6 +117,27 @@ function stripExtension(name: string): string {
 }
 
 /**
+ * Creates a comparable filename key from a raw reference, URL, or Drive filename.
+ * Handles the camera-photo naming convention where O and 0 are easily confused.
+ */
+function normalizeMediaReference(value?: string): string {
+  if (!value || typeof value !== "string") return "";
+
+  let name = value.trim();
+  try {
+    const parsed = new URL(name);
+    name = decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() || name);
+  } catch {
+    name = name.split(/[?#]/, 1)[0].split(/[\\/]/).pop() || name;
+  }
+
+  name = stripExtension(name.normalize("NFKC").trim()).toLocaleLowerCase("en-US");
+  const cameraReference = name.match(/^([a-z]{2,5})[o0](\d{4,})$/);
+  if (cameraReference) return `${cameraReference[1]}0${cameraReference[2]}`;
+  return name;
+}
+
+/**
  * Applies matched Google Drive images to the product collection.
  * Updates both product-level and variant-level media with authenticated proxy URLs,
  * preserving metadata, ordering, and existing valid media.
@@ -109,19 +145,16 @@ function stripExtension(name: string): string {
 export function applyDriveMatchesToProducts(
   products: BulkParsedProduct[],
   matches: ImageMatchResult,
-  getDriveProxyUrl: (fileId: string) => string
+  getDriveProxyUrl: (fileId: string) => string,
+  getDriveThumbnailUrl?: (fileId: string) => string
 ): BulkParsedProduct[] {
   if (!matches || !Array.isArray(matches.matched) || matches.matched.length === 0) {
     return products;
   }
 
-  // Create lookup maps for fast matching
-  // 1. Map by productGroupId
   const byGroup = new Map<string, typeof matches.matched>();
-  // 2. Map by variantSku
   const byVariantSku = new Map<string, typeof matches.matched>();
-  // 3. Map by reference filename / URL
-  const byReference = new Map<string, typeof matches.matched[0]>();
+  const byReference = new Map<string, typeof matches.matched[number]>();
 
   for (const entry of matches.matched) {
     if (entry.productGroupId) {
@@ -130,160 +163,132 @@ export function applyDriveMatchesToProducts(
       byGroup.set(entry.productGroupId, list);
     }
     if (entry.variantSku) {
-      const list = byVariantSku.get(entry.variantSku) || [];
+      const skuKey = entry.variantSku.toLocaleLowerCase("en-US").trim();
+      const list = byVariantSku.get(skuKey) || [];
       list.push(entry);
-      byVariantSku.set(entry.variantSku, list);
+      byVariantSku.set(skuKey, list);
     }
-    if (entry.reference) {
-      const refKey = entry.reference.toLowerCase().trim();
-      byReference.set(refKey, entry);
-      // Also index by base name (without extension)
-      const refBase = stripExtension(refKey);
-      if (refBase !== refKey) byReference.set(refBase, entry);
-    }
-    if (entry.file?.name) {
-      const nameKey = entry.file.name.toLowerCase().trim();
-      byReference.set(nameKey, entry);
-      // Also index by base name
-      const nameBase = stripExtension(nameKey);
-      if (nameBase !== nameKey) byReference.set(nameBase, entry);
+
+    for (const value of [entry.reference, entry.file?.name]) {
+      if (!value) continue;
+      const normalizedKey = normalizeMediaReference(value);
+      if (normalizedKey) byReference.set(normalizedKey, entry);
     }
   }
 
+  // The backend's mediaIndex is global across products: product media first,
+  // followed by that product's variant media. Reconstruct those positions so
+  // matched files still attach correctly when a filename string differs.
+  let globalMediaCursor = 0;
+
   return products.map((product) => {
-    const groupMatches = byGroup.get(product.productGroupId) || [];
+    const productMedia = product.media || [];
+    const productMediaStart = globalMediaCursor;
+    globalMediaCursor += productMedia.length;
 
-    // 1. Update product-level media
-    const existingMedia = product.media || [];
-    let updatedProductMedia: BulkParsedMedia[] = [];
-
-    if (existingMedia.length > 0) {
-      updatedProductMedia = existingMedia.map((m, idx) => {
-        // Find matching drive entry by reference filename, order index, or group match
-        const refMatch =
-          (m.url ? byReference.get(m.url.toLowerCase().trim()) : null) ||
-          groupMatches.find(
-            (gm) =>
-              !gm.variantSku &&
-              (gm.mediaIndex === m.order || gm.mediaIndex === idx || gm.reference === m.url)
-          );
-
-        if (refMatch?.file) {
-          const proxyUrl = getDriveProxyUrl(refMatch.file.id);
-          return {
-            ...m,
-            url: proxyUrl,
-            thumbnailUrl: refMatch.file.thumbnailLink || proxyUrl,
-            key: refMatch.file.id,
-            source: "product" as const,
-            productGroupId: product.productGroupId,
-            altText: m.altText || refMatch.file.name,
-            title: m.title || refMatch.file.name,
-          };
-        }
-        return m;
-      });
-    } else {
-      // If product had no media entries, create entries from groupMatches that don't belong to a variant
-      const unassignedGroupMatches = groupMatches.filter((gm) => !gm.variantSku);
-      if (unassignedGroupMatches.length > 0) {
-        updatedProductMedia = unassignedGroupMatches.map((gm, idx) => {
-          const proxyUrl = getDriveProxyUrl(gm.file.id);
-          return {
-            type: "IMAGE" as const,
-            url: proxyUrl,
-            thumbnailUrl: gm.file.thumbnailLink || proxyUrl,
-            key: gm.file.id,
-            source: "product" as const,
-            productGroupId: product.productGroupId,
-            altText: gm.file.name,
-            title: gm.file.name,
-            order: idx,
-            isActive: true,
-          };
-        });
-      }
+    const variantMediaStarts = new Map<string, number>();
+    for (const variant of product.variants || []) {
+      const skuKey = (variant.sku || "").toLocaleLowerCase("en-US").trim();
+      variantMediaStarts.set(skuKey, globalMediaCursor);
+      globalMediaCursor += (variant.media || []).length;
     }
 
-    // 2. Update variants and their variant-level media
-    const updatedVariants = product.variants?.map((v) => {
-      const vSku = v.sku?.toLowerCase().trim();
-      const variantMatches = (vSku ? byVariantSku.get(vSku) : null) || [];
-      const existingVMedia = v.media || [];
-      let updatedVMedia: BulkParsedMedia[] = [];
+    const groupMatches = byGroup.get(product.productGroupId) || [];
 
-      if (existingVMedia.length > 0) {
-        updatedVMedia = existingVMedia.map((m, idx) => {
-          const refMatch =
-            (m.url ? byReference.get(m.url.toLowerCase().trim()) : null) ||
-            variantMatches.find(
-              (vm) => vm.mediaIndex === m.order || vm.mediaIndex === idx || vm.reference === m.url
-            );
+    const updatedProductMedia: BulkParsedMedia[] = productMedia.map((media, index) => {
+      const currentUrl = media.url?.trim() || "";
+      const alreadyStoredUrl =
+        /^https?:\/\//i.test(currentUrl) &&
+        !/drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\//i.test(currentUrl);
+      // Keep permanent HTTPS product-image URLs when a draft is rematched or retried.
+      if (alreadyStoredUrl) return media;
+      const normalizedRef = normalizeMediaReference(media.url);
+      const refMatch =
+        (normalizedRef ? byReference.get(normalizedRef) : undefined) ||
+        groupMatches.find(
+          (entry) => !entry.variantSku && entry.mediaIndex === productMediaStart + index
+        );
 
-          if (refMatch?.file) {
-            const proxyUrl = getDriveProxyUrl(refMatch.file.id);
-            return {
-              ...m,
-              url: proxyUrl,
-              thumbnailUrl: refMatch.file.thumbnailLink || proxyUrl,
-              key: refMatch.file.id,
-              source: "variant" as const,
-              variantSku: v.sku,
-              productGroupId: product.productGroupId,
-              altText: m.altText || refMatch.file.name,
-              title: m.title || refMatch.file.name,
-            };
-          }
-          return m;
-        });
-      } else if (variantMatches.length > 0) {
-        updatedVMedia = variantMatches.map((vm, idx) => {
-          const proxyUrl = getDriveProxyUrl(vm.file.id);
-          return {
-            type: "IMAGE" as const,
-            url: proxyUrl,
-            thumbnailUrl: vm.file.thumbnailLink || proxyUrl,
-            key: vm.file.id,
-            source: "variant" as const,
-            variantSku: v.sku,
-            productGroupId: product.productGroupId,
-            altText: vm.file.name,
-            title: vm.file.name,
-            order: idx,
-            isActive: true,
-          };
-        });
-      }
+      if (!refMatch?.file) return media;
 
+      const proxyUrl = getDriveProxyUrl(refMatch.file.id);
       return {
-        ...v,
-        media: updatedVMedia.length > 0 ? updatedVMedia : v.media,
+        ...media,
+        url: proxyUrl,
+        thumbnailUrl: refMatch.file.thumbnailLink || getDriveThumbnailUrl?.(refMatch.file.id) || proxyUrl,
+        key: refMatch.file.id,
+        source: "product" as const,
+        productGroupId: product.productGroupId,
+        altText: media.altText || refMatch.file.name,
+        title: media.title || refMatch.file.name,
       };
     });
 
-    // 3. Rebuild unified allImages
-    const unifiedAllImages: BulkParsedMedia[] = [
-      ...updatedProductMedia.map((m, idx) => ({
-        ...m,
-        source: "product" as const,
-        order: m.order ?? idx,
-      })),
-      ...(updatedVariants || []).flatMap((v) =>
-        (v.media || []).map((m, idx) => ({
-          ...m,
+    const updatedVariants = (product.variants || []).map((variant) => {
+      const skuKey = (variant.sku || "").toLocaleLowerCase("en-US").trim();
+      const variantMedia = variant.media || [];
+      const variantMediaStart = variantMediaStarts.get(skuKey) ?? productMediaStart + productMedia.length;
+      const variantMatches = skuKey ? (byVariantSku.get(skuKey) || []) : [];
+
+      const updatedVariantMedia = variantMedia.map((media, index) => {
+        const currentUrl = media.url?.trim() || "";
+      const alreadyStoredUrl =
+        /^https?:\/\//i.test(currentUrl) &&
+        !/drive\.google\.com|docs\.google\.com|\/products\/bulk\/drive-proxy\//i.test(currentUrl);
+      // Keep permanent HTTPS product-image URLs when a draft is rematched or retried.
+      if (alreadyStoredUrl) return media;
+      const normalizedRef = normalizeMediaReference(media.url);
+        const refMatch =
+          (normalizedRef ? byReference.get(normalizedRef) : undefined) ||
+          variantMatches.find((entry) => entry.mediaIndex === variantMediaStart + index) ||
+          groupMatches.find(
+            (entry) => entry.variantSku?.toLocaleLowerCase("en-US").trim() === skuKey &&
+              entry.mediaIndex === variantMediaStart + index
+          );
+
+        if (!refMatch?.file) return media;
+
+        const proxyUrl = getDriveProxyUrl(refMatch.file.id);
+        return {
+          ...media,
+          url: proxyUrl,
+          thumbnailUrl: refMatch.file.thumbnailLink || getDriveThumbnailUrl?.(refMatch.file.id) || proxyUrl,
+          key: refMatch.file.id,
           source: "variant" as const,
-          variantSku: v.sku,
-          order: m.order ?? (100 + idx),
+          variantSku: variant.sku,
+          productGroupId: product.productGroupId,
+          altText: media.altText || refMatch.file.name,
+          title: media.title || refMatch.file.name,
+        };
+      });
+
+      return {
+        ...variant,
+        media: updatedVariantMedia,
+      };
+    });
+
+    const unifiedAllImages: BulkParsedMedia[] = [
+      ...updatedProductMedia.map((media, index) => ({
+        ...media,
+        source: "product" as const,
+        order: media.order ?? index,
+      })),
+      ...updatedVariants.flatMap((variant) =>
+        (variant.media || []).map((media, index) => ({
+          ...media,
+          source: "variant" as const,
+          variantSku: variant.sku,
+          order: media.order ?? (100 + index),
         }))
       ),
     ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     return {
       ...product,
-      media: updatedProductMedia.length > 0 ? updatedProductMedia : product.media,
+      media: updatedProductMedia,
       variants: updatedVariants,
       allImages: unifiedAllImages.length > 0 ? unifiedAllImages : product.allImages,
     };
   });
 }
-
