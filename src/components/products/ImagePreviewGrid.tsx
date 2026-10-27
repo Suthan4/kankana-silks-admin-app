@@ -55,6 +55,19 @@ export const ImagePreviewGrid: React.FC<ImagePreviewGridProps> = ({
                 src={displayUrl}
                 alt={item.altText || `Product photo ${idx + 1}`}
                 className="w-full h-full object-cover"
+                onError={(event) => {
+                  const image = event.currentTarget;
+                  if (
+                    item.url &&
+                    displayUrl !== item.url &&
+                    image.dataset.urlFallback !== "true"
+                  ) {
+                    image.dataset.urlFallback = "true";
+                    image.src = item.url;
+                    return;
+                  }
+                  image.style.visibility = "hidden";
+                }}
               />
             )}
 
