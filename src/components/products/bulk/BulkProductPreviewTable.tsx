@@ -1942,6 +1942,7 @@ export const BulkProductPreviewTable: React.FC<
                         activeImage.type !== "VIDEO" &&
                         failedStorefrontImageUrl !== detailImageUrl ? (
                           <img
+                            key={detailImageUrl}
                             src={detailImageUrl}
                             alt={
                               activeImage.altText ||
@@ -2035,6 +2036,7 @@ export const BulkProductPreviewTable: React.FC<
                               >
                                 {thumbSrc ? (
                                   <img
+                                    key={thumbSrc}
                                     src={thumbSrc}
                                     alt=""
                                     loading="lazy"
