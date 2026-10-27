@@ -136,7 +136,7 @@ function summaryFromProducts(
   };
 }
 
-const POLLING_INTERVAL = 2500; // ms
+const POLLING_INTERVAL = 1000; // ms - refresh background image/product progress promptly
 
 // ─── Draft Selector modal ────────────────────────────────────────────────────
 
@@ -1607,12 +1607,16 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
 }) => {
   if (!job) return null;
 
-  const pct =
-    job.total > 0
-      ? Math.round((job.processed / job.total) * 100)
-      : (job.progress ?? 0);
-  const isDone = job.status === "completed" || job.status === "failed";
+  const pct = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
   const isRunning = job.status === "pending" || job.status === "processing";
+  const stageLabel =
+    job.stage === "preparing_images" ? "Preparing image batch…" :
+    job.stage === "uploading_images" ? "Downloading from Drive and uploading to S3…" :
+    job.stage === "images_failed" ? "Image uploads need attention" :
+    job.stage === "importing_products" ? "Importing products…" :
+    job.stage === "completed" ? "Completed" :
+    job.stage === "failed" ? "Failed" :
+    isRunning ? "Queued…" : job.status;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm mt-4">
@@ -1627,7 +1631,11 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
           {job.status === "failed" && (
             <XCircle className="w-4 h-4 text-red-600" />
           )}
-          Import Progress
+          {job.stage === "uploading_images" || job.stage === "preparing_images"
+            ? "Image Upload Progress"
+            : job.stage === "images_failed"
+              ? "Image Upload Errors"
+              : "Import Progress"}
         </h3>
         <span
           className={classNames(
@@ -1641,7 +1649,7 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
                   : "bg-gray-100 text-gray-600",
           )}
         >
-          {job.status}
+          {stageLabel}
         </span>
       </div>
       <div className="p-4 space-y-3">
@@ -1663,6 +1671,44 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
             />
           </div>
         </div>
+
+        {(job.imagesTotal ?? 0) > 0 && (
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-semibold text-indigo-900">Drive images → S3</span>
+              <span className="font-semibold text-indigo-800">
+                {job.imagesProcessed ?? 0}/{job.imagesTotal} processed
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white">
+              <div
+                className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+                style={{
+                  width: `${Math.round(((job.imagesProcessed ?? 0) / Math.max(1, job.imagesTotal || 0)) * 100)}%`,
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded bg-white p-2">
+                <span className="block font-bold text-slate-900">{job.imagesTotal}</span>
+                <span className="text-slate-500">Total</span>
+              </div>
+              <div className="rounded bg-white p-2">
+                <span className="block font-bold text-emerald-700">{job.imagesUploaded ?? 0}</span>
+                <span className="text-slate-500">Uploaded</span>
+              </div>
+              <div className="rounded bg-white p-2">
+                <span className="block font-bold text-red-700">{job.imagesFailed ?? 0}</span>
+                <span className="text-slate-500">Failed</span>
+              </div>
+            </div>
+            {isRunning && job.currentFile && (
+              <p className="break-words text-[11px] text-indigo-800">
+                Processing: <span className="font-semibold">{job.currentFile}</span>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Counts */}
         <div className="grid grid-cols-3 gap-2 text-center">
@@ -1690,6 +1736,22 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
         {job.error && (
           <div className="bg-red-50 rounded-lg p-3 text-xs text-red-700">
             {job.error}
+          </div>
+        )}
+
+        {(job.imageResults || []).some((result) => result.status === "failed") && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <div className="mb-2 text-xs font-semibold text-red-800">
+              Failed image uploads — exact server errors
+            </div>
+            <div className="max-h-56 space-y-2 overflow-y-auto">
+              {job.imageResults!.filter((result) => result.status === "failed").map((result) => (
+                <div key={result.fileId} className="rounded border border-red-100 bg-white p-2 text-xs">
+                  <div className="font-semibold text-red-800">{result.name}</div>
+                  <div className="mt-1 break-words text-red-700">{result.error || "Unknown image upload error"}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1742,7 +1804,7 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
             ) : (
               <RefreshCw className="w-4 h-4" />
             )}
-            Retry Failed Items
+            {job.stage === "images_failed" ? "Retry Failed Images" : "Retry Failed Items"}
           </button>
         )}
 
@@ -1788,7 +1850,6 @@ const BulkProductUploadPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const importedDriveImagesRef = useRef(new Map<string, { url: string; key?: string }>());
   const [isDriveMatching, setIsDriveMatching] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
@@ -1840,6 +1901,7 @@ const BulkProductUploadPage: React.FC = () => {
   const canImport =
     !hasBlockers &&
     !isDriveMatching &&
+    job?.stage !== "images_failed" &&
     products.length > 0 &&
     !!draftId &&
     job?.status !== "processing" &&
@@ -1847,7 +1909,9 @@ const BulkProductUploadPage: React.FC = () => {
 
   const importDisabledReason = isDriveMatching
     ? "Wait for Google Drive reference matching to finish."
-    : !draftId
+    : job?.stage === "images_failed"
+      ? "Use Retry Failed Images in Import Progress; successful image uploads are already saved."
+      : !draftId
       ? "Create or open a draft first."
       : products.length === 0
         ? "Parse products first."
@@ -1862,24 +1926,50 @@ const BulkProductUploadPage: React.FC = () => {
   useEffect(() => {
     if (!jobId || job?.status === "completed" || job?.status === "failed")
       return;
-    const timer = setInterval(async () => {
+
+    let disposed = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const refreshJob = async () => {
       try {
         const res = await productApi.getJobStatus(jobId);
-        if (res.data) {
-          setJob(res.data);
-          if (res.data.status === "completed") {
-            toast.success("Import complete!");
-            queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
-          } else if (res.data.status === "failed") {
-            toast.error("Import failed. See details below.");
-          }
+        if (disposed || !res.data) return;
+
+        const payload = res.data as BulkImportJob & { id?: string };
+        const resolvedId = payload.jobId || payload.id || jobId;
+        const normalized: BulkImportJob = {
+          ...payload,
+          id: payload.id || resolvedId,
+          jobId: resolvedId,
+          draftId: payload.draftId || draftId || "",
+          results: payload.results || [],
+          imageResults: payload.imageResults || [],
+          imagesTotal: payload.imagesTotal ?? 0,
+          imagesProcessed: payload.imagesProcessed ?? 0,
+          imagesUploaded: payload.imagesUploaded ?? 0,
+          imagesFailed: payload.imagesFailed ?? 0,
+        };
+        setJob(normalized);
+
+        if (normalized.status === "completed") {
+          toast.success("Import job completed. " + normalized.successful + " product(s) created.");
+          queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
+        } else if (normalized.status === "failed") {
+          toast.error(normalized.error || "Import failed. See image/product error details below.");
+          queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         }
       } catch {
-        // ignore transient polling errors
+        // Polling is the realtime fallback if a transient network request fails.
       }
-    }, POLLING_INTERVAL);
-    return () => clearInterval(timer);
-  }, [jobId, job?.status, queryClient]);
+    };
+
+    void refreshJob();
+    timer = setInterval(() => { void refreshJob(); }, POLLING_INTERVAL);
+    return () => {
+      disposed = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [jobId, job?.status, draftId, queryClient]);
 
   // ─ Prompt on unsaved changes ─────────────────────────────────────────────
 
@@ -2356,196 +2446,59 @@ const BulkProductUploadPage: React.FC = () => {
     if (!draftId || !canImport) return;
 
     setIsImporting(true);
-    const tid = toast.loading("Preparing product images for import…");
+    const tid = toast.loading("Queuing background image and product import…");
 
     try {
-      const matchesById = new Map<string, MatchedEntry>(
-        (imageMatches?.matched ?? []).map((entry) => [entry.file.id, entry] as const),
-      );
+      // Matching only builds the preview. Persist the matched Drive proxy URLs
+      // and report first; original image downloads and multi-file S3 uploads
+      // now run inside the backend job.
+      const productsForImport = imageMatches?.matched?.length
+        ? applyDriveMatchesToProducts(
+            products,
+            imageMatches,
+            productApi.getDriveProxyUrl,
+            productApi.getDriveThumbnailUrl,
+          )
+        : products;
 
-      const getDriveFileId = (media: BulkParsedMedia): string | null => {
-        const url = media.url || "";
-        const proxyMatch = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
-        if (proxyMatch?.[1]) {
-          try {
-            const id = decodeURIComponent(proxyMatch[1]);
-            if (matchesById.has(id)) return id;
-          } catch {
-            if (matchesById.has(proxyMatch[1])) return proxyMatch[1];
-          }
-        }
-
-        // Matched Drive media carries the Drive file ID as key until the
-        // corresponding image has been uploaded to storage.
-        if (media.key && matchesById.has(media.key)) {
-          return media.key;
-        }
-        return null;
-      };
-
-      // Re-apply the current match result before import so older drafts also get
-      // the Drive file IDs attached to product/variant media.
-      const productsWithMatchedFiles =
-        imageMatches?.matched?.length
-          ? applyDriveMatchesToProducts(
-              products,
-              imageMatches,
-              productApi.getDriveProxyUrl,
-              productApi.getDriveThumbnailUrl,
-            )
-          : products;
-
-      const neededIds = new Set<string>();
-      for (const product of productsWithMatchedFiles) {
-        for (const media of product.media ?? []) {
-          const id = getDriveFileId(media);
-          if (id) neededIds.add(id);
-        }
-        for (const variant of product.variants ?? []) {
-          for (const media of variant.media ?? []) {
-            const id = getDriveFileId(media);
-            if (id) neededIds.add(id);
-          }
-        }
-      }
-
-      const idsToUpload = [...neededIds].filter(
-        (id) => !importedDriveImagesRef.current.has(id),
-      );
-
-      let completedUploads = 0;
-      const failedUploads: string[] = [];
-      let nextUploadIndex = 0;
-      const workerCount = Math.min(3, idsToUpload.length);
-
-      const uploadNextDriveImage = async (): Promise<void> => {
-        while (true) {
-          const index = nextUploadIndex;
-          nextUploadIndex += 1;
-          if (index >= idsToUpload.length) return;
-
-          const fileId = idsToUpload[index];
-          const entry = matchesById.get(fileId);
-          const fileName = entry?.file.name || fileId;
-
-          try {
-            const response = await fetch(productApi.getDriveProxyUrl(fileId));
-            if (!response.ok) {
-              throw new Error("Could not download " + fileName + " from Google Drive (HTTP " + response.status + ").");
-            }
-
-            const blob = await response.blob();
-            const contentType = response.headers.get("content-type") || blob.type;
-            if (!contentType.toLowerCase().startsWith("image/")) {
-              throw new Error("Google Drive did not return image content for " + fileName + ".");
-            }
-
-            const file = new File([blob], fileName, {
-              type: entry?.file.mimeType || contentType || "image/jpeg",
-            });
-            const uploaded = await productApi.uploadBulkImageFile(file);
-            const storage = uploaded.data as any;
-            if (!storage?.url || !/^https:\/\//i.test(storage.url)) {
-              throw new Error("Storage did not return a valid HTTPS URL for " + fileName + ".");
-            }
-
-            importedDriveImagesRef.current.set(fileId, {
-              url: storage.url,
-              key: storage.key,
-            });
-          } catch (error) {
-            failedUploads.push(fileName + ": " + humanError(error));
-          } finally {
-            completedUploads += 1;
-            toast.loading(
-              "Preparing product images: " + completedUploads + "/" + idsToUpload.length +
-                (failedUploads.length ? " (" + failedUploads.length + " failed)" : ""),
-              { id: tid },
-            );
-          }
-        }
-      };
-
-      if (idsToUpload.length > 0) {
-        toast.loading("Uploading " + idsToUpload.length + " matched image(s) to storage…", { id: tid });
-        await Promise.all(
-          Array.from({ length: workerCount }, () => uploadNextDriveImage()),
-        );
-      }
-
-      if (failedUploads.length > 0) {
-        throw new Error(
-          failedUploads.length + " image(s) could not be uploaded. Successful uploads are cached for retry. " +
-            failedUploads.slice(0, 3).join("; "),
-        );
-      }
-
-      const updateMedia = (media: BulkParsedMedia): BulkParsedMedia => {
-        const fileId = getDriveFileId(media);
-        const storage = fileId
-          ? importedDriveImagesRef.current.get(fileId)
-          : undefined;
-        if (!storage) return media;
-        return {
-          ...media,
-          url: storage.url,
-          thumbnailUrl: storage.url,
-          key: storage.key,
-        };
-      };
-
-      const productsReadyForImport = productsWithMatchedFiles.map((product) => {
-        const nextMedia = (product.media ?? []).map(updateMedia);
-        const nextVariants = (product.variants ?? []).map((variant) => ({
-          ...variant,
-          media: (variant.media ?? []).map(updateMedia),
-        }));
-        const allImages: BulkParsedMedia[] = [
-          ...nextMedia.map((media, index) => ({
-            ...media,
-            source: "product" as const,
-            order: media.order ?? index,
-          })),
-          ...nextVariants.flatMap((variant) =>
-            (variant.media ?? []).map((media, index) => ({
-              ...media,
-              source: "variant" as const,
-              variantSku: variant.sku,
-              order: media.order ?? (100 + index),
-            })),
-          ),
-        ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-        return {
-          ...product,
-          media: nextMedia,
-          variants: nextVariants,
-          allImages,
-        };
+      const serialized = JSON.stringify(productsForImport, null, 2);
+      await productApi.updateDraft(draftId, {
+        rawInput: serialized,
+        parsedData: productsForImport,
+        confirmedAssignments,
       });
+      setProducts(productsForImport);
+      setRawInput(serialized);
+      setIsDirty(false);
 
-      // Persist final S3 URLs before starting the background importer, because
-      // the job reads the product payload from the saved draft.
-      if (idsToUpload.length > 0 || productsReadyForImport !== products) {
-        setProducts(productsReadyForImport);
-        const serialized = JSON.stringify(productsReadyForImport, null, 2);
-        setRawInput(serialized);
-        await productApi.updateDraft(draftId, {
-          rawInput: serialized,
-          parsedData: productsReadyForImport,
-          confirmedAssignments,
-        });
-        setIsDirty(false);
-      }
-
-      toast.loading("Starting product import…", { id: tid });
       const res = await productApi.startDraftImport(draftId);
-      if (res.data) {
-        setJob(res.data);
-        setJobId(res.data.jobId);
-        setDraftStatus("IMPORTING");
-        toast.success("Import job started.", { id: tid });
+      if (!res.data) {
+        throw new Error("The server did not return a background job.");
       }
+
+      const returned = res.data as BulkImportJob & { id?: string };
+      const resolvedJobId = returned.jobId || returned.id;
+      if (!resolvedJobId) {
+        throw new Error("The import job was created but the API did not return its job ID. Refresh and check the Job Status endpoint.");
+      }
+
+      const normalizedJob: BulkImportJob = {
+        ...returned,
+        id: returned.id || resolvedJobId,
+        jobId: resolvedJobId,
+        draftId: returned.draftId || draftId,
+        stage: returned.stage || "preparing_images",
+        imagesTotal: returned.imagesTotal ?? (imageMatches?.matched?.length || 0),
+        imagesProcessed: returned.imagesProcessed ?? 0,
+        imagesUploaded: returned.imagesUploaded ?? 0,
+        imagesFailed: returned.imagesFailed ?? 0,
+        imageResults: returned.imageResults ?? [],
+        results: returned.results ?? [],
+      };
+      setJob(normalizedJob);
+      setJobId(resolvedJobId);
+      setDraftStatus("IMPORTING");
+      toast.success("Background job queued. Images will upload to S3 in batches; you can keep using the admin app.", { id: tid });
     } catch (err) {
       toast.error(humanError(err), { id: tid });
     } finally {
@@ -2554,12 +2507,50 @@ const BulkProductUploadPage: React.FC = () => {
   };
 
   const handleRetryJob = async () => {
+    if (job?.stage === "images_failed" && draftId) {
+      // Successful image URLs are saved after each backend batch, so starting
+      // another draft job retries only the images that remain as Drive refs.
+      setIsImporting(true);
+      try {
+        const res = await productApi.startDraftImport(draftId);
+        const returned = res.data as (BulkImportJob & { id?: string }) | undefined;
+        const nextJobId = returned?.jobId || returned?.id;
+        if (!returned || !nextJobId) {
+          throw new Error("The backend did not return a retry job ID.");
+        }
+        const normalizedJob = {
+          ...returned,
+          id: returned.id || nextJobId,
+          jobId: nextJobId,
+          draftId: returned.draftId || draftId,
+          imageResults: returned.imageResults || [],
+          results: returned.results || [],
+        } as BulkImportJob;
+        setJob(normalizedJob);
+        setJobId(nextJobId);
+        setDraftStatus("IMPORTING");
+        toast.success("Retry job queued for the remaining failed images.");
+      } catch (err) {
+        toast.error(humanError(err));
+      } finally {
+        setIsImporting(false);
+      }
+      return;
+    }
+
     if (!jobId) return;
     try {
       const res = await productApi.retryJob(jobId);
       if (res.data) {
-        setJob(res.data);
-        toast.success("Retrying failed items…");
+        const returned = res.data as BulkImportJob & { id?: string };
+        const nextJobId = returned.jobId || returned.id;
+        if (nextJobId) {
+          setJob({ ...returned, jobId: nextJobId });
+          setJobId(nextJobId);
+        } else {
+          setJob(res.data);
+        }
+        toast.success("Retrying failed products…");
       }
     } catch (err) {
       toast.error(humanError(err));
@@ -2833,6 +2824,47 @@ const BulkProductUploadPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {job && (job.status === "pending" || job.status === "processing") && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="sticky top-0 z-30 border-b border-indigo-100 bg-white/95 px-4 py-3 shadow-sm backdrop-blur sm:px-6 lg:px-8"
+          >
+            <div className="mx-auto flex max-w-screen-2xl flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-2 font-semibold text-slate-800">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                  {job.stage === "preparing_images"
+                    ? "Preparing matched Drive images"
+                    : job.stage === "uploading_images"
+                      ? "Uploading and optimizing images in the background"
+                      : "Importing products in the background"}
+                </span>
+                <span className="font-semibold tabular-nums text-indigo-700">{job.progress ?? 0}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-indigo-600 transition-all duration-500"
+                  style={{ width: `${Math.max(0, Math.min(100, job.progress ?? 0))}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+                {(job.stage === "preparing_images" || job.stage === "uploading_images") && (
+                  <span>
+                    Images: {job.imagesProcessed ?? 0}/{job.imagesTotal ?? imageMatches?.matched?.length ?? 0}
+                    {" · "}{job.imagesUploaded ?? 0} uploaded
+                    {" · "}{job.imagesFailed ?? 0} failed
+                  </span>
+                )}
+                {job.stage === "importing_products" && (
+                  <span>Products: {job.processed}/{job.total} processed</span>
+                )}
+                {job.currentFile && <span className="max-w-full truncate">Current: {job.currentFile}</span>}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Body ───────────────────────────────────────────────────────────── */}
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
