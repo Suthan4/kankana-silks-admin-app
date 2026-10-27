@@ -11,6 +11,7 @@ import {
   Box,
   Tag,
   Image as ImageIcon,
+  Eye,
   Globe,
   Trash2,
   Edit2,
@@ -41,6 +42,28 @@ import {
   resolveCategory,
   validateBulkProduct,
 } from "@/lib/utils/bulkProductNormalization";
+
+function getStorefrontPreviewMedia(product: BulkParsedProduct): BulkParsedMedia[] {
+  if (product.allImages?.length) {
+    return [...product.allImages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
+  return [
+    ...(product.media ?? []).map((media, index) => ({
+      ...media,
+      source: "product" as const,
+      order: media.order ?? index,
+    })),
+    ...(product.variants ?? []).flatMap((variant) =>
+      (variant.media ?? []).map((media, index) => ({
+        ...media,
+        source: "variant" as const,
+        variantSku: media.variantSku || variant.sku,
+        order: media.order ?? 100 + index,
+      })),
+    ),
+  ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
 
 interface BulkProductPreviewTableProps {
   products: BulkParsedProduct[];
@@ -94,6 +117,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
     index: number;
   } | null>(null);
   const [failedDetailImageUrl, setFailedDetailImageUrl] = useState<string | null>(null);
+  const [storefrontPreviewProduct, setStorefrontPreviewProduct] = useState<BulkParsedProduct | null>(null);
+  const [storefrontPreviewImageIndex, setStorefrontPreviewImageIndex] = useState(0);
+  const [failedStorefrontImageUrl, setFailedStorefrontImageUrl] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(null);
 
@@ -615,6 +641,20 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
 
                     {/* Actions */}
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStorefrontPreviewProduct(product);
+                          setStorefrontPreviewImageIndex(0);
+                          setFailedStorefrontImageUrl(null);
+                        }}
+                        title="Preview as customer"
+                        aria-label={`Preview ${product.name} as a customer`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100"
+                      >
+                        <Eye className="h-4 w-4" />
+                        <span className="hidden 2xl:inline">Preview</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => setViewingJsonProduct(product)}
@@ -1431,6 +1471,218 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
           </div>
         </div>
       )}
+
+      {storefrontPreviewProduct && (() => {
+        const previewProduct = storefrontPreviewProduct;
+        const previewImages = getStorefrontPreviewMedia(previewProduct);
+        const activeIndex = Math.min(storefrontPreviewImageIndex, Math.max(0, previewImages.length - 1));
+        const activeImage = previewImages[activeIndex];
+        const currentImageUrl = activeImage?.url || "";
+        const detailImageUrl = /^(https?:\/\/|\/)/i.test(currentImageUrl) ? currentImageUrl : "";
+        const discountPercent = previewProduct.basePrice > 0 && previewProduct.basePrice > previewProduct.sellingPrice
+          ? Math.round(((previewProduct.basePrice - previewProduct.sellingPrice) / previewProduct.basePrice) * 100)
+          : 0;
+        return (
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-5"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Customer storefront preview for ${previewProduct.name}`}
+            onClick={() => setStorefrontPreviewProduct(null)}
+          >
+            <div
+              className="flex max-h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-900">Storefront preview</span>
+                    <span className="text-[10px] text-slate-400">Admin-only · read-only</span>
+                  </div>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-900">{previewProduct.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStorefrontPreviewProduct(null)}
+                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                  aria-label="Close storefront preview"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </header>
+
+              <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-2">
+                <section className="border-b border-slate-200 bg-[#faf9f6] p-4 sm:p-6 lg:border-b-0 lg:border-r">
+                  <div className="mx-auto max-w-xl">
+                    <div className="relative flex aspect-[4/5] max-h-[58vh] items-center justify-center overflow-hidden rounded-xl bg-white">
+                      {activeImage && detailImageUrl && activeImage.type !== "VIDEO" && failedStorefrontImageUrl !== detailImageUrl ? (
+                        <img
+                          src={detailImageUrl}
+                          alt={activeImage.altText || activeImage.title || previewProduct.name}
+                          loading="eager"
+                          decoding="async"
+                          className="h-full w-full object-contain"
+                          onError={() => setFailedStorefrontImageUrl(detailImageUrl)}
+                        />
+                      ) : (
+                        <div className="flex max-w-sm flex-col items-center gap-2 p-8 text-center text-slate-500">
+                          <ImageIcon className="h-12 w-12 text-slate-300" />
+                          <p className="text-sm font-semibold text-slate-700">
+                            {failedStorefrontImageUrl === detailImageUrl && detailImageUrl
+                              ? "This image could not be loaded"
+                              : "No full-size product image available"}
+                          </p>
+                          <p className="text-xs leading-relaxed">Confirm the selected image is uploaded to storage, then reopen this preview.</p>
+                        </div>
+                      )}
+                      {previewImages.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStorefrontPreviewImageIndex((activeIndex - 1 + previewImages.length) % previewImages.length);
+                              setFailedStorefrontImageUrl(null);
+                            }}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-200 bg-white/95 p-2 text-slate-700 shadow transition hover:bg-white"
+                            aria-label="Previous product image"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStorefrontPreviewImageIndex((activeIndex + 1) % previewImages.length);
+                              setFailedStorefrontImageUrl(null);
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-200 bg-white/95 p-2 text-slate-700 shadow transition hover:bg-white"
+                            aria-label="Next product image"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                      {discountPercent > 0 && (
+                        <span className="absolute left-3 top-3 rounded-sm bg-rose-700 px-2 py-1 text-[10px] font-bold text-white">{discountPercent}% OFF</span>
+                      )}
+                      {activeIndex === 0 && previewImages.length > 0 && (
+                        <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-medium text-slate-700 shadow-sm">Primary image</span>
+                      )}
+                    </div>
+
+                    {previewImages.length > 0 && (
+                      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                        {previewImages.map((media, index) => {
+                          const thumbSrc = resolveImageUrl(media.url, media.thumbnailUrl, getDriveProxyUrl, getDriveThumbnailUrl);
+                          return (
+                            <button
+                              key={`${media.url}-${index}`}
+                              type="button"
+                              onClick={() => {
+                                setStorefrontPreviewImageIndex(index);
+                                setFailedStorefrontImageUrl(null);
+                              }}
+                              className={`h-16 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${index === activeIndex ? "border-amber-700 ring-2 ring-amber-100" : "border-slate-200 hover:border-slate-400"}`}
+                              aria-label={`View product image ${index + 1}`}
+                            >
+                              {thumbSrc ? (
+                                <img src={thumbSrc} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                              ) : (
+                                <span className="flex h-full items-center justify-center"><ImageIcon className="h-5 w-5 text-slate-300" /></span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <p className="mt-2 text-center text-[10px] text-slate-400">{previewImages.length} product image{previewImages.length === 1 ? "" : "s"}</p>
+                  </div>
+                </section>
+
+                <section className="p-5 sm:p-7 lg:overflow-y-auto">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-800">{previewProduct.categoryPath || "Kankana Silks"}</p>
+                  <h2 className="mt-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{previewProduct.name}</h2>
+                  {previewProduct.artisanName && <p className="mt-2 text-sm text-slate-500">Woven by {previewProduct.artisanName}</p>}
+                  <div className="mt-5 flex flex-wrap items-baseline gap-2">
+                    <span className="text-2xl font-semibold text-slate-900">₹{Number(previewProduct.sellingPrice || 0).toLocaleString("en-IN")}</span>
+                    {previewProduct.basePrice > previewProduct.sellingPrice && (
+                      <span className="text-sm text-slate-400 line-through">₹{Number(previewProduct.basePrice || 0).toLocaleString("en-IN")}</span>
+                    )}
+                    {discountPercent > 0 && <span className="rounded bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700">{discountPercent}% OFF</span>}
+                  </div>
+                  {previewProduct.sku && <p className="mt-2 text-[11px] text-slate-400">SKU: {previewProduct.sku}</p>}
+
+                  <div className="mt-5 border-y border-slate-200 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Product details</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{previewProduct.description || "No product description provided."}</p>
+                  </div>
+
+                  {previewProduct.productType === "variable" && (previewProduct.variants?.length || 0) > 0 && (
+                    <div className="mt-5">
+                      <p className="text-xs font-semibold text-slate-800">Available options</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {previewProduct.variants!.map((variant, index) => {
+                          const optionName = variant.title || [variant.color, variant.size].filter(Boolean).join(" / ") || variant.sku || `Option ${index + 1}`;
+                          return (
+                            <span key={variant.sku || index} className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700">
+                              {optionName}
+                              {variant.sellingPrice !== undefined && variant.sellingPrice !== previewProduct.sellingPrice ? (
+                                <span className="ml-2 font-semibold">₹{Number(variant.sellingPrice).toLocaleString("en-IN")}</span>
+                              ) : null}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {previewProduct.specifications && previewProduct.specifications.length > 0 && (
+                    <div className="mt-5">
+                      <p className="text-xs font-semibold text-slate-800">Specifications</p>
+                      <dl className="mt-2 divide-y divide-slate-100 border-y border-slate-100">
+                        {previewProduct.specifications.map((spec, index) => (
+                          <div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2 text-xs">
+                            <dt className="text-slate-500">{spec.key}</dt>
+                            <dd className="text-right font-medium text-slate-800">{spec.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  )}
+
+                  <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <p className="text-slate-500">Weight</p>
+                      <p className="mt-1 font-semibold text-slate-800">{previewProduct.weight || "—"} kg</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <p className="text-slate-500">Availability</p>
+                      <p className="mt-1 font-semibold text-emerald-700">
+                        {previewProduct.productType === "variable"
+                          ? `${previewProduct.variants?.length || 0} options`
+                          : (previewProduct.stock?.quantity ?? 0) > 0 ? "In stock" : "Stock not set"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <button type="button" disabled className="cursor-not-allowed rounded-lg bg-slate-900 px-4 py-3 text-xs font-semibold text-white opacity-90">Add to cart</button>
+                    <button type="button" disabled className="cursor-not-allowed rounded-lg border border-slate-300 px-4 py-3 text-xs font-semibold text-slate-700 opacity-90">Buy now</button>
+                  </div>
+                  <p className="mt-2 text-center text-[10px] text-slate-400">Preview only — storefront actions are disabled in the admin preview.</p>
+                  {previewProduct.seo && (
+                    <div className="mt-6 rounded-lg border border-dashed border-slate-200 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Search listing preview</p>
+                      <p className="mt-1 text-xs font-semibold text-blue-800">{previewProduct.seo.metaTitle || previewProduct.metaTitle || previewProduct.name}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{previewProduct.seo.metaDesc || previewProduct.metaDesc || previewProduct.description}</p>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {imageGallery && imageGallery.images[imageGallery.index] && (
         <div
