@@ -1957,7 +1957,50 @@ const BulkProductUploadPage: React.FC = () => {
         setJob(normalized);
 
         if (normalized.status === "completed") {
-          toast.success("Import job completed. " + normalized.successful + " product(s) created.");
+          const completedDraftId = normalized.draftId || draftId;
+          // Reload the server's final product payload. The backend must have
+          // replaced all matched Drive references with permanent storage URLs.
+          if (completedDraftId) {
+            try {
+              const completedDraftRes = await productApi.getDraft(completedDraftId);
+              if (!disposed && completedDraftRes.data) {
+                const completedProducts = normalizeProducts(
+                  extractProducts(completedDraftRes.data.parsedData),
+                  flatCategoriesRef.current,
+                  warehousesRef.current,
+                );
+                setProducts(completedProducts);
+                setRawInput(
+                  JSON.stringify(sanitizeProductsForStorage(completedProducts), null, 2),
+                );
+                setValidationErrors(completedProducts.flatMap((product) => product.errors || []));
+              }
+            } catch (draftRefreshError) {
+              // Keep the completed job results visible even if the product snapshot cannot reload.
+              console.warn("Could not refresh completed bulk draft:", draftRefreshError);
+              setRawInput(sanitizeBulkRawInput(rawInput));
+            }
+          }
+
+          setDraftId(null);
+          setDraftStatus("COMPLETED");
+          setImageMatches(null);
+          setConfirmedAssignments({});
+          setIsDirty(false);
+          setJobId(null);
+          loadedDraftIdRef.current = "__completed_import__";
+          localStorage.removeItem("active_bulk_draft_id");
+          setSearchParams(
+            (previous) => {
+              const next = new URLSearchParams(previous);
+              next.delete("draftId");
+              return next;
+            },
+            { replace: true },
+          );
+          toast.success(
+            `Import finished: ${normalized.successful} product(s) created, ${normalized.failed} failed.`,
+          );
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         } else if (normalized.status === "failed") {
           toast.error(normalized.error || "Import failed. See image/product error details below.");
@@ -1974,7 +2017,7 @@ const BulkProductUploadPage: React.FC = () => {
       disposed = true;
       if (timer) clearInterval(timer);
     };
-  }, [jobId, job?.status, draftId, queryClient]);
+  }, [jobId, job?.status, draftId, rawInput, queryClient, setSearchParams]);
 
   // ─ Prompt on unsaved changes ─────────────────────────────────────────────
 
@@ -2762,6 +2805,34 @@ const BulkProductUploadPage: React.FC = () => {
     [flatCategories, warehouses],
   );
 
+  const handleStartNewImport = () => {
+    // Keep the completed job's result visible until this button is clicked.
+    loadedDraftIdRef.current = "__new_import__";
+    inFlightDraftIdRef.current = null;
+    localStorage.removeItem("active_bulk_draft_id");
+    setDraftId(null);
+    setDraftStatus("DRAFT");
+    setRawInput("");
+    setProducts([]);
+    setValidationErrors([]);
+    setImageMatches(null);
+    setConfirmedAssignments({});
+    setJob(null);
+    setJobId(null);
+    setIsDirty(false);
+    setShowDraftSelector(false);
+    setProductFilter("all");
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("draftId");
+        return next;
+      },
+      { replace: true },
+    );
+    toast.success("Ready for a new bulk import. Upload or paste your next product batch.");
+  };
+
   // ─ Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -2832,6 +2903,7 @@ const BulkProductUploadPage: React.FC = () => {
                   </button>
                 )}
 
+                {!(job?.status === "completed" && !draftId) && (
                 <button
                   onClick={handleSaveDraft}
                   disabled={
@@ -2848,6 +2920,7 @@ const BulkProductUploadPage: React.FC = () => {
                   )}
                   Save Draft
                 </button>
+                )}
 
                 {draftId && (
                   <button
@@ -2859,31 +2932,42 @@ const BulkProductUploadPage: React.FC = () => {
                   </button>
                 )}
 
-                {/* Primary import button */}
-                <div className="relative group">
+                {/* Primary action: a completed job starts a fresh workspace, never re-imports stale products. */}
+                {job?.status === "completed" && !draftId ? (
                   <button
-                    onClick={handleImport}
-                    disabled={!canImport || isImporting || isDriveMatching}
-                    className={classNames(
-                      "flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors",
-                      canImport
-                        ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                        : "bg-gray-200 text-gray-400 cursor-not-allowed",
-                    )}
+                    type="button"
+                    onClick={handleStartNewImport}
+                    className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
                   >
-                    {isImporting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <UploadCloud className="w-4 h-4" />
-                    )}
-                    Import Products
+                    <Plus className="h-4 w-4" />
+                    Start New Import
                   </button>
-                  {importDisabledReason && (
-                    <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg">
-                      {importDisabledReason}
-                    </div>
-                  )}
-                </div>
+                ) : (
+                  <div className="relative group">
+                    <button
+                      onClick={handleImport}
+                      disabled={!canImport || isImporting || isDriveMatching}
+                      className={classNames(
+                        "flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors",
+                        canImport
+                          ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                          : "bg-gray-200 text-gray-400 cursor-not-allowed",
+                      )}
+                    >
+                      {isImporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <UploadCloud className="w-4 h-4" />
+                      )}
+                      Import Products
+                    </button>
+                    {importDisabledReason && (
+                      <div className="absolute right-0 top-full mt-1 z-10 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg">
+                        {importDisabledReason}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2926,6 +3010,13 @@ const BulkProductUploadPage: React.FC = () => {
                 )}
                 {job.currentFile && <span className="max-w-full truncate">Current: {job.currentFile}</span>}
               </div>
+              <p className="text-[11px] text-slate-500">
+                {job.stage === "preparing_images"
+                  ? "Checking which selected photos are still attached to these products. Nothing is published yet."
+                  : job.stage === "uploading_images"
+                    ? "Images are being prepared in the background and saved to storage. Products will not be created until required image uploads succeed."
+                    : "Image preparation is finished. Product records are now being saved; you can keep using this admin app."}
+              </p>
             </div>
           </div>
         )}
