@@ -1905,6 +1905,7 @@ const BulkProductUploadPage: React.FC = () => {
     products.length > 0 ? summaryFromProducts(products) : undefined;
   const hasBlockers = (summary?.errorCount ?? 0) > 0;
   const canImport =
+    draftStatus !== "COMPLETED" &&
     !hasBlockers &&
     !isDriveMatching &&
     job?.stage !== "images_failed" &&
@@ -1913,11 +1914,13 @@ const BulkProductUploadPage: React.FC = () => {
     job?.status !== "processing" &&
     job?.status !== "pending";
 
-  const importDisabledReason = isDriveMatching
-    ? "Wait for Google Drive reference matching to finish."
-    : job?.stage === "images_failed"
-      ? "Use Retry Failed Images in Import Progress; successful image uploads are already saved."
-      : !draftId
+  const importDisabledReason = draftStatus === "COMPLETED"
+    ? "This draft has already been imported. Start a new import to create another batch."
+    : isDriveMatching
+      ? "Wait for Google Drive reference matching to finish."
+      : job?.stage === "images_failed"
+        ? "Use Retry Failed Images in Import Progress; successful image uploads are already saved."
+        : !draftId
       ? "Create or open a draft first."
       : products.length === 0
         ? "Parse products first."
@@ -2903,7 +2906,7 @@ const BulkProductUploadPage: React.FC = () => {
                   Open Draft
                 </button>
 
-                {draftId && (
+                {draftId && draftStatus !== "COMPLETED" && (
                   <button
                     onClick={handleReloadDraft}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
@@ -2914,7 +2917,7 @@ const BulkProductUploadPage: React.FC = () => {
                   </button>
                 )}
 
-                {!(job?.status === "completed" && !draftId) && (
+                {draftStatus !== "COMPLETED" && !(job?.status === "completed" && !draftId) && (
                 <button
                   onClick={handleSaveDraft}
                   disabled={
@@ -2933,7 +2936,7 @@ const BulkProductUploadPage: React.FC = () => {
                 </button>
                 )}
 
-                {draftId && (
+                {draftId && draftStatus !== "COMPLETED" && (
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
                     className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -2944,7 +2947,7 @@ const BulkProductUploadPage: React.FC = () => {
                 )}
 
                 {/* Primary action: a completed job starts a fresh workspace, never re-imports stale products. */}
-                {job?.status === "completed" && !draftId ? (
+                {draftStatus === "COMPLETED" || (job?.status === "completed" && !draftId) ? (
                   <button
                     type="button"
                     onClick={handleStartNewImport}
