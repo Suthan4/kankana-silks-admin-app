@@ -653,7 +653,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100"
                       >
                         <Eye className="h-4 w-4" />
-                        <span className="hidden 2xl:inline">Preview</span>
+                        <span className="hidden sm:inline">Preview as customer</span>
                       </button>
                       <button
                         type="button"
@@ -1265,13 +1265,14 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                           className="w-full h-full object-cover cursor-zoom-in"
                                           onError={(e) => {
                                             const target = e.currentTarget;
-                                            const canonicalStorageUrl = /(?:cloudfront\.net|amazonaws\.com|localhost:4566)/i.test(m.url || "");
+                                            const isHttpUrl = /^https?:\/\//i.test(m.url || "");
                                             const isDriveThumbnail = (m.thumbnailUrl || "").includes("/products/bulk/drive-thumbnail/");
+                                            const isDriveOriginalProxy = (m.url || "").includes("/products/bulk/drive-proxy/");
                                             if (
-                                              canonicalStorageUrl &&
+                                              isHttpUrl &&
                                               isDriveThumbnail &&
                                               !target.dataset.storageFallback &&
-                                              !m.url.includes("/products/bulk/drive-proxy/")
+                                              !isDriveOriginalProxy
                                             ) {
                                               // The stored S3/CloudFront image has already passed the backend
                                               // optimizer. It is a safe fallback; never use the Drive original here.
