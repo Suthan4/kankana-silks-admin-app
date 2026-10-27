@@ -172,15 +172,30 @@ export function filterImageMatchesToProductMedia(
     entry: ImageMatchResult["matched"][number],
   ): BulkParsedMedia[] => {
     const media: BulkParsedMedia[] = [];
+    const wantedSku = (entry.variantSku || "").trim().toLocaleLowerCase("en-US");
     for (const product of products) {
       if (entry.productGroupId && product.productGroupId !== entry.productGroupId) continue;
-      if (entry.variantSku) {
+      if (wantedSku) {
         for (const variant of product.variants || []) {
-          if ((variant.sku || "").trim().toLocaleLowerCase("en-US") !== entry.variantSku.trim().toLocaleLowerCase("en-US")) continue;
+          if ((variant.sku || "").trim().toLocaleLowerCase("en-US") !== wantedSku) continue;
           media.push(...(variant.media || []));
         }
+        // Some workbook formats keep variant media in products[].media, tagged
+        // with variantSku/source="variant". Include it as well so match
+        // filtering and upload totals reflect the current persisted structure.
+        media.push(
+          ...(product.media || []).filter(
+            (item) =>
+              (item.variantSku || "").trim().toLocaleLowerCase("en-US") === wantedSku ||
+              (item.source === "variant" && !item.variantSku),
+          ),
+        );
       } else {
-        media.push(...(product.media || []));
+        media.push(
+          ...(product.media || []).filter(
+            (item) => !item.variantSku && item.source !== "variant",
+          ),
+        );
       }
     }
     return media;
