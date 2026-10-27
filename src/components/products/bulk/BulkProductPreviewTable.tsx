@@ -1220,8 +1220,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                           title="Click to view full-size"
                                           onClick={() => {
                                             setFailedDetailImageUrl(null);
-                                            setFailedDetailImageUrl(null);
-                                        setImageGallery({ productName: product.name, images: displayMedia, index: mIdx });
+                                            setImageGallery({ productName: product.name, images: displayMedia, index: mIdx });
                                           }}
                                           className="w-full h-full object-cover cursor-zoom-in"
                                           onError={(e) => {
@@ -1246,6 +1245,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        setFailedDetailImageUrl(null);
                                         setImageGallery({ productName: product.name, images: displayMedia, index: mIdx });
                                       }}
                                       className="absolute inset-0 z-[5] flex items-center justify-center bg-black/0 text-white opacity-0 transition hover:bg-black/20 hover:opacity-100 focus:opacity-100"
