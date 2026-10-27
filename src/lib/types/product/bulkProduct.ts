@@ -68,8 +68,10 @@ export interface BulkParsedMedia {
   variantSku?: string;
   /** "product" for product-level images, "variant" for variant-level images */
   source?: "product" | "variant";
-  /** S3 key (preserved as-is, no re-upload needed) */
+  /** S3 object key (preserved as-is, no re-upload needed). */
   key?: string;
+  /** Drive file ID retained as an association after upload, for safe retries/preview edits. */
+  sourceDriveFileId?: string;
   mimeType?: string;
   fileSize?: number;
   duration?: number;
