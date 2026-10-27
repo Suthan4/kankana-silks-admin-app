@@ -606,8 +606,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
         view.setMimeTypes("image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp");
         view.setIncludeFolders(false);
 
-        const picker = new google.picker.PickerBuilder()
-          .setAppId(String(appId))
+        const pickerBuilder = new google.picker.PickerBuilder()
           .setDeveloperKey(apiKey)
           .setOAuthToken(accessToken)
           .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
@@ -638,8 +637,9 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
               return;
             }
             void handleImportDriveSelection(selectedFiles);
-          })
-          .build();
+          });
+        if (appId) pickerBuilder.setAppId(String(appId));
+        const picker = pickerBuilder.build();
 
         picker.setVisible(true);
         setDrivePickerLaunching(false);
