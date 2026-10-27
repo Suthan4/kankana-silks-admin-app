@@ -27,10 +27,7 @@ import {
   FolderOpen,
   Image as ImageIcon,
   Info,
-  Search,
   Check,
-  Folder,
-  FileImage,
   MonitorUp,
   Cloud,
   Layers,
@@ -286,11 +283,6 @@ function buildDriveConnectUrl(draftId?: string | null): string {
 }
 
 
-interface DriveBrowseResult {
-  files: DriveFile[];
-  folders: DriveFolder[];
-  nextPageToken?: string | null;
-}
 
 interface DriveMatchingPanelProps {
   draftId: string | null;
@@ -323,16 +315,11 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   const [localProgress, setLocalProgress] = useState({ completed: 0, total: 0 });
   const localFilesRef = useRef(localFiles);
 
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [driveLoading, setDriveLoading] = useState(false);
-  const [driveError, setDriveError] = useState<string | null>(null);
-  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
-  const [driveFolders, setDriveFolders] = useState<DriveFolder[]>([]);
-  const [drivePageToken, setDrivePageToken] = useState<string | null>(null);
-  const [driveSearchInput, setDriveSearchInput] = useState("");
-  const [driveSearch, setDriveSearch] = useState("");
-  const [folderTrail, setFolderTrail] = useState<DriveFolder[]>([]);
-  const [selectedDriveFiles, setSelectedDriveFiles] = useState<Record<string, DriveFile>>({});
+  const [drivePickerLaunching, setDrivePickerLaunching] = useState(false);
+  const [drivePickerError, setDrivePickerError] = useState<string | null>(null);
+  const driveAccessTokenRef = useRef<string | null>(null);
+  const driveTokenExpiresAtRef = useRef(0);
+  const pickerConsentGrantedRef = useRef(false);
   const [uploadingDrive, setUploadingDrive] = useState(false);
   const [driveProgress, setDriveProgress] = useState({ completed: 0, total: 0 });
 
@@ -483,104 +470,215 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     } finally { setUploadingLocal(false); }
   };
 
-  const loadDriveItems = async (
-    folderId: string,
-    options: { append?: boolean; pageToken?: string | null; query?: string } = {},
-  ) => {
-    setDriveLoading(true);
-    setDriveError(null);
-    try {
-      const response = await productApi.listDriveFiles({
-        parentId: folderId,
-        pageToken: options.pageToken ?? undefined,
-        query: options.query ?? driveSearch,
-      });
-      const data = response.data as any;
-      const page: DriveBrowseResult = {
-        files: Array.isArray(data) ? data : (data?.files ?? []),
-        folders: Array.isArray(data?.folders) ? data.folders : [],
-        nextPageToken: data?.nextPageToken ?? null,
-      };
-      const imageFiles = page.files.filter((file) => file.mimeType?.startsWith("image/"));
-      setDriveFiles((previous) => options.append ? [...previous, ...imageFiles] : imageFiles);
-      setDriveFolders(page.folders);
-      setDrivePageToken(page.nextPageToken ?? null);
-    } catch (err) {
-      setDriveError(humanError(err) + ". The backend must expose GET /products/bulk/drive/files for this picker.");
-    } finally { setDriveLoading(false); }
-  };
-
-  const openDrivePicker = () => {
-    if (!driveConnected) { toast.error("Connect Google Drive before selecting images."); return; }
-    if (!selectedFolderId) { toast.error("Select a Drive folder first."); return; }
-    const root = folders.find((folder) => folder.id === selectedFolderId);
-    setFolderTrail(root ? [root] : []);
-    setDriveSearchInput("");
-    setDriveSearch("");
-    setSelectedDriveFiles({});
-    setPickerOpen(true);
-    void loadDriveItems(selectedFolderId, { query: "" });
-  };
-
-  const toggleDriveSelection = (file: DriveFile) => setSelectedDriveFiles((previous) => {
-    const next = { ...previous };
-    if (next[file.id]) delete next[file.id]; else next[file.id] = file;
-    return next;
-  });
-
-  const moveSelectedDriveFile = (fileId: string, direction: -1 | 1) => {
-    setSelectedDriveFiles((previous) => {
-      const entries = Object.entries(previous);
-      const index = entries.findIndex(([id]) => id === fileId);
-      const destination = index + direction;
-      if (index < 0 || destination < 0 || destination >= entries.length) return previous;
-      [entries[index], entries[destination]] = [entries[destination], entries[index]];
-      return Object.fromEntries(entries);
-    });
-  };
-
-  const navigateToFolder = (folder: DriveFolder, index?: number) => {
-    const nextTrail = index === undefined ? [...folderTrail, folder] : folderTrail.slice(0, index + 1);
-    setFolderTrail(nextTrail);
-    void loadDriveItems(nextTrail[nextTrail.length - 1].id, { query: driveSearch });
-  };
-
-  const handleImportDriveSelection = async () => {
-    const selected = Object.values(selectedDriveFiles);
-    if (!targetProduct || selected.length === 0) { toast.error("Select a product and at least one Drive image."); return; }
+  const handleImportDriveSelection = async (selected: DriveFile[]) => {
+    if (!targetProduct || selected.length === 0) {
+      toast.error("Select a product and at least one Drive image.");
+      return;
+    }
     const media: BulkParsedMedia[] = [];
     const failedNames: string[] = [];
     setUploadingDrive(true);
     setDriveProgress({ completed: 0, total: selected.length });
-    setPickerOpen(false);
     try {
       for (let index = 0; index < selected.length; index += 1) {
         const driveFile = selected[index];
         try {
+          // The native picker only returns selected files. Retrieve those files
+          // through the existing authenticated proxy, then upload to S3.
           const downloadResponse = await fetch(getDriveProxyUrl(driveFile.id));
           if (!downloadResponse.ok) throw new Error("Drive download failed");
           const blob = await downloadResponse.blob();
-          const responseType = downloadResponse.headers.get("content-type") || blob.type;
-          if (!responseType.toLowerCase().startsWith("image/")) throw new Error("Drive proxy did not return image content.");
-          const file = new File([blob], driveFile.name, { type: driveFile.mimeType || responseType || "image/jpeg" });
-          const uploadResponse = await productApi.uploadBulkImageFile(file);
-          const result = uploadResponse.data as any;
-          if (!result?.url || !/^https:\/\//i.test(result.url)) throw new Error("Storage did not return a valid HTTPS URL.");
-          media.push({
-            type: "IMAGE", url: result.url, key: result.key, altText: targetProduct.name,
-            order: (assignmentMode === "append" ? (targetProduct.media?.length ?? 0) : 0) + media.length, isActive: true, source: "product",
-            mimeType: file.type, fileSize: file.size,
+          const contentType = downloadResponse.headers.get("content-type") || blob.type;
+          if (!contentType.toLowerCase().startsWith("image/")) {
+            throw new Error("Drive proxy returned non-image content.");
+          }
+          const file = new File([blob], driveFile.name, {
+            type: driveFile.mimeType || contentType || "image/jpeg",
           });
-        } catch { failedNames.push(driveFile.name); }
-        finally { setDriveProgress({ completed: index + 1, total: selected.length }); }
+          const uploadResponse = await productApi.uploadBulkImageFile(file);
+          const storage = uploadResponse.data as any;
+          if (!storage?.url || !/^https:\/\//i.test(storage.url)) {
+            throw new Error("Storage did not return a valid HTTPS URL.");
+          }
+          media.push({
+            type: "IMAGE",
+            url: storage.url,
+            key: storage.key,
+            altText: targetProduct.name,
+            order: (assignmentMode === "append" ? (targetProduct.media?.length ?? 0) : 0) + media.length,
+            isActive: true,
+            source: "product",
+            mimeType: file.type,
+            fileSize: file.size,
+          });
+        } catch {
+          failedNames.push(driveFile.name);
+        } finally {
+          setDriveProgress({ completed: index + 1, total: selected.length });
+        }
       }
       if (media.length) {
         onAssignMedia(targetProduct.productGroupId, media, assignmentMode);
-        setSelectedDriveFiles({});
         toast.success("Uploaded " + media.length + " selected Drive image(s) to storage.");
       }
-      if (failedNames.length) toast.error(failedNames.length + " Drive image(s) failed: " + failedNames.slice(0, 3).join(", "));
-    } finally { setUploadingDrive(false); }
+      if (failedNames.length) {
+        toast.error(failedNames.length + " Drive image(s) failed: " + failedNames.slice(0, 3).join(", "));
+      }
+    } finally {
+      setUploadingDrive(false);
+      setDrivePickerLaunching(false);
+    }
+  };
+
+  const openGoogleDrivePicker = async () => {
+    if (!driveConnected) {
+      toast.error("Connect Google Drive before selecting images.");
+      return;
+    }
+    if (!targetProduct) {
+      toast.error("Select a product first.");
+      return;
+    }
+
+    const apiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY;
+    const appId = import.meta.env.VITE_GOOGLE_PICKER_APP_ID;
+    const clientId =
+      import.meta.env.VITE_GOOGLE_PICKER_CLIENT_ID ||
+      import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+    if (!apiKey || !appId || !clientId) {
+      setDrivePickerError(
+        "Google Picker setup is missing. Configure VITE_GOOGLE_PICKER_API_KEY, VITE_GOOGLE_PICKER_APP_ID, and VITE_GOOGLE_PICKER_CLIENT_ID in the admin app environment.",
+      );
+      toast.error("Google Drive Picker is not configured.");
+      return;
+    }
+
+    setDrivePickerLaunching(true);
+    setDrivePickerError(null);
+
+    try {
+      const loadScript = (id: string, src: string): Promise<void> =>
+        new Promise((resolve, reject) => {
+          const existing = document.getElementById(id) as HTMLScriptElement | null;
+          if (existing?.dataset.loaded === "true") {
+            resolve();
+            return;
+          }
+          const script = existing ?? document.createElement("script");
+          script.id = id;
+          script.src = src;
+          script.async = true;
+          script.onload = () => {
+            script.dataset.loaded = "true";
+            resolve();
+          };
+          script.onerror = () => reject(new Error("Could not load the Google Picker library."));
+          if (!existing) document.head.appendChild(script);
+        });
+
+      await loadScript("google-picker-api-script", "https://apis.google.com/js/api.js");
+      const browserWindow = window as any;
+      await new Promise<void>((resolve, reject) => {
+        browserWindow.gapi.load("picker", {
+          callback: resolve,
+          onerror: () => reject(new Error("Google Picker failed to initialize.")),
+          timeout: 10000,
+          ontimeout: () => reject(new Error("Google Picker initialization timed out.")),
+        });
+      });
+      await loadScript("google-identity-services-script", "https://accounts.google.com/gsi/client");
+
+      const google = browserWindow.google;
+      if (!google?.accounts?.oauth2 || !google?.picker) {
+        throw new Error("Google Picker is unavailable. Check your API configuration.");
+      }
+
+      const showPicker = (accessToken: string) => {
+        const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
+        view.setMimeTypes("image/jpeg,image/png,image/webp,image/gif,image/avif,image/bmp");
+        view.setIncludeFolders(false);
+
+        const picker = new google.picker.PickerBuilder()
+          .setAppId(String(appId))
+          .setDeveloperKey(apiKey)
+          .setOAuthToken(accessToken)
+          .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+          .addView(view)
+          .setTitle("Select product images from Google Drive")
+          .setCallback((data: any) => {
+            if (data.action === google.picker.Action.CANCEL) {
+              setDrivePickerLaunching(false);
+              return;
+            }
+            if (data.action !== google.picker.Action.PICKED) return;
+
+            const docs = data[google.picker.Response.DOCUMENTS] ?? [];
+            const selectedFiles: DriveFile[] = docs
+              .filter((doc: any) => doc?.id && String(doc.mimeType ?? "").startsWith("image/"))
+              .map((doc: any) => ({
+                id: String(doc.id),
+                name: String(doc.name || "drive-image"),
+                mimeType: String(doc.mimeType || "image/jpeg"),
+                size: doc.sizeBytes ? Number(doc.sizeBytes) : undefined,
+                thumbnailLink: doc.thumbnails?.[0]?.url,
+                webViewLink: doc.url,
+              }));
+
+            if (!selectedFiles.length) {
+              setDrivePickerLaunching(false);
+              toast.error("No image files were selected.");
+              return;
+            }
+            void handleImportDriveSelection(selectedFiles);
+          })
+          .build();
+
+        picker.setVisible(true);
+        setDrivePickerLaunching(false);
+      };
+
+      // Reuse an unexpired token during the current page session. Google will
+      // prompt for permission the first time; later opens can reuse the grant.
+      if (
+        driveAccessTokenRef.current &&
+        Date.now() < driveTokenExpiresAtRef.current
+      ) {
+        showPicker(driveAccessTokenRef.current);
+        return;
+      }
+
+      const tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: "https://www.googleapis.com/auth/drive.readonly",
+        callback: (response: any) => {
+          if (response?.error || !response?.access_token) {
+            setDrivePickerLaunching(false);
+            setDrivePickerError(response?.error_description || response?.error || "Google authorization was not completed.");
+            toast.error("Could not authorize Google Drive selection.");
+            return;
+          }
+          driveAccessTokenRef.current = response.access_token;
+          driveTokenExpiresAtRef.current =
+            Date.now() + (Number(response.expires_in || 3600) * 1000) - 60000;
+          pickerConsentGrantedRef.current = true;
+          showPicker(response.access_token);
+        },
+        error_callback: (error: any) => {
+          setDrivePickerLaunching(false);
+          setDrivePickerError(error?.message || "Google authorization was not completed.");
+          toast.error("Google Drive authorization was cancelled or failed.");
+        },
+      });
+      tokenClient.requestAccessToken({
+        prompt: pickerConsentGrantedRef.current ? "" : "consent",
+      });
+    } catch (error) {
+      setDrivePickerLaunching(false);
+      const message = humanError(error);
+      setDrivePickerError(message);
+      toast.error(message);
+    }
   };
 
   const stats = imageMatches ? {
@@ -674,37 +772,44 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
 
       {sourceMode === "drive" && (
         <div className="p-4 space-y-4">
-          <div><label className="block text-xs font-medium text-gray-700 mb-1">Assign images to product</label><select value={targetProductGroupId} onChange={(event) => setTargetProductGroupId(event.target.value)} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white" disabled={!products.length}>{products.length === 0 ? <option value="">Parse or add a product first</option> : products.map((product) => <option key={product.productGroupId} value={product.productGroupId}>{product.productGroupId} — {product.name}</option>)}</select></div>
-          <div><label className="block text-xs font-medium text-gray-700 mb-1">How should these images be assigned?</label><select value={assignmentMode} onChange={(event) => setAssignmentMode(event.target.value as "replace" | "append")} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"><option value="replace">Replace existing product images (recommended for missing references)</option><option value="append">Append to existing product images</option></select><p className="mt-1 text-[11px] text-gray-500">When replacing, the first selected image becomes the primary image (order 0). Variant-specific media is preserved.</p></div>
-          {!driveConnected ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3"><p className="text-xs text-amber-800">Connect Google Drive to browse and select images.</p><button type="button" onClick={handleConnectDrive} className="w-full rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700"><Cloud className="w-4 h-4 inline mr-2" />Connect Google Drive</button></div> : <>
-            <div><label className="block text-xs font-medium text-gray-700 mb-1">Starting folder</label><select value={selectedFolderId} onChange={(event) => setSelectedFolderId(event.target.value)} disabled={loadingFolders} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"><option value="">Select a folder…</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></div>
-            <button type="button" onClick={openDrivePicker} disabled={!selectedFolderId || !targetProduct || driveConnected !== true} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-3 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"><Cloud className="w-4 h-4" />Browse and select Drive images</button>
-          </>}
-          {uploadingDrive && <div><div className="flex justify-between text-xs text-gray-500"><span>Transferring selected Drive images to storage…</span><span>{driveProgress.completed}/{driveProgress.total}</span></div><div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-indigo-600 transition-all" style={{ width: (driveProgress.total ? (driveProgress.completed / driveProgress.total) * 100 : 0) + "%" }} /></div></div>}
-          <p className="text-xs text-gray-500">Only images selected for the current product are downloaded and uploaded to storage.</p>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Assign images to product</label>
+            <select value={targetProductGroupId} onChange={(event) => setTargetProductGroupId(event.target.value)} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white" disabled={!products.length}>
+              {products.length === 0 ? <option value="">Parse or add a product first</option> : products.map((product) => <option key={product.productGroupId} value={product.productGroupId}>{product.productGroupId} — {product.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">How should these images be assigned?</label>
+            <select value={assignmentMode} onChange={(event) => setAssignmentMode(event.target.value as "replace" | "append")} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white">
+              <option value="replace">Replace existing product images</option>
+              <option value="append">Append to existing product images</option>
+            </select>
+            <p className="mt-1 text-[11px] text-gray-500">The first selected image becomes the primary image. Variant-specific media is preserved.</p>
+          </div>
+
+          {!driveConnected ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3">
+              <p className="text-xs text-amber-800">Connect Google Drive to choose images from your account.</p>
+              <button type="button" onClick={handleConnectDrive} className="w-full rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700"><Cloud className="w-4 h-4 inline mr-2" />Connect Google Drive</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => void openGoogleDrivePicker()} disabled={!targetProduct || drivePickerLaunching || uploadingDrive} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-3 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+              {drivePickerLaunching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+              {drivePickerLaunching ? "Opening Google Drive…" : "Choose images from Google Drive"}
+            </button>
+          )}
+
+          {drivePickerError && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">{drivePickerError}</div>}
+          {uploadingDrive && (
+            <div>
+              <div className="flex justify-between text-xs text-gray-500"><span>Uploading selected images to storage…</span><span>{driveProgress.completed}/{driveProgress.total}</span></div>
+              <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-indigo-600 transition-all" style={{ width: (driveProgress.total ? (driveProgress.completed / driveProgress.total) * 100 : 0) + "%" }} /></div>
+            </div>
+          )}
+          <p className="text-xs text-gray-500">Google's familiar Drive picker opens directly. Select multiple images, click Select, and the chosen files are uploaded to S3 and attached to this product.</p>
         </div>
       )}
 
-      {pickerOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6">
-        <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-          <div className="flex items-center justify-between gap-3 border-b p-4 sm:px-6"><div><h3 className="text-base font-semibold text-gray-900">Select Google Drive images</h3><p className="text-xs text-gray-500 mt-1">{targetProduct?.name} · {Object.keys(selectedDriveFiles).length} selected</p></div><button type="button" onClick={() => setPickerOpen(false)} aria-label="Close Drive picker" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"><X className="w-5 h-5" /></button></div>
-          <div className="flex flex-wrap items-center gap-2 border-b p-3 sm:px-6"><div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-xs text-gray-500">{folderTrail.map((folder, index) => <React.Fragment key={folder.id}>{index > 0 && <span>/</span>}<button type="button" onClick={() => navigateToFolder(folder, index)} className="max-w-40 truncate hover:text-indigo-700">{folder.name}</button></React.Fragment>)}</div><form onSubmit={(event) => { event.preventDefault(); setDriveSearch(driveSearchInput); void loadDriveItems(folderTrail[folderTrail.length - 1]?.id ?? selectedFolderId, { query: driveSearchInput }); }} className="flex w-full gap-2 sm:w-auto"><div className="relative flex-1 sm:w-64"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input value={driveSearchInput} onChange={(event) => setDriveSearchInput(event.target.value)} placeholder="Search filenames…" className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm outline-none focus:border-indigo-500" /></div><button type="submit" className="rounded-lg border px-3 text-sm hover:bg-gray-50">Search</button></form></div>
-          {driveError && <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 sm:mx-6">{driveError}</div>}
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-            {driveLoading && driveFiles.length === 0 ? <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500"><Loader2 className="w-5 h-5 animate-spin" />Loading Drive files…</div> : <>
-              {driveFolders.length > 0 && <div className="mb-5"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Folders</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{driveFolders.map((folder) => <button type="button" key={folder.id} onClick={() => navigateToFolder(folder)} className="flex items-center gap-2 rounded-lg border p-3 text-left hover:border-indigo-300 hover:bg-indigo-50"><Folder className="h-5 w-5 shrink-0 text-indigo-600" /><span className="truncate text-xs font-medium text-gray-700">{folder.name}</span></button>)}</div></div>}
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Images ({driveFiles.length}{drivePageToken ? "+" : ""})</p>
-              {driveFiles.length === 0 ? <div className="rounded-xl border border-dashed border-gray-300 p-10 text-center"><FileImage className="mx-auto mb-2 h-8 w-8 text-gray-300" /><p className="text-sm text-gray-600">No images found in this folder.</p><p className="text-xs text-gray-400 mt-1">Try another folder or search term.</p></div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">{driveFiles.map((file) => {
-                const selected = Boolean(selectedDriveFiles[file.id]);
-                return <button type="button" key={file.id} aria-pressed={selected} onClick={() => toggleDriveSelection(file)} className={classNames("relative min-w-0 overflow-hidden rounded-xl border text-left transition-all", selected ? "border-indigo-600 ring-2 ring-indigo-200" : "border-gray-200 hover:border-indigo-300")}><div className="aspect-square bg-gray-50"><img loading="lazy" src={file.thumbnailLink || getDriveProxyUrl(file.id)} alt={file.name} className="h-full w-full object-cover" onError={(event) => { const image = event.currentTarget; if (image.src !== getDriveProxyUrl(file.id)) image.src = getDriveProxyUrl(file.id); }} /></div><div className="p-2"><p className="truncate text-[11px] font-medium text-gray-700" title={file.name}>{file.name}</p><p className="text-[10px] text-gray-400">{file.size ? (file.size / (1024 * 1024)).toFixed(1) + " MB" : "Image"}</p></div><span className={classNames("absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border shadow-sm", selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-gray-300 bg-white/95 text-transparent")}><Check className="h-3 w-3" /></span></button>;
-              })}</div>}
-              {drivePageToken && <div className="mt-5 text-center"><button type="button" onClick={() => void loadDriveItems(folderTrail[folderTrail.length - 1]?.id ?? selectedFolderId, { append: true, pageToken: drivePageToken, query: driveSearch })} disabled={driveLoading} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">{driveLoading ? "Loading…" : "Load more images"}</button></div>}
-            </>}
-          </div>
-          {Object.keys(selectedDriveFiles).length > 0 && <div className="max-h-28 overflow-y-auto border-t border-gray-100 px-4 py-2 sm:px-6"><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Selected order · First image is primary</p><div className="flex gap-2 overflow-x-auto">{Object.values(selectedDriveFiles).map((file, index, items) => <div key={file.id} className="flex min-w-0 items-center gap-1 rounded-lg border border-gray-200 bg-white p-1.5"><span className="text-[10px] text-gray-500">{index + 1}.</span><span title={file.name} className="max-w-28 truncate text-[10px] text-gray-700">{file.name}</span><button type="button" disabled={index === 0} onClick={() => moveSelectedDriveFile(file.id, -1)} className="rounded border px-1 text-[10px] disabled:opacity-30" title="Move earlier">↑</button><button type="button" disabled={index === items.length - 1} onClick={() => moveSelectedDriveFile(file.id, 1)} className="rounded border px-1 text-[10px] disabled:opacity-30" title="Move later">↓</button><button type="button" onClick={() => toggleDriveSelection(file)} className="rounded p-1 text-red-600 hover:bg-red-50" title="Remove"><X className="h-3 w-3" /></button></div>)}</div></div>}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-gray-50 p-3 sm:px-6"><p className="text-xs text-gray-500">{Object.keys(selectedDriveFiles).length} selected · Only selected files will be transferred.</p><div className="flex gap-2"><button type="button" onClick={() => setPickerOpen(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button><button type="button" onClick={() => void handleImportDriveSelection()} disabled={!Object.keys(selectedDriveFiles).length || uploadingDrive} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"><UploadCloud className="w-4 h-4" />Upload {Object.keys(selectedDriveFiles).length} selected</button></div></div>
-        </div>
-      </div>}
     </div>
   );
 };
