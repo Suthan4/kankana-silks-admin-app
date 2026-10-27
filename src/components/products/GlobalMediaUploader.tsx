@@ -197,7 +197,7 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
             const displayUrl = item.preview || item.url;
             const hasLegacyDriveLink =
               /drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\/|[?&]token=/i.test(
-                `${item.url || ""} ${item.preview || ""}`,
+                String(item.url || ""),
               );
             const previewFailed = failedPreviewIds.has(mediaKey);
 
