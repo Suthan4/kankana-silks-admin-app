@@ -708,7 +708,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
               >
                 <p className="font-semibold">Some images use temporary Google Drive links</p>
                 <p className="mt-1">
-                  These are not permanent S3/storage URLs. Their thumbnails may still be visible, but saving is blocked until you remove and re-upload those images using <strong>Add Media Files</strong>. This prevents broken images and temporary access tokens from being saved into product media.
+                  These are not permanent storage URLs. Their thumbnails may still be visible, but saving is blocked until you remove and re-upload those images using the product or variant media controls. This prevents broken images and temporary access tokens from being saved into product media.
                 </p>
               </div>
             )}
