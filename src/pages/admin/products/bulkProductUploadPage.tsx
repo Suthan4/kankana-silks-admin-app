@@ -1901,6 +1901,7 @@ const BulkProductUploadPage: React.FC = () => {
   const canImport =
     !hasBlockers &&
     !isDriveMatching &&
+    job?.stage !== "images_failed" &&
     products.length > 0 &&
     !!draftId &&
     job?.status !== "processing" &&
@@ -1908,7 +1909,9 @@ const BulkProductUploadPage: React.FC = () => {
 
   const importDisabledReason = isDriveMatching
     ? "Wait for Google Drive reference matching to finish."
-    : !draftId
+    : job?.stage === "images_failed"
+      ? "Use Retry Failed Images in Import Progress; successful image uploads are already saved."
+      : !draftId
       ? "Create or open a draft first."
       : products.length === 0
         ? "Parse products first."
