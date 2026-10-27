@@ -58,7 +58,10 @@ import {
   resolveCategory,
   validateBulkProduct,
 } from "@/lib/utils/bulkProductNormalization";
-import { applyDriveMatchesToProducts } from "@/lib/utils/bulkImageUtils";
+import {
+  applyDriveMatchesToProducts,
+  filterImageMatchesToProductMedia,
+} from "@/lib/utils/bulkImageUtils";
 import type {
   BulkImportDraft,
   BulkImportJob,
@@ -2235,11 +2238,17 @@ const BulkProductUploadPage: React.FC = () => {
     setIsSaving(true);
     try {
       if (draftId) {
+        const currentImageMatches = filterImageMatchesToProductMedia(
+          imageMatches,
+          products,
+        );
         const res = await productApi.updateDraft(draftId, {
           rawInput: effectiveInput,
           parsedData: products.length > 0 ? products : undefined,
           confirmedAssignments,
+          imageMatches: currentImageMatches,
         });
+        setImageMatches(currentImageMatches);
         if (res.data) {
           setDraftStatus(res.data.status);
           setRawInput(effectiveInput);
@@ -2452,23 +2461,33 @@ const BulkProductUploadPage: React.FC = () => {
       // Matching only builds the preview. Persist the matched Drive proxy URLs
       // and report first; original image downloads and multi-file S3 uploads
       // now run inside the backend job.
-      const productsForImport = imageMatches?.matched?.length
+      const retainedMatches = filterImageMatchesToProductMedia(
+        imageMatches,
+        products,
+      );
+      const productsForImport = retainedMatches?.matched?.length
         ? applyDriveMatchesToProducts(
             products,
-            imageMatches,
+            retainedMatches,
             productApi.getDriveProxyUrl,
             productApi.getDriveThumbnailUrl,
           )
         : products;
+      const importImageMatches = filterImageMatchesToProductMedia(
+        retainedMatches,
+        productsForImport,
+      );
 
       const serialized = JSON.stringify(productsForImport, null, 2);
       await productApi.updateDraft(draftId, {
         rawInput: serialized,
         parsedData: productsForImport,
         confirmedAssignments,
+        imageMatches: importImageMatches,
       });
       setProducts(productsForImport);
       setRawInput(serialized);
+      setImageMatches(importImageMatches);
       setIsDirty(false);
 
       const res = await productApi.startDraftImport(draftId);
@@ -2631,13 +2650,17 @@ const BulkProductUploadPage: React.FC = () => {
   );
 
   const handleUpdateProduct = useCallback((updated: BulkParsedProduct) => {
-    setProducts((prev) => {
-      const next = prev.map((p) =>
-        p.productGroupId === updated.productGroupId ? updated : p,
-      );
-      setRawInput(JSON.stringify(next, null, 2));
-      return next;
-    });
+    const nextProducts = products.map((p) =>
+      p.productGroupId === updated.productGroupId ? updated : p,
+    );
+    setProducts(nextProducts);
+    setRawInput(JSON.stringify(nextProducts, null, 2));
+
+    // Remove stale match entries as soon as an admin deletes media. The saved
+    // draft and subsequent background job must use this filtered set.
+    setImageMatches((current) =>
+      filterImageMatchesToProductMedia(current, nextProducts),
+    );
     setValidationErrors((prev) => {
       const remaining = prev.filter(
         (e) => e.productGroupId !== updated.productGroupId,
@@ -2645,7 +2668,7 @@ const BulkProductUploadPage: React.FC = () => {
       return [...remaining, ...(updated.errors || [])];
     });
     setIsDirty(true);
-  }, []);
+  }, [products]);
 
   const handleDeleteProduct = useCallback((productGroupId: string) => {
     setProducts((prev) => {
@@ -2663,6 +2686,9 @@ const BulkProductUploadPage: React.FC = () => {
     (updatedProducts: BulkParsedProduct[]) => {
       setProducts(updatedProducts);
       setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setImageMatches((current) =>
+        filterImageMatchesToProductMedia(current, updatedProducts),
+      );
       setValidationErrors(updatedProducts.flatMap((p) => p.errors || []));
       setIsDirty(true);
     },
