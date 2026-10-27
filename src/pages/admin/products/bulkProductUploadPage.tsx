@@ -2507,7 +2507,7 @@ const BulkProductUploadPage: React.FC = () => {
         jobId: resolvedJobId,
         draftId: returned.draftId || draftId,
         stage: returned.stage || "preparing_images",
-        imagesTotal: returned.imagesTotal ?? (imageMatches?.matched?.length || 0),
+        imagesTotal: returned.imagesTotal ?? (importImageMatches?.matched?.length || 0),
         imagesProcessed: returned.imagesProcessed ?? 0,
         imagesUploaded: returned.imagesUploaded ?? 0,
         imagesFailed: returned.imagesFailed ?? 0,
