@@ -2872,12 +2872,17 @@ const BulkProductUploadPage: React.FC = () => {
                   </h1>
                   <p className="text-xs text-gray-500">
                     Prepare, preview, and import multiple products at once.
-                    {draftId && (
+                    {isJobRunning ? (
+                      <span className="ml-2 inline-flex items-center gap-1.5 font-semibold text-indigo-700">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Import running in background · editing paused
+                      </span>
+                    ) : draftId ? (
                       <span className="ml-2 text-indigo-600 font-medium">
                         Draft #{draftId.slice(-8)}
                         {isDirty && " · unsaved changes"}
                       </span>
-                    )}
+                    ) : null}
                   </p>
                 </div>
               </div>
@@ -2900,7 +2905,7 @@ const BulkProductUploadPage: React.FC = () => {
                               : "bg-gray-100 text-gray-600",
                     )}
                   >
-                    {draftStatus}
+                    {isJobRunning ? "IN PROGRESS" : draftStatus}
                   </span>
                 )}
 
@@ -2924,7 +2929,7 @@ const BulkProductUploadPage: React.FC = () => {
                   </button>
                 )}
 
-                {draftStatus !== "COMPLETED" && !(job?.status === "completed" && !draftId) && (
+                {draftStatus !== "COMPLETED" && !isJobRunning && !(job?.status === "completed" && !draftId) && (
                 <button
                   onClick={handleSaveDraft}
                   disabled={
