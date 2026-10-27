@@ -1788,7 +1788,6 @@ const BulkProductUploadPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const importedDriveImagesRef = useRef(new Map<string, { url: string; key?: string }>());
   const [isDriveMatching, setIsDriveMatching] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
@@ -2356,196 +2355,59 @@ const BulkProductUploadPage: React.FC = () => {
     if (!draftId || !canImport) return;
 
     setIsImporting(true);
-    const tid = toast.loading("Preparing product images for import…");
+    const tid = toast.loading("Queuing background image and product import…");
 
     try {
-      const matchesById = new Map<string, MatchedEntry>(
-        (imageMatches?.matched ?? []).map((entry) => [entry.file.id, entry] as const),
-      );
+      // Matching only builds the preview. Persist the matched Drive proxy URLs
+      // and report first; original image downloads and multi-file S3 uploads
+      // now run inside the backend job.
+      const productsForImport = imageMatches?.matched?.length
+        ? applyDriveMatchesToProducts(
+            products,
+            imageMatches,
+            productApi.getDriveProxyUrl,
+            productApi.getDriveThumbnailUrl,
+          )
+        : products;
 
-      const getDriveFileId = (media: BulkParsedMedia): string | null => {
-        const url = media.url || "";
-        const proxyMatch = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
-        if (proxyMatch?.[1]) {
-          try {
-            const id = decodeURIComponent(proxyMatch[1]);
-            if (matchesById.has(id)) return id;
-          } catch {
-            if (matchesById.has(proxyMatch[1])) return proxyMatch[1];
-          }
-        }
-
-        // Matched Drive media carries the Drive file ID as key until the
-        // corresponding image has been uploaded to storage.
-        if (media.key && matchesById.has(media.key)) {
-          return media.key;
-        }
-        return null;
-      };
-
-      // Re-apply the current match result before import so older drafts also get
-      // the Drive file IDs attached to product/variant media.
-      const productsWithMatchedFiles =
-        imageMatches?.matched?.length
-          ? applyDriveMatchesToProducts(
-              products,
-              imageMatches,
-              productApi.getDriveProxyUrl,
-              productApi.getDriveThumbnailUrl,
-            )
-          : products;
-
-      const neededIds = new Set<string>();
-      for (const product of productsWithMatchedFiles) {
-        for (const media of product.media ?? []) {
-          const id = getDriveFileId(media);
-          if (id) neededIds.add(id);
-        }
-        for (const variant of product.variants ?? []) {
-          for (const media of variant.media ?? []) {
-            const id = getDriveFileId(media);
-            if (id) neededIds.add(id);
-          }
-        }
-      }
-
-      const idsToUpload = [...neededIds].filter(
-        (id) => !importedDriveImagesRef.current.has(id),
-      );
-
-      let completedUploads = 0;
-      const failedUploads: string[] = [];
-      let nextUploadIndex = 0;
-      const workerCount = Math.min(3, idsToUpload.length);
-
-      const uploadNextDriveImage = async (): Promise<void> => {
-        while (true) {
-          const index = nextUploadIndex;
-          nextUploadIndex += 1;
-          if (index >= idsToUpload.length) return;
-
-          const fileId = idsToUpload[index];
-          const entry = matchesById.get(fileId);
-          const fileName = entry?.file.name || fileId;
-
-          try {
-            const response = await fetch(productApi.getDriveProxyUrl(fileId));
-            if (!response.ok) {
-              throw new Error("Could not download " + fileName + " from Google Drive (HTTP " + response.status + ").");
-            }
-
-            const blob = await response.blob();
-            const contentType = response.headers.get("content-type") || blob.type;
-            if (!contentType.toLowerCase().startsWith("image/")) {
-              throw new Error("Google Drive did not return image content for " + fileName + ".");
-            }
-
-            const file = new File([blob], fileName, {
-              type: entry?.file.mimeType || contentType || "image/jpeg",
-            });
-            const uploaded = await productApi.uploadBulkImageFile(file);
-            const storage = uploaded.data as any;
-            if (!storage?.url || !/^https:\/\//i.test(storage.url)) {
-              throw new Error("Storage did not return a valid HTTPS URL for " + fileName + ".");
-            }
-
-            importedDriveImagesRef.current.set(fileId, {
-              url: storage.url,
-              key: storage.key,
-            });
-          } catch (error) {
-            failedUploads.push(fileName + ": " + humanError(error));
-          } finally {
-            completedUploads += 1;
-            toast.loading(
-              "Preparing product images: " + completedUploads + "/" + idsToUpload.length +
-                (failedUploads.length ? " (" + failedUploads.length + " failed)" : ""),
-              { id: tid },
-            );
-          }
-        }
-      };
-
-      if (idsToUpload.length > 0) {
-        toast.loading("Uploading " + idsToUpload.length + " matched image(s) to storage…", { id: tid });
-        await Promise.all(
-          Array.from({ length: workerCount }, () => uploadNextDriveImage()),
-        );
-      }
-
-      if (failedUploads.length > 0) {
-        throw new Error(
-          failedUploads.length + " image(s) could not be uploaded. Successful uploads are cached for retry. " +
-            failedUploads.slice(0, 3).join("; "),
-        );
-      }
-
-      const updateMedia = (media: BulkParsedMedia): BulkParsedMedia => {
-        const fileId = getDriveFileId(media);
-        const storage = fileId
-          ? importedDriveImagesRef.current.get(fileId)
-          : undefined;
-        if (!storage) return media;
-        return {
-          ...media,
-          url: storage.url,
-          thumbnailUrl: storage.url,
-          key: storage.key,
-        };
-      };
-
-      const productsReadyForImport = productsWithMatchedFiles.map((product) => {
-        const nextMedia = (product.media ?? []).map(updateMedia);
-        const nextVariants = (product.variants ?? []).map((variant) => ({
-          ...variant,
-          media: (variant.media ?? []).map(updateMedia),
-        }));
-        const allImages: BulkParsedMedia[] = [
-          ...nextMedia.map((media, index) => ({
-            ...media,
-            source: "product" as const,
-            order: media.order ?? index,
-          })),
-          ...nextVariants.flatMap((variant) =>
-            (variant.media ?? []).map((media, index) => ({
-              ...media,
-              source: "variant" as const,
-              variantSku: variant.sku,
-              order: media.order ?? (100 + index),
-            })),
-          ),
-        ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-        return {
-          ...product,
-          media: nextMedia,
-          variants: nextVariants,
-          allImages,
-        };
+      const serialized = JSON.stringify(productsForImport, null, 2);
+      await productApi.updateDraft(draftId, {
+        rawInput: serialized,
+        parsedData: productsForImport,
+        confirmedAssignments,
       });
+      setProducts(productsForImport);
+      setRawInput(serialized);
+      setIsDirty(false);
 
-      // Persist final S3 URLs before starting the background importer, because
-      // the job reads the product payload from the saved draft.
-      if (idsToUpload.length > 0 || productsReadyForImport !== products) {
-        setProducts(productsReadyForImport);
-        const serialized = JSON.stringify(productsReadyForImport, null, 2);
-        setRawInput(serialized);
-        await productApi.updateDraft(draftId, {
-          rawInput: serialized,
-          parsedData: productsReadyForImport,
-          confirmedAssignments,
-        });
-        setIsDirty(false);
-      }
-
-      toast.loading("Starting product import…", { id: tid });
       const res = await productApi.startDraftImport(draftId);
-      if (res.data) {
-        setJob(res.data);
-        setJobId(res.data.jobId);
-        setDraftStatus("IMPORTING");
-        toast.success("Import job started.", { id: tid });
+      if (!res.data) {
+        throw new Error("The server did not return a background job.");
       }
+
+      const returned = res.data as BulkImportJob & { id?: string };
+      const resolvedJobId = returned.jobId || returned.id;
+      if (!resolvedJobId) {
+        throw new Error("The import job was created but the API did not return its job ID. Refresh and check the Job Status endpoint.");
+      }
+
+      const normalizedJob: BulkImportJob = {
+        ...returned,
+        id: returned.id || resolvedJobId,
+        jobId: resolvedJobId,
+        draftId: returned.draftId || draftId,
+        stage: returned.stage || "preparing_images",
+        imagesTotal: returned.imagesTotal ?? (imageMatches?.matched?.length || 0),
+        imagesProcessed: returned.imagesProcessed ?? 0,
+        imagesUploaded: returned.imagesUploaded ?? 0,
+        imagesFailed: returned.imagesFailed ?? 0,
+        imageResults: returned.imageResults ?? [],
+        results: returned.results ?? [],
+      };
+      setJob(normalizedJob);
+      setJobId(resolvedJobId);
+      setDraftStatus("IMPORTING");
+      toast.success("Background job queued. Images will upload to S3 in batches; you can keep using the admin app.", { id: tid });
     } catch (err) {
       toast.error(humanError(err), { id: tid });
     } finally {
@@ -2554,12 +2416,50 @@ const BulkProductUploadPage: React.FC = () => {
   };
 
   const handleRetryJob = async () => {
+    if (job?.stage === "images_failed" && draftId) {
+      // Successful image URLs are saved after each backend batch, so starting
+      // another draft job retries only the images that remain as Drive refs.
+      setIsImporting(true);
+      try {
+        const res = await productApi.startDraftImport(draftId);
+        const returned = res.data as (BulkImportJob & { id?: string }) | undefined;
+        const nextJobId = returned?.jobId || returned?.id;
+        if (!returned || !nextJobId) {
+          throw new Error("The backend did not return a retry job ID.");
+        }
+        const normalizedJob = {
+          ...returned,
+          id: returned.id || nextJobId,
+          jobId: nextJobId,
+          draftId: returned.draftId || draftId,
+          imageResults: returned.imageResults || [],
+          results: returned.results || [],
+        } as BulkImportJob;
+        setJob(normalizedJob);
+        setJobId(nextJobId);
+        setDraftStatus("IMPORTING");
+        toast.success("Retry job queued for the remaining failed images.");
+      } catch (err) {
+        toast.error(humanError(err));
+      } finally {
+        setIsImporting(false);
+      }
+      return;
+    }
+
     if (!jobId) return;
     try {
       const res = await productApi.retryJob(jobId);
       if (res.data) {
-        setJob(res.data);
-        toast.success("Retrying failed items…");
+        const returned = res.data as BulkImportJob & { id?: string };
+        const nextJobId = returned.jobId || returned.id;
+        if (nextJobId) {
+          setJob({ ...returned, jobId: nextJobId });
+          setJobId(nextJobId);
+        } else {
+          setJob(res.data);
+        }
+        toast.success("Retrying failed products…");
       }
     } catch (err) {
       toast.error(humanError(err));
