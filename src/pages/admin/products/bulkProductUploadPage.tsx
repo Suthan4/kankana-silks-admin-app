@@ -2221,8 +2221,9 @@ const BulkProductUploadPage: React.FC = () => {
           if (isCancelled) return;
           const drafts = res.data ?? [];
           if (drafts.length > 0) {
-            const activeDraft =
-              drafts.find((d) => d.status !== "COMPLETED") || drafts[0];
+            // Never auto-open a completed draft after a refresh. Completed
+            // batches stay in history and the workspace starts clean.
+            const activeDraft = drafts.find((d) => d.status !== "COMPLETED");
             if (
               activeDraft &&
               !isCancelled &&
@@ -2279,8 +2280,9 @@ const BulkProductUploadPage: React.FC = () => {
           if (isCancelled) return;
           const drafts = listRes.data ?? [];
           if (drafts.length > 0) {
-            const activeDraft =
-              drafts.find((d) => d.status !== "COMPLETED") || drafts[0];
+            // Never auto-open a completed draft after a refresh. Completed
+            // batches stay in history and the workspace starts clean.
+            const activeDraft = drafts.find((d) => d.status !== "COMPLETED");
             if (
               activeDraft &&
               !isCancelled &&
