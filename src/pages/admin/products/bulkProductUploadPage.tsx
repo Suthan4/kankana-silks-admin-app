@@ -27,6 +27,12 @@ import {
   FolderOpen,
   Image as ImageIcon,
   Info,
+  Search,
+  Check,
+  Folder,
+  FileImage,
+  MonitorUp,
+  Cloud,
   Layers,
   Loader2,
   Package,
@@ -63,6 +69,8 @@ import type {
   BulkValidationError,
   BulkValidationSummary,
   DriveFolder,
+  DriveFile,
+  BulkParsedMedia,
   ImageMatchResult,
   MatchedEntry,
   AmbiguousEntry,
@@ -262,497 +270,401 @@ const DeleteDraftModal: React.FC<DeleteDraftModalProps> = ({
   </div>
 );
 
-// ─── Drive Matching Panel ────────────────────────────────────────────────────
+// ─── Product Image Sources Panel ──────────────────────────────────────────────
 
-/** Build the backend Google OAuth redirect URL, passing the access token so the
- *  backend can identify the user without a separate login step. */
-function buildDriveConnectUrl(draftId?: string | null): string {
-  const token = localStorage.getItem("accessToken") ?? "";
-  const apiBase = (
-    import.meta.env.VITE_API_URL || "http://localhost:3000/api"
-  ).replace(/\/+$/, "");
-  const params = new URLSearchParams({ token });
-  if (draftId) params.set("draftId", draftId);
-  return `${apiBase}/auth/google?${params.toString()}`;
+type ImageSourceMode = "references" | "local" | "drive";
+
+interface DriveBrowseResult {
+  files: DriveFile[];
+  folders: DriveFolder[];
+  nextPageToken?: string | null;
 }
 
 interface DriveMatchingPanelProps {
   draftId: string | null;
+  products: BulkParsedProduct[];
   imageMatches: ImageMatchResult | null;
   confirmedAssignments: Record<string, string>;
-  onMatchComplete: (
-    matches: ImageMatchResult,
-    assignments: Record<string, string>,
-  ) => void;
+  onMatchComplete: (matches: ImageMatchResult, assignments: Record<string, string>) => void;
+  onAssignMedia: (productGroupId: string, media: BulkParsedMedia[]) => void;
   getDriveProxyUrl: (fileId: string) => string;
   onPrepareDraft?: () => Promise<void>;
 }
 
 const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
-  draftId,
-  imageMatches,
-  confirmedAssignments,
-  onMatchComplete,
-  getDriveProxyUrl,
-  onPrepareDraft,
+  draftId, products, imageMatches, confirmedAssignments, onMatchComplete, onAssignMedia, getDriveProxyUrl, onPrepareDraft,
 }) => {
-  const [driveConnected, setDriveConnected] = useState<boolean | null>(null); // null = loading
+  const [sourceMode, setSourceMode] = useState<ImageSourceMode>("references");
+  const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState("");
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [matching, setMatching] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
   const [showAmbiguous, setShowAmbiguous] = useState(false);
-  const [pendingAssignments, setPendingAssignments] = useState<
-    Record<string, string>
-  >(confirmedAssignments ?? {});
+  const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>(confirmedAssignments ?? {});
+  const [targetProductGroupId, setTargetProductGroupId] = useState("");
 
-  // Check connection status first, then load folders if connected
-  const checkAndLoadFolders = useCallback(
-    async (forceReload = false) => {
-      setLoadingFolders(true);
-      setFolderError(null);
-      try {
-        // 1. Check if Drive is connected for this user
-        const statusRes = await productApi.getDriveStatus(draftId ?? undefined);
-        const { connected } = statusRes.data ?? { connected: false };
-        setDriveConnected(connected);
+  const [localFiles, setLocalFiles] = useState<Array<{ id: string; file: File; previewUrl: string }>>([]);
+  const [uploadingLocal, setUploadingLocal] = useState(false);
+  const [localProgress, setLocalProgress] = useState({ completed: 0, total: 0 });
+  const localFilesRef = useRef(localFiles);
 
-        if (!connected) {
-          setLoadingFolders(false);
-          return;
-        }
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [driveLoading, setDriveLoading] = useState(false);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
+  const [driveFolders, setDriveFolders] = useState<DriveFolder[]>([]);
+  const [drivePageToken, setDrivePageToken] = useState<string | null>(null);
+  const [driveSearchInput, setDriveSearchInput] = useState("");
+  const [driveSearch, setDriveSearch] = useState("");
+  const [folderTrail, setFolderTrail] = useState<DriveFolder[]>([]);
+  const [selectedDriveFiles, setSelectedDriveFiles] = useState<Record<string, DriveFile>>({});
+  const [uploadingDrive, setUploadingDrive] = useState(false);
+  const [driveProgress, setDriveProgress] = useState({ completed: 0, total: 0 });
 
-        // 2. Drive is connected — load the folder list
-        const res = await productApi.listDriveFolders();
-        const raw = res.data;
-        const folderList = Array.isArray(raw)
-          ? raw
-          : Array.isArray((raw as any)?.folders)
-            ? (raw as any).folders
-            : [];
-        setFolders(folderList);
-      } catch (err: any) {
-        const msg = humanError(err);
-        setDriveConnected(false);
-        setFolderError(msg);
-      } finally {
-        setLoadingFolders(false);
-      }
-    },
-    [draftId],
-  );
+  const targetProduct = products.find((product) => product.productGroupId === targetProductGroupId);
 
-  // On mount — also handle the ?drive_connected=true callback from Google OAuth
+  useEffect(() => { localFilesRef.current = localFiles; }, [localFiles]);
+  useEffect(() => () => {
+    localFilesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+  }, []);
+
+  useEffect(() => {
+    if (!products.length) setTargetProductGroupId("");
+    else if (!products.some((product) => product.productGroupId === targetProductGroupId)) {
+      setTargetProductGroupId(products[0].productGroupId);
+    }
+  }, [products, targetProductGroupId]);
+
+  const checkAndLoadFolders = useCallback(async () => {
+    setLoadingFolders(true);
+    setFolderError(null);
+    try {
+      const statusRes = await productApi.getDriveStatus(draftId ?? undefined);
+      const connected = Boolean(statusRes.data?.connected);
+      setDriveConnected(connected);
+      if (!connected) { setFolders([]); return; }
+      const res = await productApi.listDriveFolders();
+      const raw = res.data;
+      const folderList: DriveFolder[] = Array.isArray(raw) ? raw : Array.isArray((raw as any)?.folders) ? (raw as any).folders : [];
+      setFolders(folderList);
+      setSelectedFolderId((current) => current && folderList.some((folder) => folder.id === current) ? current : (folderList[0]?.id ?? ""));
+    } catch (err) {
+      setDriveConnected(false);
+      setFolderError(humanError(err));
+    } finally {
+      setLoadingFolders(false);
+    }
+  }, [draftId]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const justConnected = params.get("drive_connected") === "true";
-    if (justConnected) {
-      // Clean the query param so a page refresh doesn't re-trigger
+    if (params.get("drive_connected") === "true") {
       params.delete("drive_connected");
-      const newSearch = params.toString();
-      window.history.replaceState(
-        {},
-        "",
-        window.location.pathname + (newSearch ? `?${newSearch}` : ""),
-      );
+      const nextSearch = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (nextSearch ? "?" + nextSearch : ""));
       toast.success("Google Drive connected successfully!");
     }
-    checkAndLoadFolders();
+    void checkAndLoadFolders();
   }, [checkAndLoadFolders]);
 
-  const handleConnectDrive = () => {
-    // Navigate the current tab to the backend OAuth redirect endpoint.
-    // The backend will redirect to Google, then back to /admin/products/bulk-upload?drive_connected=true
-    window.location.href = buildDriveConnectUrl(draftId);
-  };
-
-  const loadFolders = useCallback(
-    () => checkAndLoadFolders(true),
-    [checkAndLoadFolders],
-  );
+  const handleConnectDrive = () => { window.location.href = buildDriveConnectUrl(draftId); };
 
   const handleMatch = async () => {
     if (!draftId || !selectedFolderId) return;
     setMatching(true);
     try {
-      if (onPrepareDraft) {
-        await onPrepareDraft();
-      }
+      await onPrepareDraft?.();
       const res = await productApi.matchDriveImages(draftId, selectedFolderId);
-      const matchResult: ImageMatchResult =
-        (res.data as any)?.imageMatches || (res.data as any);
-      if (matchResult && Array.isArray(matchResult.matched)) {
-        await productApi.confirmDriveAssignment(draftId, pendingAssignments);
-        onMatchComplete(matchResult, pendingAssignments);
-        toast.success(
-          `Matched ${matchResult.matched.length} image(s). ` +
-            (matchResult.missing.length > 0
-              ? `${matchResult.missing.length} missing.`
-              : ""),
-        );
+      const result: ImageMatchResult = (res.data as any)?.imageMatches || (res.data as any);
+      if (!result || !Array.isArray(result.matched)) { toast.error("Invalid image matching response from server."); return; }
+      await productApi.confirmDriveAssignment(draftId, pendingAssignments);
+      onMatchComplete(result, pendingAssignments);
+      if (result.matched.length === 0 && result.missing.length > 0) {
+        toast.error("No image references matched. Review the filenames or select images manually.");
       } else {
-        toast.error("Invalid image matching response from server.");
+        toast.success("Matched " + result.matched.length + " image(s)." + (result.missing.length ? " " + result.missing.length + " missing." : ""));
       }
-    } catch (err) {
-      toast.error(humanError(err));
-    } finally {
-      setMatching(false);
-    }
+    } catch (err) { toast.error(humanError(err)); }
+    finally { setMatching(false); }
   };
 
   const assignCandidate = async (entry: AmbiguousEntry, fileId: string) => {
-    const newAssignments = {
-      ...pendingAssignments,
-      [String(entry.mediaIndex)]: fileId,
-    };
-    setPendingAssignments(newAssignments);
-    if (draftId) {
-      try {
-        await productApi.confirmDriveAssignment(draftId, newAssignments);
-        toast.success("Assignment saved.");
-      } catch {
-        toast.error("Failed to save assignment.");
-      }
-    }
+    const next = { ...pendingAssignments, [String(entry.mediaIndex)]: fileId };
+    setPendingAssignments(next);
+    if (!draftId) return;
+    try {
+      await productApi.confirmDriveAssignment(draftId, next);
+      toast.success("Assignment saved.");
+    } catch { toast.error("Failed to save assignment."); }
   };
 
-  const stats = imageMatches
-    ? {
-        matched: imageMatches.matched.length,
-        missing: imageMatches.missing.length,
-        ambiguous: imageMatches.ambiguous.length,
-        duplicates: imageMatches.duplicates.length,
-        total: imageMatches.totalMedia,
+  const addLocalFiles = (fileList: FileList | null) => {
+    if (!fileList) return;
+    const list = Array.from(fileList);
+    const accepted = list.filter((file) => file.type.startsWith("image/"));
+    if (accepted.length !== list.length) toast.error((list.length - accepted.length) + " non-image file(s) were skipped.");
+    setLocalFiles((previous) => {
+      const keys = new Set(previous.map((item) => item.id));
+      const additions = accepted.map((file) => ({
+        id: file.name + ":" + file.size + ":" + file.lastModified,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      })).filter((item) => !keys.has(item.id));
+      return [...previous, ...additions];
+    });
+  };
+
+  const removeLocalFile = (index: number) => setLocalFiles((previous) => {
+    const removed = previous[index];
+    if (removed) URL.revokeObjectURL(removed.previewUrl);
+    return previous.filter((_item, itemIndex) => itemIndex !== index);
+  });
+
+  const handleUploadLocalFiles = async () => {
+    if (!targetProduct) { toast.error("Select a product before uploading images."); return; }
+    if (!localFiles.length) { toast.error("Select one or more images first."); return; }
+    const media: BulkParsedMedia[] = [];
+    const uploadedIds: string[] = [];
+    const failedNames: string[] = [];
+    setUploadingLocal(true);
+    setLocalProgress({ completed: 0, total: localFiles.length });
+    try {
+      for (let index = 0; index < localFiles.length; index += 1) {
+        const item = localFiles[index];
+        try {
+          const response = await productApi.uploadBulkImageFile(item.file);
+          const result = response.data as any;
+          if (!result?.url || !/^https:\/\//i.test(result.url)) throw new Error("Storage did not return a valid HTTPS URL.");
+          media.push({
+            type: "IMAGE", url: result.url, key: result.key, altText: targetProduct.name,
+            order: (targetProduct.media?.length ?? 0) + media.length, isActive: true, source: "product",
+            mimeType: item.file.type, fileSize: item.file.size,
+          });
+          uploadedIds.push(item.id);
+        } catch { failedNames.push(item.file.name); }
+        finally { setLocalProgress({ completed: index + 1, total: localFiles.length }); }
       }
-    : null;
+      if (media.length) {
+        onAssignMedia(targetProduct.productGroupId, media);
+        setLocalFiles((previous) => previous.filter((item) => {
+          if (!uploadedIds.includes(item.id)) return true;
+          URL.revokeObjectURL(item.previewUrl);
+          return false;
+        }));
+        toast.success("Uploaded " + media.length + " image(s) to storage.");
+      }
+      if (failedNames.length) toast.error(failedNames.length + " image(s) failed to upload; you can retry them.");
+    } finally { setUploadingLocal(false); }
+  };
 
-  // Show loading spinner while checking status
-  if (driveConnected === null) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <ImageIcon className="w-4 h-4 text-indigo-600" />
-            Google Drive Image Matching
-          </h3>
-        </div>
-        <div className="p-6 flex items-center justify-center text-gray-400 gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span className="text-xs">Checking Drive connection…</span>
-        </div>
-      </div>
-    );
-  }
+  const loadDriveItems = async (
+    folderId: string,
+    options: { append?: boolean; pageToken?: string | null; query?: string } = {},
+  ) => {
+    setDriveLoading(true);
+    setDriveError(null);
+    try {
+      const response = await productApi.listDriveFiles({
+        parentId: folderId,
+        pageToken: options.pageToken ?? undefined,
+        query: options.query ?? driveSearch,
+      });
+      const data = response.data as any;
+      const page: DriveBrowseResult = {
+        files: Array.isArray(data) ? data : (data?.files ?? []),
+        folders: Array.isArray(data?.folders) ? data.folders : [],
+        nextPageToken: data?.nextPageToken ?? null,
+      };
+      const imageFiles = page.files.filter((file) => file.mimeType?.startsWith("image/"));
+      setDriveFiles((previous) => options.append ? [...previous, ...imageFiles] : imageFiles);
+      setDriveFolders(page.folders);
+      setDrivePageToken(page.nextPageToken ?? null);
+    } catch (err) {
+      setDriveError(humanError(err) + ". The backend must expose GET /products/bulk/drive/files for this picker.");
+    } finally { setDriveLoading(false); }
+  };
 
-  // Show connect prompt when Drive is not yet authorized
-  if (!driveConnected) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <ImageIcon className="w-4 h-4 text-indigo-600" />
-            Google Drive Image Matching
-          </h3>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-medium text-amber-800">
-                Google Drive not connected
-              </p>
-              <p className="text-xs text-amber-700 mt-0.5">
-                Connect your Google account to browse Drive folders and match
-                images to your products automatically.
-              </p>
-            </div>
-          </div>
+  const openDrivePicker = () => {
+    if (!driveConnected) { toast.error("Connect Google Drive before selecting images."); return; }
+    if (!selectedFolderId) { toast.error("Select a Drive folder first."); return; }
+    const root = folders.find((folder) => folder.id === selectedFolderId);
+    setFolderTrail(root ? [root] : []);
+    setDriveSearchInput("");
+    setDriveSearch("");
+    setSelectedDriveFiles({});
+    setPickerOpen(true);
+    void loadDriveItems(selectedFolderId, { query: "" });
+  };
 
-          {folderError && (
-            <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">
-              {folderError}
-            </p>
-          )}
+  const toggleDriveSelection = (file: DriveFile) => setSelectedDriveFiles((previous) => {
+    const next = { ...previous };
+    if (next[file.id]) delete next[file.id]; else next[file.id] = file;
+    return next;
+  });
 
-          <button
-            onClick={handleConnectDrive}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Connect to Google Drive
-          </button>
+  const navigateToFolder = (folder: DriveFolder, index?: number) => {
+    const nextTrail = index === undefined ? [...folderTrail, folder] : folderTrail.slice(0, index + 1);
+    setFolderTrail(nextTrail);
+    void loadDriveItems(nextTrail[nextTrail.length - 1].id, { query: driveSearch });
+  };
 
-          <p className="text-xs text-gray-400 text-center">
-            You will be redirected to Google to authorize read-only Drive
-            access. After approving, you'll return here automatically.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const handleImportDriveSelection = async () => {
+    const selected = Object.values(selectedDriveFiles);
+    if (!targetProduct || selected.length === 0) { toast.error("Select a product and at least one Drive image."); return; }
+    const media: BulkParsedMedia[] = [];
+    const failedNames: string[] = [];
+    setUploadingDrive(true);
+    setDriveProgress({ completed: 0, total: selected.length });
+    setPickerOpen(false);
+    try {
+      for (let index = 0; index < selected.length; index += 1) {
+        const driveFile = selected[index];
+        try {
+          const downloadResponse = await fetch(getDriveProxyUrl(driveFile.id));
+          if (!downloadResponse.ok) throw new Error("Drive download failed");
+          const blob = await downloadResponse.blob();
+          const file = new File([blob], driveFile.name, { type: driveFile.mimeType || blob.type || "image/jpeg" });
+          const uploadResponse = await productApi.uploadBulkImageFile(file);
+          const result = uploadResponse.data as any;
+          if (!result?.url || !/^https:\/\//i.test(result.url)) throw new Error("Storage did not return a valid HTTPS URL.");
+          media.push({
+            type: "IMAGE", url: result.url, key: result.key, altText: targetProduct.name,
+            order: (targetProduct.media?.length ?? 0) + media.length, isActive: true, source: "product",
+            mimeType: file.type, fileSize: file.size,
+          });
+        } catch { failedNames.push(driveFile.name); }
+        finally { setDriveProgress({ completed: index + 1, total: selected.length }); }
+      }
+      if (media.length) {
+        onAssignMedia(targetProduct.productGroupId, media);
+        setSelectedDriveFiles({});
+        toast.success("Uploaded " + media.length + " selected Drive image(s) to storage.");
+      }
+      if (failedNames.length) toast.error(failedNames.length + " Drive image(s) failed: " + failedNames.slice(0, 3).join(", "));
+    } finally { setUploadingDrive(false); }
+  };
+
+  const stats = imageMatches ? {
+    matched: imageMatches.matched.length,
+    missing: imageMatches.missing.length,
+    ambiguous: imageMatches.ambiguous.length,
+    duplicates: imageMatches.duplicates.length,
+  } : null;
+
+  const tabClass = (active: boolean) => classNames(
+    "min-w-0 flex flex-col sm:flex-row items-center justify-center gap-1.5 rounded-lg border px-1.5 sm:px-2 py-2.5 text-[10px] sm:text-xs font-medium transition-colors",
+    active ? "border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100" : "border-gray-200 bg-white text-gray-600 hover:border-indigo-300 hover:bg-gray-50",
+  );
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <ImageIcon className="w-4 h-4 text-indigo-600" />
-          Google Drive Image Matching
-        </h3>
-        {/* Connected badge + disconnect link */}
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-            <CheckCircle2 className="w-3 h-3" />
-            Connected
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-indigo-600" />Product Images</h3>
+            <p className="text-xs text-gray-500 mt-1">Choose how to add images to your products.</p>
+          </div>
+          <span className={classNames("shrink-0 text-[10px] rounded-full border px-2 py-1", driveConnected ? "text-green-700 bg-green-50 border-green-200" : "text-gray-500 bg-gray-50 border-gray-200")}>
+            {driveConnected === null ? "Checking Drive" : driveConnected ? "Drive connected" : "Drive not connected"}
           </span>
-          <button
-            onClick={handleConnectDrive}
-            title="Re-authorize Google Drive"
-            className="text-xs text-gray-400 hover:text-indigo-600 transition-colors"
-          >
-            <RefreshCw className="w-3 h-3" />
-          </button>
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Folder selector */}
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Drive Folder
-          </label>
-          <div className="flex gap-2">
-            <select
-              value={selectedFolderId}
-              onChange={(e) => setSelectedFolderId(e.target.value)}
-              className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-              disabled={loadingFolders}
-            >
-              <option value="">Select a folder…</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={loadFolders}
-              disabled={loadingFolders}
-              className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-gray-600 transition-colors disabled:opacity-50"
-              title="Refresh folders"
-            >
-              {loadingFolders ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-          {folderError && (
-            <p className="text-xs text-red-600 mt-1">{folderError}</p>
-          )}
-          {folders.length === 0 && !loadingFolders && !folderError && (
-            <p className="text-xs text-gray-400 mt-1">
-              No folders found in your Drive.
-            </p>
-          )}
+      <div className="p-3 border-b border-gray-100">
+        <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Product image source">
+          <button type="button" role="tab" aria-selected={sourceMode === "references"} className={tabClass(sourceMode === "references")} onClick={() => setSourceMode("references")}><Layers className="w-4 h-4" /><span>Existing references</span></button>
+          <button type="button" role="tab" aria-selected={sourceMode === "local"} className={tabClass(sourceMode === "local")} onClick={() => setSourceMode("local")}><MonitorUp className="w-4 h-4" /><span>Local upload</span></button>
+          <button type="button" role="tab" aria-selected={sourceMode === "drive"} className={tabClass(sourceMode === "drive")} onClick={() => setSourceMode("drive")}><Cloud className="w-4 h-4" /><span>Google Drive</span></button>
         </div>
+      </div>
 
-        {/* Match button */}
-        <button
-          onClick={handleMatch}
-          disabled={!draftId || !selectedFolderId || matching}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-        >
-          {matching ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Matching images…
-            </>
+      {sourceMode === "references" && (
+        <div className="p-4 space-y-4">
+          {driveConnected === null ? <div className="flex items-center gap-2 text-xs text-gray-500 py-4"><Loader2 className="w-4 h-4 animate-spin" />Checking Google Drive connection…</div> : !driveConnected ? (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Connect Google Drive to match the references in the product JSON.</div>
+              {folderError && <p className="text-xs text-red-600">{folderError}</p>}
+              <button type="button" onClick={handleConnectDrive} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-3 py-2.5 text-sm font-medium hover:bg-indigo-700"><Cloud className="w-4 h-4" />Connect Google Drive</button>
+            </div>
           ) : (
             <>
-              <ZapIcon className="w-4 h-4" />
-              Match Images
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Drive folder</label>
+                <div className="flex gap-2">
+                  <select value={selectedFolderId} onChange={(event) => setSelectedFolderId(event.target.value)} disabled={loadingFolders} className="flex-1 min-w-0 text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"><option value="">Select a folder…</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select>
+                  <button type="button" title="Refresh folders" onClick={() => void checkAndLoadFolders()} disabled={loadingFolders} className="p-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">{loadingFolders ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}</button>
+                </div>
+                {folderError && <p className="text-xs text-red-600 mt-1">{folderError}</p>}
+              </div>
+              <button type="button" onClick={() => void handleMatch()} disabled={!draftId || !selectedFolderId || matching} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">{matching ? <Loader2 className="w-4 h-4 animate-spin" /> : <ZapIcon className="w-4 h-4" />}{matching ? "Matching references…" : "Match existing references"}</button>
+              {stats && <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-lg bg-green-50 p-2"><b className="block text-lg text-green-700">{stats.matched}</b><span className="text-xs text-green-700">Matched</span></div>
+                <div className="rounded-lg bg-red-50 p-2"><b className="block text-lg text-red-700">{stats.missing}</b><span className="text-xs text-red-700">Missing</span></div>
+                <div className="rounded-lg bg-amber-50 p-2"><b className="block text-lg text-amber-700">{stats.ambiguous}</b><span className="text-xs text-amber-700">Ambiguous</span></div>
+                <div className="rounded-lg bg-gray-50 p-2"><b className="block text-lg text-gray-700">{stats.duplicates}</b><span className="text-xs text-gray-600">Duplicates</span></div>
+              </div>}
+              {imageMatches && imageMatches.missing.length > 0 && <div className="rounded-lg bg-red-50 p-3">
+                <p className="text-xs font-semibold text-red-700 mb-1">Missing references ({imageMatches.missing.length})</p>
+                <div className="max-h-28 overflow-y-auto text-xs text-red-700 space-y-1">{imageMatches.missing.slice(0, 100).map((entry, index) => <p key={entry.mediaIndex + "-" + index} className="truncate">{entry.reference}{entry.productGroupId ? " — " + entry.productGroupId : ""}</p>)}</div>
+                <p className="text-[11px] text-red-600 mt-2">References that cannot be verified are not assigned automatically. Use the Google Drive tab to select images manually.</p>
+              </div>}
+              {imageMatches && imageMatches.matched.length > 0 && <div><p className="text-xs font-medium text-gray-700 mb-2">Matched images ({imageMatches.matched.length})</p><div className="grid grid-cols-4 gap-2">{imageMatches.matched.slice(0, 8).map((match) => <div key={match.file.id + "-" + match.mediaIndex} className="min-w-0"><div className="aspect-square rounded-lg border overflow-hidden bg-gray-50"><img loading="lazy" src={getDriveProxyUrl(match.file.id)} alt={match.file.name} className="w-full h-full object-cover" /></div><p className="mt-1 truncate text-[10px] text-gray-500" title={match.file.name}>{match.file.name}</p></div>)}</div></div>}
+              {imageMatches && imageMatches.ambiguous.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <button type="button" onClick={() => setShowAmbiguous((value) => !value)} className="flex items-center gap-1 text-xs font-medium text-amber-800">{showAmbiguous ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}Resolve {imageMatches.ambiguous.length} ambiguous match(es)</button>
+                {showAmbiguous && <div className="mt-3 space-y-3">{imageMatches.ambiguous.map((entry) => <div key={entry.mediaIndex}><p className="text-xs text-amber-900 mb-1">{entry.reference}</p><div className="flex flex-wrap gap-2">{entry.candidates.map((candidate) => <button type="button" key={candidate.id} title={candidate.name} onClick={() => void assignCandidate(entry, candidate.id)} className={classNames("w-14 h-14 rounded border overflow-hidden", pendingAssignments[String(entry.mediaIndex)] === candidate.id ? "border-indigo-500 ring-2 ring-indigo-300" : "border-gray-300")}><img loading="lazy" src={getDriveProxyUrl(candidate.id)} alt={candidate.name} className="w-full h-full object-cover" /></button>)}</div></div>)}</div>}
+              </div>}
             </>
           )}
-        </button>
+        </div>
+      )}
 
-        {!draftId && (
-          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2">
-            Save or create a draft first to match images.
-          </p>
-        )}
+      {sourceMode === "local" && (
+        <div className="p-4 space-y-4">
+          <div><label className="block text-xs font-medium text-gray-700 mb-1">Assign images to product</label><select value={targetProductGroupId} onChange={(event) => setTargetProductGroupId(event.target.value)} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white" disabled={!products.length}>{products.length === 0 ? <option value="">Parse or add a product first</option> : products.map((product) => <option key={product.productGroupId} value={product.productGroupId}>{product.productGroupId} — {product.name}</option>)}</select></div>
+          <label className="block cursor-pointer rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 text-center hover:border-indigo-400 transition-colors"><MonitorUp className="w-7 h-7 text-indigo-600 mx-auto mb-2" /><span className="block text-sm font-semibold text-gray-800">Choose images from your computer</span><span className="block text-xs text-gray-500 mt-1">Select multiple supported image files.</span><input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { addLocalFiles(event.target.files); event.currentTarget.value = ""; }} /></label>
+          {localFiles.length > 0 && <>
+            <div className="flex items-center justify-between text-xs text-gray-600"><span>{localFiles.length} image(s) selected</span><button type="button" onClick={() => { localFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl)); setLocalFiles([]); }} className="text-red-600 hover:underline">Clear all</button></div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-64 overflow-y-auto">{localFiles.map((item, index) => <div key={item.id} className="relative min-w-0 rounded-lg border overflow-hidden"><img src={item.previewUrl} alt={item.file.name} className="w-full aspect-square object-cover bg-gray-50" /><button type="button" onClick={() => removeLocalFile(index)} aria-label={"Remove " + item.file.name} className="absolute top-1 right-1 rounded-full bg-white text-red-600 p-1 shadow"><X className="w-3 h-3" /></button><div className="p-1.5"><p className="truncate text-[10px] text-gray-700" title={item.file.name}>{item.file.name}</p><p className="text-[10px] text-gray-400">{(item.file.size / (1024 * 1024)).toFixed(1)} MB</p></div></div>)}</div>
+            {uploadingLocal && <div><div className="flex justify-between text-xs text-gray-500"><span>Uploading to storage…</span><span>{localProgress.completed}/{localProgress.total}</span></div><div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-indigo-600 transition-all" style={{ width: (localProgress.total ? (localProgress.completed / localProgress.total) * 100 : 0) + "%" }} /></div></div>}
+            <button type="button" onClick={() => void handleUploadLocalFiles()} disabled={uploadingLocal || !targetProduct} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">{uploadingLocal ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}{uploadingLocal ? "Uploading images…" : "Upload " + localFiles.length + " image(s) to product"}</button>
+          </>}
+          <p className="text-[11px] text-gray-400">Image files are uploaded through the existing storage endpoint. Temporary browser previews are not saved as product URLs.</p>
+        </div>
+      )}
 
-        {/* Stats */}
-        {stats && (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-green-50 rounded-lg p-2 text-center">
-                <span className="block text-lg font-bold text-green-700">
-                  {stats.matched}
-                </span>
-                <span className="text-xs text-green-600">Matched</span>
-              </div>
-              <div className="bg-red-50 rounded-lg p-2 text-center">
-                <span className="block text-lg font-bold text-red-700">
-                  {stats.missing}
-                </span>
-                <span className="text-xs text-red-600">Missing</span>
-              </div>
-              <div className="bg-amber-50 rounded-lg p-2 text-center">
-                <span className="block text-lg font-bold text-amber-700">
-                  {stats.ambiguous}
-                </span>
-                <span className="text-xs text-amber-600">Ambiguous</span>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-2 text-center">
-                <span className="block text-lg font-bold text-gray-700">
-                  {stats.duplicates}
-                </span>
-                <span className="text-xs text-gray-600">Duplicates</span>
-              </div>
-            </div>
+      {sourceMode === "drive" && (
+        <div className="p-4 space-y-4">
+          <div><label className="block text-xs font-medium text-gray-700 mb-1">Assign images to product</label><select value={targetProductGroupId} onChange={(event) => setTargetProductGroupId(event.target.value)} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white" disabled={!products.length}>{products.length === 0 ? <option value="">Parse or add a product first</option> : products.map((product) => <option key={product.productGroupId} value={product.productGroupId}>{product.productGroupId} — {product.name}</option>)}</select></div>
+          {!driveConnected ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3"><p className="text-xs text-amber-800">Connect Google Drive to browse and select images.</p><button type="button" onClick={handleConnectDrive} className="w-full rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700"><Cloud className="w-4 h-4 inline mr-2" />Connect Google Drive</button></div> : <>
+            <div><label className="block text-xs font-medium text-gray-700 mb-1">Starting folder</label><select value={selectedFolderId} onChange={(event) => setSelectedFolderId(event.target.value)} disabled={loadingFolders} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"><option value="">Select a folder…</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></div>
+            <button type="button" onClick={openDrivePicker} disabled={!selectedFolderId || !targetProduct || driveConnected !== true} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-3 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"><Cloud className="w-4 h-4" />Browse and select Drive images</button>
+          </>}
+          {uploadingDrive && <div><div className="flex justify-between text-xs text-gray-500"><span>Transferring selected Drive images to storage…</span><span>{driveProgress.completed}/{driveProgress.total}</span></div><div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-indigo-600 transition-all" style={{ width: (driveProgress.total ? (driveProgress.completed / driveProgress.total) * 100 : 0) + "%" }} /></div></div>}
+          <p className="text-xs text-gray-500">Only images selected for the current product are downloaded and uploaded to storage.</p>
+        </div>
+      )}
 
-            {/* Matched thumbnails (first 6) */}
-            {imageMatches!.matched.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-gray-700 mb-1">
-                  Matched Images
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {imageMatches!.matched
-                    .slice(0, 6)
-                    .map((m: MatchedEntry, i) => (
-                      <div
-                        key={i}
-                        className="relative w-12 h-12 rounded border border-gray-200 overflow-hidden bg-gray-100"
-                        title={m.file.name}
-                      >
-                        {m.file.thumbnailLink ? (
-                          <img
-                            src={getDriveProxyUrl(m.file.id)}
-                            alt={m.file.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display =
-                                "none";
-                            }}
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full">
-                            <ImageIcon className="w-4 h-4 text-gray-400" />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  {imageMatches!.matched.length > 6 && (
-                    <div className="w-12 h-12 rounded border border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-gray-50">
-                      +{imageMatches!.matched.length - 6}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Ambiguous — manual resolve */}
-            {imageMatches!.ambiguous.length > 0 && (
-              <div>
-                <button
-                  onClick={() => setShowAmbiguous((s) => !s)}
-                  className="text-xs text-amber-700 font-medium flex items-center gap-1 hover:underline"
-                >
-                  {showAmbiguous ? (
-                    <ChevronUp className="w-3 h-3" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3" />
-                  )}
-                  Resolve {imageMatches!.ambiguous.length} ambiguous match(es)
-                </button>
-                {showAmbiguous && (
-                  <div className="mt-2 space-y-3">
-                    {imageMatches!.ambiguous.map(
-                      (entry: AmbiguousEntry, ei) => (
-                        <div
-                          key={ei}
-                          className="border border-amber-200 rounded-lg p-2 bg-amber-50"
-                        >
-                          <p className="text-xs font-medium text-amber-800 mb-1 truncate">
-                            {entry.reference || `Media #${entry.mediaIndex}`}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {entry.candidates.map((c) => (
-                              <button
-                                key={c.id}
-                                onClick={() => assignCandidate(entry, c.id)}
-                                className={classNames(
-                                  "relative w-14 h-14 rounded border overflow-hidden",
-                                  pendingAssignments[
-                                    String(entry.mediaIndex)
-                                  ] === c.id
-                                    ? "border-indigo-500 ring-2 ring-indigo-300"
-                                    : "border-gray-300 hover:border-indigo-400",
-                                )}
-                                title={c.name}
-                              >
-                                {c.thumbnailLink ? (
-                                  <img
-                                    src={getDriveProxyUrl(c.id)}
-                                    alt={c.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      (
-                                        e.target as HTMLImageElement
-                                      ).style.display = "none";
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="flex items-center justify-center h-full bg-gray-100">
-                                    <ImageIcon className="w-4 h-4 text-gray-400" />
-                                  </div>
-                                )}
-                                {pendingAssignments[
-                                  String(entry.mediaIndex)
-                                ] === c.id && (
-                                  <div className="absolute top-0 right-0 bg-indigo-600 rounded-bl p-0.5">
-                                    <CheckCircle2 className="w-2.5 h-2.5 text-white" />
-                                  </div>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                          <p className="text-xs text-amber-700 mt-1">
-                            {entry.productGroupId &&
-                              `Product: ${entry.productGroupId}`}
-                            {entry.variantSku &&
-                              ` · Variant: ${entry.variantSku}`}
-                          </p>
-                        </div>
-                      ),
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Missing refs */}
-            {imageMatches!.missing.length > 0 && (
-              <div className="bg-red-50 rounded-lg p-2">
-                <p className="text-xs font-medium text-red-700 mb-1">
-                  Missing ({imageMatches!.missing.length})
-                </p>
-                <ul className="text-xs text-red-600 space-y-0.5 max-h-20 overflow-y-auto">
-                  {imageMatches!.missing.map((m, i) => (
-                    <li key={i} className="truncate">
-                      {m.reference || `Media #${m.mediaIndex}`}
-                      {m.productGroupId && ` — ${m.productGroupId}`}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+      {pickerOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6">
+        <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex items-center justify-between gap-3 border-b p-4 sm:px-6"><div><h3 className="text-base font-semibold text-gray-900">Select Google Drive images</h3><p className="text-xs text-gray-500 mt-1">{targetProduct?.name} · {Object.keys(selectedDriveFiles).length} selected</p></div><button type="button" onClick={() => setPickerOpen(false)} aria-label="Close Drive picker" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"><X className="w-5 h-5" /></button></div>
+          <div className="flex flex-wrap items-center gap-2 border-b p-3 sm:px-6"><div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-xs text-gray-500">{folderTrail.map((folder, index) => <React.Fragment key={folder.id}>{index > 0 && <span>/</span>}<button type="button" onClick={() => navigateToFolder(folder, index)} className="max-w-40 truncate hover:text-indigo-700">{folder.name}</button></React.Fragment>)}</div><form onSubmit={(event) => { event.preventDefault(); setDriveSearch(driveSearchInput); void loadDriveItems(folderTrail[folderTrail.length - 1]?.id ?? selectedFolderId, { query: driveSearchInput }); }} className="flex w-full gap-2 sm:w-auto"><div className="relative flex-1 sm:w-64"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input value={driveSearchInput} onChange={(event) => setDriveSearchInput(event.target.value)} placeholder="Search filenames…" className="w-full rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm outline-none focus:border-indigo-500" /></div><button type="submit" className="rounded-lg border px-3 text-sm hover:bg-gray-50">Search</button></form></div>
+          {driveError && <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 sm:mx-6">{driveError}</div>}
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            {driveLoading && driveFiles.length === 0 ? <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500"><Loader2 className="w-5 h-5 animate-spin" />Loading Drive files…</div> : <>
+              {driveFolders.length > 0 && <div className="mb-5"><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Folders</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{driveFolders.map((folder) => <button type="button" key={folder.id} onClick={() => navigateToFolder(folder)} className="flex items-center gap-2 rounded-lg border p-3 text-left hover:border-indigo-300 hover:bg-indigo-50"><Folder className="h-5 w-5 shrink-0 text-indigo-600" /><span className="truncate text-xs font-medium text-gray-700">{folder.name}</span></button>)}</div></div>}
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Images ({driveFiles.length}{drivePageToken ? "+" : ""})</p>
+              {driveFiles.length === 0 ? <div className="rounded-xl border border-dashed border-gray-300 p-10 text-center"><FileImage className="mx-auto mb-2 h-8 w-8 text-gray-300" /><p className="text-sm text-gray-600">No images found in this folder.</p><p className="text-xs text-gray-400 mt-1">Try another folder or search term.</p></div> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">{driveFiles.map((file) => {
+                const selected = Boolean(selectedDriveFiles[file.id]);
+                return <button type="button" key={file.id} aria-pressed={selected} onClick={() => toggleDriveSelection(file)} className={classNames("relative min-w-0 overflow-hidden rounded-xl border text-left transition-all", selected ? "border-indigo-600 ring-2 ring-indigo-200" : "border-gray-200 hover:border-indigo-300")}><div className="aspect-square bg-gray-50"><img loading="lazy" src={file.thumbnailLink || getDriveProxyUrl(file.id)} alt={file.name} className="h-full w-full object-cover" onError={(event) => { const image = event.currentTarget; if (image.src !== getDriveProxyUrl(file.id)) image.src = getDriveProxyUrl(file.id); }} /></div><div className="p-2"><p className="truncate text-[11px] font-medium text-gray-700" title={file.name}>{file.name}</p><p className="text-[10px] text-gray-400">{file.size ? (file.size / (1024 * 1024)).toFixed(1) + " MB" : "Image"}</p></div><span className={classNames("absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border shadow-sm", selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-gray-300 bg-white/95 text-transparent")}><Check className="h-3 w-3" /></span></button>;
+              })}</div>}
+              {drivePageToken && <div className="mt-5 text-center"><button type="button" onClick={() => void loadDriveItems(folderTrail[folderTrail.length - 1]?.id ?? selectedFolderId, { append: true, pageToken: drivePageToken, query: driveSearch })} disabled={driveLoading} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">{driveLoading ? "Loading…" : "Load more images"}</button></div>}
+            </>}
           </div>
-        )}
-      </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-gray-50 p-3 sm:px-6"><p className="text-xs text-gray-500">{Object.keys(selectedDriveFiles).length} selected · Only selected files will be transferred.</p><div className="flex gap-2"><button type="button" onClick={() => setPickerOpen(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button><button type="button" onClick={() => void handleImportDriveSelection()} disabled={!Object.keys(selectedDriveFiles).length || uploadingDrive} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"><UploadCloud className="w-4 h-4" />Upload {Object.keys(selectedDriveFiles).length} selected</button></div></div>
+        </div>
+      </div>}
     </div>
   );
 };
@@ -1712,6 +1624,29 @@ const BulkProductUploadPage: React.FC = () => {
     [products, draftId],
   );
 
+  const handleAssignProductMedia = useCallback(
+    (productGroupId: string, mediaToAdd: BulkParsedMedia[]) => {
+      const updatedProducts = products.map((product) => {
+        if (product.productGroupId !== productGroupId) return product;
+        const existingMedia = product.media ?? [];
+        const existingUrls = new Set(existingMedia.map((media) => media.url));
+        const uniqueAdditions = mediaToAdd
+          .filter((media) => !existingUrls.has(media.url))
+          .map((media, index) => ({ ...media, order: existingMedia.length + index, source: "product" as const }));
+        const nextMedia = [...existingMedia, ...uniqueAdditions];
+        const nextAllImages = [...(product.allImages ?? existingMedia), ...uniqueAdditions]
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        return { ...product, media: nextMedia, allImages: nextAllImages };
+      });
+      setProducts(updatedProducts);
+      setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setValidationErrors(updatedProducts.flatMap((product) => product.errors || []));
+      setIsDirty(true);
+      toast.success("Added " + mediaToAdd.length + " image(s). Save the draft to persist changes.");
+    },
+    [products],
+  );
+
   const handleUpdateProduct = useCallback((updated: BulkParsedProduct) => {
     setProducts((prev) => {
       const next = prev.map((p) =>
@@ -2040,9 +1975,11 @@ const BulkProductUploadPage: React.FC = () => {
               {/* D. Drive matching */}
               <DriveMatchingPanel
                 draftId={draftId}
+                products={products}
                 imageMatches={imageMatches}
                 confirmedAssignments={confirmedAssignments}
                 onMatchComplete={handleMatchComplete}
+                onAssignMedia={handleAssignProductMedia}
                 getDriveProxyUrl={productApi.getDriveProxyUrl}
                 onPrepareDraft={async () => {
                   if (draftId && products.length > 0) {
