@@ -2325,6 +2325,7 @@ export const BulkProductPreviewTable: React.FC<
                     active.type !== "VIDEO" &&
                     failedDetailImageUrl !== detailSrc ? (
                     <img
+                      key={detailSrc}
                       src={detailSrc}
                       alt={
                         active.altText ||
