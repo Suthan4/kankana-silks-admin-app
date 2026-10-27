@@ -490,9 +490,24 @@ export const productApi = {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", "products");
-    return apiCall("POST", "/upload", formData, {
+
+    // The existing /upload controller returns { success, url, key } at the
+    // top level instead of the standard { success, data } response envelope.
+    const response = await apiClient.post<{
+      success: boolean;
+      url: string;
+      key: string;
+    }>("/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    return {
+      success: response.data.success,
+      data: {
+        success: response.data.success,
+        url: response.data.url,
+        key: response.data.key,
+      },
+    };
   },
 
   getDriveProxyUrl: (fileId: string): string => {
