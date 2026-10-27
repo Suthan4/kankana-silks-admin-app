@@ -1950,6 +1950,129 @@ export const BulkProductPreviewTable: React.FC<
                     100,
                 )
               : 0;
+
+          const selectedVariantForMedia = previewProduct.variants?.find(
+            (variant) => variant.sku === storefrontSelectedVariantSku,
+          );
+          const editVariantMedia =
+            Boolean(storefrontSelectedVariantSku) &&
+            Boolean(selectedVariantForMedia) &&
+            (previewImages.some(
+              (media) =>
+                media.source === "variant" ||
+                media.variantSku === storefrontSelectedVariantSku,
+            ) ||
+              (selectedVariantForMedia?.media || []).some(
+                (media) => media.type === "IMAGE",
+              ));
+          const imageIdentity = (media: BulkParsedMedia, index: number) => {
+            if (media.sourceDriveFileId) return "drive:" + media.sourceDriveFileId;
+            const proxyId = (media.url || "").match(
+              /\/products\/bulk\/drive-proxy\/([^/?#]+)/,
+            );
+            if (proxyId?.[1]) {
+              try { return "drive:" + decodeURIComponent(proxyId[1]); } catch {
+                return "drive:" + proxyId[1];
+              }
+            }
+            if (media.key) return "key:" + media.key;
+            if (media.url) return "url:" + media.url;
+            return "label:" + (media.title || media.altText || "image") + ":" + index;
+          };
+
+          const updatePreviewImages = (images: BulkParsedMedia[]) => {
+            const orderedImages = images.map((media, index) => ({
+              ...media,
+              order: index,
+              isActive: true,
+              source: editVariantMedia ? ("variant" as const) : ("product" as const),
+              productGroupId: previewProduct.productGroupId,
+              variantSku: editVariantMedia ? (storefrontSelectedVariantSku || undefined) : undefined,
+            }));
+
+            let updatedProduct: BulkParsedProduct;
+            if (editVariantMedia && selectedVariantForMedia) {
+              const variants = (previewProduct.variants || []).map((variant) => {
+                if (variant.sku !== storefrontSelectedVariantSku) return variant;
+                const nonImages = (variant.media || [])
+                  .filter((media) => media.type !== "IMAGE")
+                  .map((media, index) => ({ ...media, order: orderedImages.length + index }));
+                return { ...variant, media: [...orderedImages, ...nonImages] };
+              });
+              updatedProduct = { ...previewProduct, variants };
+            } else {
+              const nonImages = (previewProduct.media || [])
+                .filter((media) => media.type !== "IMAGE")
+                .map((media, index) => ({ ...media, order: orderedImages.length + index }));
+              updatedProduct = {
+                ...previewProduct,
+                media: [...orderedImages, ...nonImages],
+              };
+            }
+
+            const allImages: BulkParsedMedia[] = [
+              ...(updatedProduct.media || []).map((media, index) => ({
+                ...media,
+                source: "product" as const,
+                order: media.order ?? index,
+              })),
+              ...(updatedProduct.variants || []).flatMap((variant) =>
+                (variant.media || []).map((media, index) => ({
+                  ...media,
+                  source: "variant" as const,
+                  variantSku: variant.sku,
+                  order: media.order ?? (10000 + index),
+                })),
+              ),
+            ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            updatedProduct = { ...updatedProduct, allImages };
+            setStorefrontPreviewProduct(updatedProduct);
+            onUpdateProduct(updatedProduct);
+            setStorefrontPreviewImageIndex((current) =>
+              Math.min(current, Math.max(0, orderedImages.length - 1)),
+            );
+            setFailedStorefrontImageUrl(null);
+          };
+
+          const movePreviewImage = (fromIndex: number, toIndex: number) => {
+            if (
+              fromIndex === toIndex ||
+              fromIndex < 0 ||
+              toIndex < 0 ||
+              fromIndex >= previewImages.length ||
+              toIndex >= previewImages.length
+            ) return;
+            const activeKey = previewImages[activeIndex]
+              ? imageIdentity(previewImages[activeIndex], activeIndex)
+              : "";
+            const nextImages = [...previewImages];
+            const [moved] = nextImages.splice(fromIndex, 1);
+            if (!moved) return;
+            nextImages.splice(toIndex, 0, moved);
+            updatePreviewImages(nextImages);
+            const nextIndex = nextImages.findIndex(
+              (media, index) => imageIdentity(media, index) === activeKey,
+            );
+            setStorefrontPreviewImageIndex(nextIndex >= 0 ? nextIndex : 0);
+            setStorefrontDraggedImageIndex(null);
+            setSelectedStorefrontImageKeys(new Set());
+          };
+
+          const removePreviewImages = (indexes: number[]) => {
+            if (indexes.length === 0) return;
+            const removed = new Set(indexes);
+            const nextImages = previewImages.filter((_media, index) => !removed.has(index));
+            updatePreviewImages(nextImages);
+            setSelectedStorefrontImageKeys(new Set());
+            setStorefrontDraggedImageIndex(null);
+            setStorefrontPreviewImageIndex(0);
+          };
+
+          const selectedImagesCount = previewImages.reduce(
+            (count, media, index) =>
+              count + (selectedStorefrontImageKeys.has(imageIdentity(media, index)) ? 1 : 0),
+            0,
+          );
           return (
             <div
               className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-5"
@@ -2085,62 +2208,182 @@ export const BulkProductPreviewTable: React.FC<
                       </div>
 
                       {previewImages.length > 0 && (
-                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                          {previewImages.map((media, index) => {
-                            const thumbSrc = resolveImageUrl(
-                              media.url,
-                              media.thumbnailUrl,
-                              getDriveProxyUrl,
-                              getDriveThumbnailUrl,
-                            );
-                            return (
+                        <>
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px]">
+                            <div className="flex items-center gap-2 font-semibold text-slate-700">
+                              <GripVertical className="h-3.5 w-3.5 text-slate-400" />
+                              Manage product images
+                              <span className="font-normal text-slate-400">· Drag to reorder</span>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <button
-                                key={`${media.url}-${index}`}
                                 type="button"
                                 onClick={() => {
-                                  setStorefrontPreviewImageIndex(index);
-                                  setFailedStorefrontImageUrl(null);
+                                  setSelectedStorefrontImageKeys(
+                                    selectedImagesCount === previewImages.length
+                                      ? new Set()
+                                      : new Set(previewImages.map(imageIdentity)),
+                                  );
                                 }}
-                                className={`h-16 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${index === activeIndex ? "border-amber-700 ring-2 ring-amber-100" : "border-slate-200 hover:border-slate-400"}`}
-                                aria-label={`View product image ${index + 1}`}
+                                className="rounded-md border border-slate-300 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50"
                               >
-                                {thumbSrc ? (
-                                  <img
-                                    key={thumbSrc}
-                                    src={thumbSrc}
-                                    alt=""
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="h-full w-full object-cover"
-                                    onError={(event) => {
-                                      const target = event.currentTarget;
-                                      const proxyMatch = (media.url || "").match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
-                                      if (proxyMatch?.[1] && getDriveThumbnailUrl && !target.dataset.thumbnailFallback) {
-                                        let fileId = proxyMatch[1];
-                                        try { fileId = decodeURIComponent(fileId); } catch { /* keep encoded ID */ }
-                                        const fallback = getDriveThumbnailUrl(fileId);
-                                        if (fallback && target.src !== fallback) {
-                                          target.dataset.thumbnailFallback = "true";
-                                          target.src = fallback;
-                                          return;
-                                        }
-                                      }
-                                      target.style.visibility = "hidden";
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="flex h-full items-center justify-center">
-                                    <ImageIcon className="h-5 w-5 text-slate-300" />
-                                  </span>
-                                )}
+                                {selectedImagesCount === previewImages.length ? "Deselect all" : "Select all"}
                               </button>
-                            );
-                          })}
-                        </div>
+                              <button
+                                type="button"
+                                disabled={selectedImagesCount === 0}
+                                onClick={() => {
+                                  const count = selectedImagesCount;
+                                  if (window.confirm(`Remove ${count} selected image(s) from this product? Only the remaining images will be imported.`)) {
+                                    removePreviewImages(
+                                      previewImages
+                                        .map((media, index) => ({ media, index }))
+                                        .filter(({ media, index }) => selectedStorefrontImageKeys.has(imageIdentity(media, index)))
+                                        .map(({ index }) => index),
+                                    );
+                                  }
+                                }}
+                                className="rounded-md border border-rose-200 px-2 py-1 font-semibold text-rose-700 enabled:hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <span className="inline-flex items-center gap-1"><Trash2 className="h-3 w-3" /> Remove selected ({selectedImagesCount})</span>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+                            {previewImages.map((media, index) => {
+                              const thumbSrc = resolveImageUrl(
+                                media.url,
+                                media.thumbnailUrl,
+                                getDriveProxyUrl,
+                                getDriveThumbnailUrl,
+                              );
+                              const stableKey = imageIdentity(media, index);
+                              const isSelected = selectedStorefrontImageKeys.has(stableKey);
+                              const isPrimary = index === 0;
+                              return (
+                                <div
+                                  key={stableKey}
+                                  draggable={previewImages.length > 1}
+                                  onDragStart={(event) => {
+                                    setStorefrontDraggedImageIndex(index);
+                                    event.dataTransfer.effectAllowed = "move";
+                                    event.dataTransfer.setData("text/plain", stableKey);
+                                  }}
+                                  onDragOver={(event) => {
+                                    event.preventDefault();
+                                    event.dataTransfer.dropEffect = "move";
+                                  }}
+                                  onDrop={(event) => {
+                                    event.preventDefault();
+                                    if (storefrontDraggedImageIndex !== null) {
+                                      movePreviewImage(storefrontDraggedImageIndex, index);
+                                    }
+                                  }}
+                                  onDragEnd={() => setStorefrontDraggedImageIndex(null)}
+                                  className={`group relative h-[88px] w-[66px] shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${index === activeIndex ? "border-amber-700 ring-2 ring-amber-100" : isSelected ? "border-indigo-500 ring-1 ring-indigo-100" : "border-slate-200 hover:border-slate-400"} ${storefrontDraggedImageIndex === index ? "opacity-50" : ""}`}
+                                  title="Drag to reorder. The first image is the primary image."
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setStorefrontPreviewImageIndex(index);
+                                      setFailedStorefrontImageUrl(null);
+                                    }}
+                                    className="absolute inset-0 z-0"
+                                    aria-label={`View product image ${index + 1}`}
+                                  >
+                                    {thumbSrc ? (
+                                      <img
+                                        key={thumbSrc}
+                                        src={thumbSrc}
+                                        alt=""
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="h-full w-full object-cover"
+                                        onError={(event) => {
+                                          const target = event.currentTarget;
+                                          const proxyMatch = (media.url || "").match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+                                          if (proxyMatch?.[1] && getDriveThumbnailUrl && !target.dataset.thumbnailFallback) {
+                                            let fileId = proxyMatch[1];
+                                            try { fileId = decodeURIComponent(fileId); } catch { /* keep encoded ID */ }
+                                            const fallback = getDriveThumbnailUrl(fileId);
+                                            if (fallback && target.src !== fallback) {
+                                              target.dataset.thumbnailFallback = "true";
+                                              target.src = fallback;
+                                              return;
+                                            }
+                                          }
+                                          target.style.visibility = "hidden";
+                                        }}
+                                      />
+                                    ) : (
+                                      <span className="flex h-full items-center justify-center">
+                                        <ImageIcon className="h-5 w-5 text-slate-300" />
+                                      </span>
+                                    )}
+                                  </button>
+                                  <div className="absolute left-1 top-1 z-10">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setSelectedStorefrontImageKeys((current) => {
+                                          const next = new Set(current);
+                                          if (next.has(stableKey)) next.delete(stableKey);
+                                          else next.add(stableKey);
+                                          return next;
+                                        });
+                                      }}
+                                      className={`flex h-4 w-4 items-center justify-center rounded border shadow-sm ${isSelected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-400 bg-white/95 text-transparent hover:border-indigo-600"}`}
+                                      aria-label={isSelected ? "Deselect image" : "Select image"}
+                                      aria-pressed={isSelected}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-between gap-1 bg-slate-950/75 px-1 py-1">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (index > 0) movePreviewImage(index, 0);
+                                      }}
+                                      disabled={isPrimary}
+                                      title={isPrimary ? "Primary image" : "Set as primary"}
+                                      className="flex min-w-0 items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-semibold text-white hover:bg-white/20 disabled:cursor-default disabled:opacity-100"
+                                    >
+                                      <Star className={`h-3 w-3 shrink-0 ${isPrimary ? "fill-amber-400 text-amber-400" : ""}`} />
+                                      <span>{isPrimary ? "Primary" : "Set"}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (window.confirm(`Remove "${media.title || media.altText || `image ${index + 1}`}" from this product? It will not be uploaded.`)) {
+                                          removePreviewImages([index]);
+                                        }
+                                      }}
+                                      title="Remove image from import"
+                                      aria-label={`Remove image ${index + 1}`}
+                                      className="rounded p-0.5 text-white hover:bg-rose-600"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  {isPrimary && (
+                                    <span className="absolute left-1 top-6 z-10 rounded bg-amber-500 px-1 py-0.5 text-[8px] font-bold text-white">
+                                      PRIMARY
+                                    </span>
+                                  )}
+                                  <span className="sr-only">{media.title || media.altText || `Image ${index + 1}`}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
                       )}
                       <p className="mt-2 text-center text-[10px] text-slate-400">
-                        {previewImages.length} product image
-                        {previewImages.length === 1 ? "" : "s"}
+                        {previewImages.length} retained product image{previewImages.length === 1 ? "" : "s"} · first image is primary
                       </p>
                     </div>
                   </section>
