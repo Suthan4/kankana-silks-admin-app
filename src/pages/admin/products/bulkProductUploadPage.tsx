@@ -285,7 +285,7 @@ interface DriveMatchingPanelProps {
   products: BulkParsedProduct[];
   imageMatches: ImageMatchResult | null;
   confirmedAssignments: Record<string, string>;
-  onMatchComplete: (matches: ImageMatchResult, assignments: Record<string, string>) => void;
+  onMatchComplete: (matches: ImageMatchResult, assignments: Record<string, string>) => Promise<ImageMatchResult | void> | ImageMatchResult | void;
   onAssignMedia: (productGroupId: string, media: BulkParsedMedia[], mode: "replace" | "append") => void;
   getDriveProxyUrl: (fileId: string) => string;
   onPrepareDraft?: () => Promise<void>;
@@ -381,11 +381,12 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       const result: ImageMatchResult = (res.data as any)?.imageMatches || (res.data as any);
       if (!result || !Array.isArray(result.matched)) { toast.error("Invalid image matching response from server."); return; }
       await productApi.confirmDriveAssignment(draftId, pendingAssignments);
-      onMatchComplete(result, pendingAssignments);
-      if (result.matched.length === 0 && result.missing.length > 0) {
+      const completedMatches = await onMatchComplete(result, pendingAssignments);
+      const finalResult = completedMatches || result;
+      if (finalResult.matched.length === 0 && finalResult.missing.length > 0) {
         toast.error("No image references matched. Review the filenames or select images manually.");
       } else {
-        toast.success("Matched " + result.matched.length + " image(s)." + (result.missing.length ? " " + result.missing.length + " missing." : ""));
+        toast.success("Matched and stored " + finalResult.matched.length + " image(s)." + (finalResult.missing.length ? " " + finalResult.missing.length + " unresolved." : ""));
       }
     } catch (err) { toast.error(humanError(err)); }
     finally { setMatching(false); }
@@ -547,7 +548,9 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
           const downloadResponse = await fetch(getDriveProxyUrl(driveFile.id));
           if (!downloadResponse.ok) throw new Error("Drive download failed");
           const blob = await downloadResponse.blob();
-          const file = new File([blob], driveFile.name, { type: driveFile.mimeType || blob.type || "image/jpeg" });
+          const responseType = downloadResponse.headers.get("content-type") || blob.type;
+          if (!responseType.toLowerCase().startsWith("image/")) throw new Error("Drive proxy did not return image content.");
+          const file = new File([blob], driveFile.name, { type: driveFile.mimeType || responseType || "image/jpeg" });
           const uploadResponse = await productApi.uploadBulkImageFile(file);
           const result = uploadResponse.data as any;
           if (!result?.url || !/^https:\/\//i.test(result.url)) throw new Error("Storage did not return a valid HTTPS URL.");
@@ -1620,15 +1623,84 @@ const BulkProductUploadPage: React.FC = () => {
   };
 
   const handleMatchComplete = useCallback(
-    async (matches: ImageMatchResult, assignments: Record<string, string>) => {
-      setImageMatches(matches);
+    async (matches: ImageMatchResult, assignments: Record<string, string>): Promise<ImageMatchResult> => {
+      let finalMatches = matches;
+      const uploadedByDriveId = new Map<string, { url: string; key?: string }>();
+
+      // Only download files the matcher confirmed. Never download the entire Drive folder.
+      for (const entry of matches.matched) {
+        if (uploadedByDriveId.has(entry.file.id)) continue;
+        try {
+          const response = await fetch(productApi.getDriveProxyUrl(entry.file.id));
+          if (!response.ok) throw new Error("Could not download " + entry.file.name);
+          const blob = await response.blob();
+          const contentType = response.headers.get("content-type") || blob.type;
+          if (!contentType.toLowerCase().startsWith("image/")) {
+            throw new Error("Drive proxy returned non-image content for " + entry.file.name);
+          }
+          const file = new File([blob], entry.file.name, {
+            type: entry.file.mimeType || contentType,
+          });
+          const uploaded = await productApi.uploadBulkImageFile(file);
+          const storage = uploaded.data as any;
+          if (!storage?.url || !/^https:\/\//i.test(storage.url)) {
+            throw new Error("Storage did not return a valid HTTPS URL for " + entry.file.name);
+          }
+          uploadedByDriveId.set(entry.file.id, { url: storage.url, key: storage.key });
+        } catch (error) {
+          // Failed transfers are turned back into missing references below.
+        }
+      }
+
+      if (matches.matched.length > 0) {
+        const successfulMatches = matches.matched.filter((entry) => uploadedByDriveId.has(entry.file.id));
+        const failedMatches = matches.matched
+          .filter((entry) => !uploadedByDriveId.has(entry.file.id))
+          .map((entry) => ({
+            reference: entry.reference,
+            mediaIndex: entry.mediaIndex,
+            productGroupId: entry.productGroupId,
+            variantSku: entry.variantSku,
+          }));
+        finalMatches = {
+          ...matches,
+          matched: successfulMatches,
+          missing: [...matches.missing, ...failedMatches],
+        };
+      }
+
+      setImageMatches(finalMatches);
       setConfirmedAssignments(assignments);
       if (products.length > 0) {
-        const updatedWithImages = applyDriveMatchesToProducts(
+        const matchedProducts = applyDriveMatchesToProducts(
           products,
-          matches,
+          finalMatches,
           productApi.getDriveProxyUrl,
         );
+        const toStorageMedia = (media: BulkParsedMedia): BulkParsedMedia => {
+          if (!media.key) return media;
+          const stored = uploadedByDriveId.get(media.key);
+          if (!stored || !media.url.includes("/products/bulk/drive-proxy/")) return media;
+          return { ...media, url: stored.url, thumbnailUrl: stored.url, key: stored.key };
+        };
+        const updatedWithImages = matchedProducts.map((product) => {
+          const nextMedia = (product.media ?? []).map(toStorageMedia);
+          const nextVariants = (product.variants ?? []).map((variant) => ({
+            ...variant,
+            media: variant.media?.map(toStorageMedia),
+          }));
+          const allImages: BulkParsedMedia[] = [
+            ...nextMedia.map((media) => ({ ...media, source: "product" as const })),
+            ...nextVariants.flatMap((variant) =>
+              (variant.media ?? []).map((media) => ({
+                ...media,
+                source: "variant" as const,
+                variantSku: variant.sku,
+              })),
+            ),
+          ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          return { ...product, media: nextMedia, variants: nextVariants, allImages };
+        });
         setProducts(updatedWithImages);
         const serialized = JSON.stringify(updatedWithImages, null, 2);
         setRawInput(serialized);
@@ -1641,10 +1713,11 @@ const BulkProductUploadPage: React.FC = () => {
               confirmedAssignments: assignments,
             });
           } catch {
-            // background
+            // Keep the page state; the user can save the draft explicitly.
           }
         }
       }
+      return finalMatches;
     },
     [products, draftId],
   );
