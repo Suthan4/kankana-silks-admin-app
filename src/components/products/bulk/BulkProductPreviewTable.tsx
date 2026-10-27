@@ -31,6 +31,7 @@ import type {
   BulkParsedProduct,
   BulkParsedVariant,
   BulkParsedMedia,
+  ImageMatchResult,
   BulkValidationError,
   BulkValidationSummary,
   BulkCategoryLookup,
@@ -73,6 +74,54 @@ function getStorefrontPreviewMedia(
   return [];
 }
 
+function getMatchedStorefrontPreviewMedia(
+  product: BulkParsedProduct,
+  matches: ImageMatchResult | null | undefined,
+  selectedVariantSku: string | null | undefined,
+  getDriveProxyUrl?: (fileId: string) => string,
+  getDriveThumbnailUrl?: (fileId: string) => string,
+): BulkParsedMedia[] {
+  if (!matches?.matched?.length || !product.productGroupId) return [];
+
+  const desiredSku = selectedVariantSku?.toLocaleLowerCase("en-US").trim() || "";
+  const groupMatches = matches.matched
+    .filter((entry) => {
+      if (entry.productGroupId !== product.productGroupId) return false;
+      const matchSku = entry.variantSku?.toLocaleLowerCase("en-US").trim() || "";
+      return desiredSku ? matchSku === desiredSku : !matchSku;
+    })
+    .sort((a, b) => a.mediaIndex - b.mediaIndex);
+
+  if (!groupMatches.length) return [];
+
+  return groupMatches.map((entry, index) => {
+    const fileId = entry.file.id;
+    const originalUrl =
+      getDriveProxyUrl?.(fileId) ||
+      entry.file.previewUrl ||
+      entry.file.webContentLink ||
+      "";
+    const thumbnailUrl =
+      getDriveThumbnailUrl?.(fileId) ||
+      entry.file.thumbnailLink ||
+      originalUrl;
+
+    return {
+      type: "IMAGE" as const,
+      url: originalUrl,
+      thumbnailUrl,
+      key: fileId,
+      altText: entry.file.name,
+      title: entry.file.name,
+      order: index,
+      isActive: true,
+      source: entry.variantSku ? ("variant" as const) : ("product" as const),
+      variantSku: entry.variantSku,
+      productGroupId: product.productGroupId,
+    };
+  }).filter((media) => Boolean(media.url));
+}
+
 interface BulkProductPreviewTableProps {
   products: BulkParsedProduct[];
   summary?: BulkValidationSummary;
@@ -89,6 +138,7 @@ interface BulkProductPreviewTableProps {
   onBulkUpdateProducts?: (updatedProducts: BulkParsedProduct[]) => void;
   getDriveProxyUrl?: (fileId: string) => string;
   getDriveThumbnailUrl?: (fileId: string) => string;
+  imageMatches?: ImageMatchResult | null;
 }
 
 export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = ({
@@ -107,6 +157,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   onBulkUpdateProducts,
   getDriveProxyUrl,
   getDriveThumbnailUrl,
+  imageMatches,
 }) => {
   const [internalFilterStatus, setInternalFilterStatus] = useState<"all" | "valid" | "error" | "warning">("all");
   const filterStatus = externalFilterStatus ?? internalFilterStatus;
@@ -1475,7 +1526,16 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
         const selectedPreviewVariant = previewProduct.variants?.find(
           (variant) => variant.sku === storefrontSelectedVariantSku,
         );
-        const previewImages = getStorefrontPreviewMedia(previewProduct, storefrontSelectedVariantSku);
+        const matchedPreviewImages = getMatchedStorefrontPreviewMedia(
+          previewProduct,
+          imageMatches,
+          storefrontSelectedVariantSku,
+          getDriveProxyUrl,
+          getDriveThumbnailUrl,
+        );
+        const previewImages = matchedPreviewImages.length
+          ? matchedPreviewImages
+          : getStorefrontPreviewMedia(previewProduct, storefrontSelectedVariantSku);
         const activeIndex = Math.min(storefrontPreviewImageIndex, Math.max(0, previewImages.length - 1));
         const activeImage = previewImages[activeIndex];
         const currentImageUrl = activeImage?.url || "";
