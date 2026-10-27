@@ -38,8 +38,8 @@ export function extractDriveFileId(input?: string): string | null {
 export function resolveImageUrl(
   url?: string,
   thumbnailUrl?: string,
-  getDriveProxyUrl?: (fileId: string) => string,
-  getDriveThumbnailUrl?: (fileId: string) => string
+  getDriveProxyUrl?: (fileId: string) => string | undefined,
+  getDriveThumbnailUrl?: (fileId: string) => string | undefined
 ): string | undefined {
   // A matched Drive proxy URL points to the original. Use the separate
   // thumbnail endpoint for the grid to avoid loading 40+ MB originals.
