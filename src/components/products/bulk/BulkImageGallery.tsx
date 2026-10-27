@@ -73,7 +73,7 @@ export const BulkImageGallery: React.FC<BulkImageGalleryProps> = ({
   const [newUrl, setNewUrl] = useState("");
 
   const thumbFor = (m: BulkParsedMedia): string | undefined => {
-    return resolveImageUrl(m.url, m.thumbnailUrl, getThumbnailUrl);
+    return resolveImageUrl(m.url, m.thumbnailUrl, getThumbnailUrl, getThumbnailUrl);
   };
 
   return (
@@ -123,8 +123,13 @@ export const BulkImageGallery: React.FC<BulkImageGalleryProps> = ({
                   <img
                     src={thumb}
                     alt={m.altText || "product image"}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    onError={(e) => {
+                      // Do not fetch a full-size original automatically just to fill a thumbnail.
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 ) : (
                   <ImageIcon className="h-8 w-8 text-slate-300" />
@@ -153,7 +158,10 @@ export const BulkImageGallery: React.FC<BulkImageGalleryProps> = ({
                 {thumb && (
                   <button
                     type="button"
-                    onClick={() => setPreviewUrl(thumb)}
+                    onClick={() => {
+                      const fullUrl = /^(https?:\/\/|\/)/i.test(m.url || "") ? m.url : thumb;
+                      setPreviewUrl(fullUrl || thumb);
+                    }}
                     className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20 transition"
                   >
                     <Eye className="h-5 w-5 text-white" />

@@ -453,10 +453,52 @@ export const productApi = {
     });
   },
 
+  /**
+   * Upload one selected image through the existing backend S3 upload endpoint.
+   * The API returns the canonical storage URL and key; never persist a blob URL.
+   */
+  uploadBulkImageFile: async (file: File): Promise<ApiResponse<{
+    success: boolean;
+    url: string;
+    key: string;
+  }>> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", "products");
+
+    // The existing /upload controller returns { success, url, key } at the
+    // top level instead of the standard { success, data } response envelope.
+    const response = await apiClient.post<{
+      success: boolean;
+      url: string;
+      key: string;
+    }>("/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return {
+      success: response.data.success,
+      data: {
+        success: response.data.success,
+        url: response.data.url,
+        key: response.data.key,
+      },
+    };
+  },
+
   getDriveProxyUrl: (fileId: string): string => {
     const token = localStorage.getItem("accessToken");
     const base = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
     return `${base}/products/bulk/drive-proxy/${fileId}?token=${token}`;
+  },
+
+  /**
+   * Lightweight thumbnail endpoint for product-grid previews.
+   * Never use the full Drive proxy as the source for a thumbnail grid.
+   */
+  getDriveThumbnailUrl: (fileId: string): string => {
+    const token = localStorage.getItem("accessToken");
+    const base = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+    return `${base}/products/bulk/drive-thumbnail/${encodeURIComponent(fileId)}?token=${encodeURIComponent(token || "")}`;
   },
 
   // ==========================================
