@@ -1110,7 +1110,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         {variantMedia.length > 0 ? (
                                           <div className="flex items-center gap-1.5 flex-wrap">
                                             {variantMedia.slice(0, 2).map((vm, vi) => {
-                                              const vmSrc = resolveImageUrl(vm.url, vm.thumbnailUrl, getDriveProxyUrl);
+                                              const vmSrc = resolveImageUrl(vm.url, vm.thumbnailUrl, getDriveProxyUrl, getDriveThumbnailUrl);
                                               return vmSrc ? (
                                                 <img
                                                   key={vi}
