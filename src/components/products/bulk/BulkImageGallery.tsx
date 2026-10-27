@@ -126,7 +126,22 @@ export const BulkImageGallery: React.FC<BulkImageGalleryProps> = ({
                     loading="lazy"
                     decoding="async"
                     className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      const storageUrl = /(?:cloudfront\.net|amazonaws\.com|localhost:4566)/i.test(m.url || "");
+                      const isDriveThumbnail = (m.thumbnailUrl || "").includes("/products/bulk/drive-thumbnail/");
+                      if (
+                        storageUrl &&
+                        isDriveThumbnail &&
+                        !target.dataset.storageFallback &&
+                        !m.url.includes("/products/bulk/drive-proxy/")
+                      ) {
+                        target.dataset.storageFallback = "true";
+                        target.src = m.url;
+                        return;
+                      }
+                      target.style.display = "none";
+                    }}
                   />
                 ) : (
                   <ImageIcon className="h-8 w-8 text-slate-300" />
