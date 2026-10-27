@@ -491,6 +491,16 @@ export const productApi = {
     return `${base}/products/bulk/drive-proxy/${fileId}?token=${token}`;
   },
 
+  /**
+   * Lightweight thumbnail endpoint for product-grid previews.
+   * Never use the full Drive proxy as the source for a thumbnail grid.
+   */
+  getDriveThumbnailUrl: (fileId: string): string => {
+    const token = localStorage.getItem("accessToken");
+    const base = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+    return `${base}/products/bulk/drive-thumbnail/${encodeURIComponent(fileId)}?token=${encodeURIComponent(token || "")}`;
+  },
+
   // ==========================================
   // BACKGROUND IMPORT JOB ENDPOINTS
   // ==========================================
