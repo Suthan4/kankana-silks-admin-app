@@ -2415,43 +2415,71 @@ const BulkProductUploadPage: React.FC = () => {
         (id) => !importedDriveImagesRef.current.has(id),
       );
 
-      for (let index = 0; index < idsToUpload.length; index += 1) {
-        const fileId = idsToUpload[index];
-        const entry = matchesById.get(fileId);
-        const fileName = entry?.file.name || fileId;
+      let completedUploads = 0;
+      const failedUploads: string[] = [];
+      let nextUploadIndex = 0;
+      const workerCount = Math.min(3, idsToUpload.length);
 
-        toast.loading(
-          `Uploading product images for import: ${index + 1}/${idsToUpload.length} — ${fileName}`,
-          { id: tid },
+      const uploadNextDriveImage = async (): Promise<void> => {
+        while (true) {
+          const index = nextUploadIndex;
+          nextUploadIndex += 1;
+          if (index >= idsToUpload.length) return;
+
+          const fileId = idsToUpload[index];
+          const entry = matchesById.get(fileId);
+          const fileName = entry?.file.name || fileId;
+
+          try {
+            const response = await fetch(productApi.getDriveProxyUrl(fileId));
+            if (!response.ok) {
+              throw new Error("Could not download " + fileName + " from Google Drive (HTTP " + response.status + ").");
+            }
+
+            const blob = await response.blob();
+            const contentType = response.headers.get("content-type") || blob.type;
+            if (!contentType.toLowerCase().startsWith("image/")) {
+              throw new Error("Google Drive did not return image content for " + fileName + ".");
+            }
+
+            const file = new File([blob], fileName, {
+              type: entry?.file.mimeType || contentType || "image/jpeg",
+            });
+            const uploaded = await productApi.uploadBulkImageFile(file);
+            const storage = uploaded.data as any;
+            if (!storage?.url || !/^https:\/\//i.test(storage.url)) {
+              throw new Error("Storage did not return a valid HTTPS URL for " + fileName + ".");
+            }
+
+            importedDriveImagesRef.current.set(fileId, {
+              url: storage.url,
+              key: storage.key,
+            });
+          } catch (error) {
+            failedUploads.push(fileName + ": " + humanError(error));
+          } finally {
+            completedUploads += 1;
+            toast.loading(
+              "Preparing product images: " + completedUploads + "/" + idsToUpload.length +
+                (failedUploads.length ? " (" + failedUploads.length + " failed)" : ""),
+              { id: tid },
+            );
+          }
+        }
+      };
+
+      if (idsToUpload.length > 0) {
+        toast.loading("Uploading " + idsToUpload.length + " matched image(s) to storage…", { id: tid });
+        await Promise.all(
+          Array.from({ length: workerCount }, () => uploadNextDriveImage()),
         );
+      }
 
-        const response = await fetch(productApi.getDriveProxyUrl(fileId));
-        if (!response.ok) {
-          throw new Error(`Could not download ${fileName} from Google Drive (HTTP ${response.status}).`);
-        }
-
-        const blob = await response.blob();
-        const contentType = response.headers.get("content-type") || blob.type;
-        if (!contentType.toLowerCase().startsWith("image/")) {
-          throw new Error(`Google Drive did not return image content for ${fileName}.`);
-        }
-
-        const file = new File([blob], fileName, {
-          type: entry?.file.mimeType || contentType || "image/jpeg",
-        });
-
-        const uploaded = await productApi.uploadBulkImageFile(file);
-        const storage = uploaded.data as any;
-        if (!storage?.url || !/^https:\/\//i.test(storage.url)) {
-          throw new Error(`Storage did not return a valid HTTPS URL for ${fileName}.`);
-        }
-
-        // Keep successful uploads cached so the user can safely retry after a
-        // later file fails without re-uploading the files already completed.
-        importedDriveImagesRef.current.set(fileId, {
-          url: storage.url,
-          key: storage.key,
-        });
+      if (failedUploads.length > 0) {
+        throw new Error(
+          failedUploads.length + " image(s) could not be uploaded. Successful uploads are cached for retry. " +
+            failedUploads.slice(0, 3).join("; "),
+        );
       }
 
       const updateMedia = (media: BulkParsedMedia): BulkParsedMedia => {
