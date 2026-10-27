@@ -50,8 +50,9 @@ function getStorefrontPreviewMedia(
   product: BulkParsedProduct,
   selectedVariantSku?: string | null,
 ): BulkParsedMedia[] {
+  const selectedSku = (selectedVariantSku || "").trim().toLocaleLowerCase("en-US");
   const selectedVariant = product.variants?.find(
-    (variant) => variant.sku === selectedVariantSku,
+    (variant) => (variant.sku || "").trim().toLocaleLowerCase("en-US") === selectedSku,
   );
   const selectedVariantImages = (selectedVariant?.media ?? []).filter(
     (media) => media.type === "IMAGE",
@@ -62,8 +63,25 @@ function getStorefrontPreviewMedia(
     );
   }
 
+  // Some parser formats store variant media in products[].media with
+  // variantSku/source="variant", instead of nesting it under the variant.
+  const embeddedVariantImages = selectedSku
+    ? (product.media ?? []).filter((media) =>
+        media.type === "IMAGE" &&
+        (
+          (media.variantSku || "").trim().toLocaleLowerCase("en-US") === selectedSku ||
+          (media.source === "variant" && !media.variantSku)
+        ),
+      )
+    : [];
+  if (embeddedVariantImages.length) {
+    return [...embeddedVariantImages].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0),
+    );
+  }
+
   const productImages = (product.media ?? []).filter(
-    (media) => media.type === "IMAGE",
+    (media) => media.type === "IMAGE" && !media.variantSku && media.source !== "variant",
   );
   if (productImages.length) {
     return [...productImages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -71,7 +89,13 @@ function getStorefrontPreviewMedia(
 
   // Fallback for imports where media is only present in the unified image list.
   if (product.allImages?.length) {
-    const images = product.allImages.filter((media) => media.type === "IMAGE");
+    const images = product.allImages.filter((media) =>
+      media.type === "IMAGE" &&
+      (selectedSku
+        ? (media.variantSku || "").trim().toLocaleLowerCase("en-US") === selectedSku ||
+          (media.source === "product" && !media.variantSku)
+        : !media.variantSku && media.source !== "variant"),
+    );
     return [...images].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
 
