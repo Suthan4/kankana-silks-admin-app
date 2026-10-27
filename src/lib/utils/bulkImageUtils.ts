@@ -199,7 +199,7 @@ export function applyDriveMatchesToProducts(
       const currentUrl = media.url?.trim() || "";
       const alreadyStoredUrl =
         /^https?:\/\//i.test(currentUrl) &&
-        !/drive\.google\.com|docs\.google\.com|\/products\/bulk\/drive-proxy\//i.test(currentUrl);
+        !/drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\//i.test(currentUrl);
       // Keep permanent HTTPS product-image URLs when a draft is rematched or retried.
       if (alreadyStoredUrl) return media;
       const normalizedRef = normalizeMediaReference(media.url);
