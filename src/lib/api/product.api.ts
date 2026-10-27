@@ -391,6 +391,7 @@ export const productApi = {
       rawInput?: string;
       confirmedAssignments?: Record<string, string>;
       parsedData?: any;
+      imageMatches?: ImageMatchResult | null;
       status?: string;
     }
   ): Promise<ApiResponse<BulkImportDraft>> => {
