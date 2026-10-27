@@ -61,6 +61,8 @@ import {
 import {
   applyDriveMatchesToProducts,
   filterImageMatchesToProductMedia,
+  sanitizeProductsForStorage,
+  sanitizeBulkRawInput,
 } from "@/lib/utils/bulkImageUtils";
 import type {
   BulkImportDraft,
@@ -2243,9 +2245,10 @@ const BulkProductUploadPage: React.FC = () => {
   }, [searchParams, loadDraft, syncDraftUrl]);
 
   const handleSaveDraft = async () => {
+    const safeProducts = sanitizeProductsForStorage(products);
     const serializedProducts =
-      products.length > 0 ? JSON.stringify(products, null, 2) : "";
-    const effectiveInput = serializedProducts || rawInput.trim();
+      products.length > 0 ? JSON.stringify(safeProducts, null, 2) : "";
+    const effectiveInput = serializedProducts || sanitizeBulkRawInput(rawInput).trim();
     if (!effectiveInput && products.length === 0) {
       toast.error("Nothing to save — enter product data first.");
       return;
@@ -2259,7 +2262,7 @@ const BulkProductUploadPage: React.FC = () => {
         );
         const res = await productApi.updateDraft(draftId, {
           rawInput: effectiveInput,
-          parsedData: products.length > 0 ? products : undefined,
+          parsedData: products.length > 0 ? safeProducts : undefined,
           confirmedAssignments,
           imageMatches: currentImageMatches,
         });
@@ -2281,8 +2284,9 @@ const BulkProductUploadPage: React.FC = () => {
           setRawInput(effectiveInput);
           if (products.length > 0) {
             await productApi.updateDraft(res.data.id, {
-              parsedData: products,
+              parsedData: safeProducts,
               confirmedAssignments,
+              imageMatches: filterImageMatchesToProductMedia(imageMatches, safeProducts),
             });
           }
           localStorage.setItem("active_bulk_draft_id", res.data.id);
@@ -2488,18 +2492,20 @@ const BulkProductUploadPage: React.FC = () => {
             productApi.getDriveThumbnailUrl,
           )
         : products;
+      const safeProductsForImport = sanitizeProductsForStorage(productsForImport);
       const importImageMatches = filterImageMatchesToProductMedia(
         retainedMatches,
-        productsForImport,
+        safeProductsForImport,
       );
 
-      const serialized = JSON.stringify(productsForImport, null, 2);
+      const serialized = JSON.stringify(safeProductsForImport, null, 2);
       await productApi.updateDraft(draftId, {
         rawInput: serialized,
-        parsedData: productsForImport,
+        parsedData: safeProductsForImport,
         confirmedAssignments,
         imageMatches: importImageMatches,
       });
+      // Keep signed proxy URLs only in memory for rendering; never persist them.
       setProducts(productsForImport);
       setRawInput(serialized);
       setImageMatches(importImageMatches);
@@ -2546,11 +2552,12 @@ const BulkProductUploadPage: React.FC = () => {
       // reappear from a stale draft snapshot.
       setIsImporting(true);
       try {
-        const retainedMatches = filterImageMatchesToProductMedia(imageMatches, products);
-        const serialized = JSON.stringify(products, null, 2);
+        const safeProducts = sanitizeProductsForStorage(products);
+        const retainedMatches = filterImageMatchesToProductMedia(imageMatches, safeProducts);
+        const serialized = JSON.stringify(safeProducts, null, 2);
         await productApi.updateDraft(draftId, {
           rawInput: serialized,
-          parsedData: products,
+          parsedData: safeProducts,
           confirmedAssignments,
           imageMatches: retainedMatches,
         });
@@ -2662,7 +2669,7 @@ const BulkProductUploadPage: React.FC = () => {
         return { ...product, media: nextMedia, allImages: nextAllImages };
       });
       setProducts(updatedProducts);
-      setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setRawInput(JSON.stringify(sanitizeProductsForStorage(updatedProducts), null, 2));
       setImageMatches((current) =>
         filterImageMatchesToProductMedia(current, updatedProducts),
       );
@@ -2684,7 +2691,7 @@ const BulkProductUploadPage: React.FC = () => {
       p.productGroupId === updated.productGroupId ? updated : p,
     );
     setProducts(nextProducts);
-    setRawInput(JSON.stringify(nextProducts, null, 2));
+    setRawInput(JSON.stringify(sanitizeProductsForStorage(nextProducts), null, 2));
 
     // Remove stale match entries as soon as an admin deletes media. The saved
     // draft and subsequent background job must use this filtered set.
@@ -2703,7 +2710,7 @@ const BulkProductUploadPage: React.FC = () => {
   const handleDeleteProduct = useCallback((productGroupId: string) => {
     const nextProducts = products.filter((p) => p.productGroupId !== productGroupId);
     setProducts(nextProducts);
-    setRawInput(JSON.stringify(nextProducts, null, 2));
+    setRawInput(JSON.stringify(sanitizeProductsForStorage(nextProducts), null, 2));
     setImageMatches((current) =>
       filterImageMatchesToProductMedia(current, nextProducts),
     );
@@ -2716,7 +2723,7 @@ const BulkProductUploadPage: React.FC = () => {
   const handleBulkUpdateProducts = useCallback(
     (updatedProducts: BulkParsedProduct[]) => {
       setProducts(updatedProducts);
-      setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setRawInput(JSON.stringify(sanitizeProductsForStorage(updatedProducts), null, 2));
       setImageMatches((current) =>
         filterImageMatchesToProductMedia(current, updatedProducts),
       );
@@ -2745,7 +2752,7 @@ const BulkProductUploadPage: React.FC = () => {
       };
       setProducts((prev) => {
         const next = [...prev, withErrors];
-        setRawInput(JSON.stringify(next, null, 2));
+        setRawInput(JSON.stringify(sanitizeProductsForStorage(next), null, 2));
         return next;
       });
       setValidationErrors((prev) => [...prev, ...valErrors]);
@@ -3070,10 +3077,12 @@ const BulkProductUploadPage: React.FC = () => {
                 getDriveThumbnailUrl={productApi.getDriveThumbnailUrl}
                 onPrepareDraft={async () => {
                   if (draftId && products.length > 0) {
+                    const safeProducts = sanitizeProductsForStorage(products);
                     await productApi.updateDraft(draftId, {
-                      rawInput: JSON.stringify(products, null, 2),
-                      parsedData: products,
+                      rawInput: JSON.stringify(safeProducts, null, 2),
+                      parsedData: safeProducts,
                       confirmedAssignments,
+                      imageMatches: filterImageMatchesToProductMedia(imageMatches, safeProducts),
                     });
                   }
                 }}
