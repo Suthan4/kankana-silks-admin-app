@@ -2636,6 +2636,9 @@ const BulkProductUploadPage: React.FC = () => {
       });
       setProducts(updatedProducts);
       setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setImageMatches((current) =>
+        filterImageMatchesToProductMedia(current, updatedProducts),
+      );
       setValidationErrors(
         updatedProducts.flatMap((product) => product.errors || []),
       );
@@ -2671,16 +2674,17 @@ const BulkProductUploadPage: React.FC = () => {
   }, [products]);
 
   const handleDeleteProduct = useCallback((productGroupId: string) => {
-    setProducts((prev) => {
-      const next = prev.filter((p) => p.productGroupId !== productGroupId);
-      setRawInput(JSON.stringify(next, null, 2));
-      return next;
-    });
+    const nextProducts = products.filter((p) => p.productGroupId !== productGroupId);
+    setProducts(nextProducts);
+    setRawInput(JSON.stringify(nextProducts, null, 2));
+    setImageMatches((current) =>
+      filterImageMatchesToProductMedia(current, nextProducts),
+    );
     setValidationErrors((prev) =>
       prev.filter((e) => e.productGroupId !== productGroupId),
     );
     setIsDirty(true);
-  }, []);
+  }, [products]);
 
   const handleBulkUpdateProducts = useCallback(
     (updatedProducts: BulkParsedProduct[]) => {
