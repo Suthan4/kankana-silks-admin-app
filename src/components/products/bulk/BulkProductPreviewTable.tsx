@@ -54,7 +54,9 @@ function getStorefrontPreviewMedia(
     (media) => media.type === "IMAGE",
   );
   if (selectedVariantImages.length) {
-    return [...selectedVariantImages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return [...selectedVariantImages].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0),
+    );
   }
 
   const productImages = (product.media ?? []).filter(
@@ -91,7 +93,9 @@ interface BulkProductPreviewTableProps {
   getDriveThumbnailUrl?: (fileId: string) => string;
 }
 
-export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = ({
+export const BulkProductPreviewTable: React.FC<
+  BulkProductPreviewTableProps
+> = ({
   products,
   summary,
   errors,
@@ -108,7 +112,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   getDriveProxyUrl,
   getDriveThumbnailUrl,
 }) => {
-  const [internalFilterStatus, setInternalFilterStatus] = useState<"all" | "valid" | "error" | "warning">("all");
+  const [internalFilterStatus, setInternalFilterStatus] = useState<
+    "all" | "valid" | "error" | "warning"
+  >("all");
   const filterStatus = externalFilterStatus ?? internalFilterStatus;
   const setFilterStatus = (s: "all" | "valid" | "error" | "warning") => {
     setInternalFilterStatus(s);
@@ -118,19 +124,29 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Editing state for inline edits
-  const [viewingJsonProduct, setViewingJsonProduct] = useState<BulkParsedProduct | null>(null);
+  const [viewingJsonProduct, setViewingJsonProduct] =
+    useState<BulkParsedProduct | null>(null);
   const [imageGallery, setImageGallery] = useState<{
     product: BulkParsedProduct;
     images: BulkParsedMedia[];
     index: number;
   } | null>(null);
-  const [failedDetailImageUrl, setFailedDetailImageUrl] = useState<string | null>(null);
-  const [storefrontPreviewProduct, setStorefrontPreviewProduct] = useState<BulkParsedProduct | null>(null);
-  const [storefrontSelectedVariantSku, setStorefrontSelectedVariantSku] = useState<string | null>(null);
-  const [storefrontPreviewImageIndex, setStorefrontPreviewImageIndex] = useState(0);
-  const [failedStorefrontImageUrl, setFailedStorefrontImageUrl] = useState<string | null>(null);
+  const [failedDetailImageUrl, setFailedDetailImageUrl] = useState<
+    string | null
+  >(null);
+  const [storefrontPreviewProduct, setStorefrontPreviewProduct] =
+    useState<BulkParsedProduct | null>(null);
+  const [storefrontSelectedVariantSku, setStorefrontSelectedVariantSku] =
+    useState<string | null>(null);
+  const [storefrontPreviewImageIndex, setStorefrontPreviewImageIndex] =
+    useState(0);
+  const [failedStorefrontImageUrl, setFailedStorefrontImageUrl] = useState<
+    string | null
+  >(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(null);
+  const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(
+    null,
+  );
 
   const toggleExpand = (groupId: string) => {
     setExpandedGroups((prev) => {
@@ -156,8 +172,10 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       // Status filter
-      const hasErrors = p.errors && p.errors.some((e) => e.severity === "error");
-      const hasWarnings = p.errors && p.errors.some((e) => e.severity === "warning");
+      const hasErrors =
+        p.errors && p.errors.some((e) => e.severity === "error");
+      const hasWarnings =
+        p.errors && p.errors.some((e) => e.severity === "warning");
       const isValid = p.isValid !== false && !hasErrors;
 
       if (filterStatus === "valid" && !isValid) return false;
@@ -171,9 +189,17 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
         const matchesSku = p.sku?.toLowerCase().includes(query);
         const matchesGroup = p.productGroupId.toLowerCase().includes(query);
         const matchesCat = p.categoryPath.toLowerCase().includes(query);
-        const matchesVariantSku = p.variants?.some((v) => v.sku?.toLowerCase().includes(query));
+        const matchesVariantSku = p.variants?.some((v) =>
+          v.sku?.toLowerCase().includes(query),
+        );
 
-        if (!matchesName && !matchesSku && !matchesGroup && !matchesCat && !matchesVariantSku) {
+        if (
+          !matchesName &&
+          !matchesSku &&
+          !matchesGroup &&
+          !matchesCat &&
+          !matchesVariantSku
+        ) {
           return false;
         }
       }
@@ -192,7 +218,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
       const resolvedCat = resolveCategory(
         editFormData.categoryPath,
         editFormData.categoryId,
-        flatCategories
+        flatCategories,
       );
       const updatedProduct: BulkParsedProduct = {
         ...editFormData,
@@ -248,7 +274,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   const handleBulkApplyCategory = (
     categoryId: string,
     categoryPath: string,
-    onlyUnassigned: boolean
+    onlyUnassigned: boolean,
   ) => {
     const selectedCat = flatCategories?.find((c) => c.id === categoryId);
     const updated = products.map((p) => {
@@ -282,7 +308,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   const handleBulkDelete = () => {
     if (
       !window.confirm(
-        `Are you sure you want to delete ${selectedIds.size} selected product(s)?`
+        `Are you sure you want to delete ${selectedIds.size} selected product(s)?`,
       )
     ) {
       return;
@@ -318,7 +344,10 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
             }`}
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
-            Valid ({summary?.validProducts ?? products.filter((p) => p.isValid !== false).length})
+            Valid (
+            {summary?.validProducts ??
+              products.filter((p) => p.isValid !== false).length}
+            )
           </button>
           <button
             type="button"
@@ -330,7 +359,12 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
             }`}
           >
             <XCircle className="h-3.5 w-3.5" />
-            With Errors ({summary?.invalidProducts ?? products.filter((p) => p.errors?.some((e) => e.severity === "error")).length})
+            With Errors (
+            {summary?.invalidProducts ??
+              products.filter((p) =>
+                p.errors?.some((e) => e.severity === "error"),
+              ).length}
+            )
           </button>
           {errors.some((e) => e.severity === "warning") && (
             <button
@@ -456,7 +490,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
       {filteredProducts.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500">
           <Box className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-          <p className="text-base font-semibold text-slate-700">No products match current filter</p>
+          <p className="text-base font-semibold text-slate-700">
+            No products match current filter
+          </p>
           <p className="text-xs text-slate-400 mt-1">
             {searchQuery
               ? `No results for "${searchQuery}". Clear your search query to see all products.`
@@ -467,14 +503,21 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
         <div className="space-y-3">
           {filteredProducts.map((product) => {
             const isExpanded = expandedGroups.has(product.productGroupId);
-            const productErrors = product.errors?.filter((e) => e.severity === "error") || [];
-            const productWarnings = product.errors?.filter((e) => e.severity === "warning") || [];
-            const isRowValid = productErrors.length === 0 && product.isValid !== false;
+            const productErrors =
+              product.errors?.filter((e) => e.severity === "error") || [];
+            const productWarnings =
+              product.errors?.filter((e) => e.severity === "warning") || [];
+            const isRowValid =
+              productErrors.length === 0 && product.isValid !== false;
             const isEditing = editingGroupId === product.productGroupId;
 
             const discount =
               product.basePrice > 0
-                ? Math.round(((product.basePrice - product.sellingPrice) / product.basePrice) * 100)
+                ? Math.round(
+                    ((product.basePrice - product.sellingPrice) /
+                      product.basePrice) *
+                      100,
+                  )
                 : 0;
 
             return (
@@ -484,8 +527,8 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                   !isRowValid
                     ? "border-rose-300 bg-rose-50/20"
                     : productWarnings.length > 0
-                    ? "border-amber-300 bg-amber-50/10"
-                    : "border-slate-200 hover:border-slate-300"
+                      ? "border-amber-300 bg-amber-50/10"
+                      : "border-slate-200 hover:border-slate-300"
                 }`}
               >
                 {/* Product Summary Row */}
@@ -501,7 +544,11 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         toggleSelectOne(product.productGroupId);
                       }}
                       className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition"
-                      title={selectedIds.has(product.productGroupId) ? "Deselect" : "Select"}
+                      title={
+                        selectedIds.has(product.productGroupId)
+                          ? "Deselect"
+                          : "Select"
+                      }
                     >
                       {selectedIds.has(product.productGroupId) ? (
                         <div className="w-4 h-4 rounded bg-indigo-600 text-white flex items-center justify-center shadow-2xs">
@@ -581,14 +628,24 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         {product.categoryPath ? (
                           <div className="inline-flex items-center gap-1 flex-wrap bg-slate-50 border border-slate-200 px-2 py-0.5 rounded text-[11px]">
                             <Tag className="h-3 w-3 text-indigo-500 shrink-0" />
-                            {product.categoryPath.split(/[>→]/).map((seg, i, arr) => (
-                              <React.Fragment key={i}>
-                                {i > 0 && <ChevronRight className="h-3 w-3 text-slate-400 shrink-0" />}
-                                <span className={i === arr.length - 1 ? "font-semibold text-indigo-900" : "text-slate-600"}>
-                                  {seg.trim()}
-                                </span>
-                              </React.Fragment>
-                            ))}
+                            {product.categoryPath
+                              .split(/[>→]/)
+                              .map((seg, i, arr) => (
+                                <React.Fragment key={i}>
+                                  {i > 0 && (
+                                    <ChevronRight className="h-3 w-3 text-slate-400 shrink-0" />
+                                  )}
+                                  <span
+                                    className={
+                                      i === arr.length - 1
+                                        ? "font-semibold text-indigo-900"
+                                        : "text-slate-600"
+                                    }
+                                  >
+                                    {seg.trim()}
+                                  </span>
+                                </React.Fragment>
+                              ))}
                           </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-medium">
@@ -602,17 +659,22 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                           </span>
                         )}
                         {product.artisanName && (
-                          <span className="text-slate-400 text-[11px]">· Artisan: {product.artisanName}</span>
-                        )}
-                        {product.specifications && product.specifications.length > 0 && (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-cyan-700 bg-cyan-50 border border-cyan-200 px-2 py-0.5 rounded font-medium">
-                            {product.specifications.length} Specs
+                          <span className="text-slate-400 text-[11px]">
+                            · Artisan: {product.artisanName}
                           </span>
                         )}
-                        {((product.allImages?.length || 0) > 0 || (product.media?.length || 0) > 0) && (
+                        {product.specifications &&
+                          product.specifications.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-cyan-700 bg-cyan-50 border border-cyan-200 px-2 py-0.5 rounded font-medium">
+                              {product.specifications.length} Specs
+                            </span>
+                          )}
+                        {((product.allImages?.length || 0) > 0 ||
+                          (product.media?.length || 0) > 0) && (
                           <span className="inline-flex items-center gap-1 text-[11px] text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-medium">
                             <ImageIcon className="h-3 w-3 text-slate-500 shrink-0" />
-                            {product.allImages?.length ?? product.media?.length} Photos
+                            {product.allImages?.length ?? product.media?.length}{" "}
+                            Photos
                           </span>
                         )}
                       </div>
@@ -642,19 +704,26 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                           </span>
                         ) : (
                           <span>
-                            Stock: <strong>{product.stock?.quantity ?? 0}</strong> ({product.stock?.warehouseCode || "Default"})
+                            Stock:{" "}
+                            <strong>{product.stock?.quantity ?? 0}</strong> (
+                            {product.stock?.warehouseCode || "Default"})
                           </span>
                         )}
                       </p>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div
+                      className="flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         type="button"
                         onClick={() => {
                           setStorefrontPreviewProduct(product);
-                          setStorefrontSelectedVariantSku(product.variants?.[0]?.sku || null);
+                          setStorefrontSelectedVariantSku(
+                            product.variants?.[0]?.sku || null,
+                          );
                           setStorefrontPreviewImageIndex(0);
                           setFailedStorefrontImageUrl(null);
                         }}
@@ -663,7 +732,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100"
                       >
                         <Eye className="h-4 w-4" />
-                        <span className="hidden sm:inline">Preview as customer</span>
+                        <span className="hidden sm:inline">
+                          Preview as customer
+                        </span>
                       </button>
                       <button
                         type="button"
@@ -707,29 +778,41 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                     </h5>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                       <div>
-                        <label className="block text-slate-600 font-medium mb-1">Product Name</label>
+                        <label className="block text-slate-600 font-medium mb-1">
+                          Product Name
+                        </label>
                         <input
                           type="text"
                           value={editFormData.name}
                           onChange={(e) =>
-                            setEditFormData({ ...editFormData, name: e.target.value })
+                            setEditFormData({
+                              ...editFormData,
+                              name: e.target.value,
+                            })
                           }
                           className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-600 font-medium mb-1">Category Full Path</label>
+                        <label className="block text-slate-600 font-medium mb-1">
+                          Category Full Path
+                        </label>
                         <input
                           type="text"
                           value={editFormData.categoryPath}
                           onChange={(e) =>
-                            setEditFormData({ ...editFormData, categoryPath: e.target.value })
+                            setEditFormData({
+                              ...editFormData,
+                              categoryPath: e.target.value,
+                            })
                           }
                           className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-600 font-medium mb-1">Base Price (MRP)</label>
+                        <label className="block text-slate-600 font-medium mb-1">
+                          Base Price (MRP)
+                        </label>
                         <input
                           type="number"
                           value={editFormData.basePrice}
@@ -743,7 +826,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-600 font-medium mb-1">Selling Price</label>
+                        <label className="block text-slate-600 font-medium mb-1">
+                          Selling Price
+                        </label>
                         <input
                           type="number"
                           value={editFormData.sellingPrice}
@@ -757,19 +842,26 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-600 font-medium mb-1">Parent SKU</label>
+                        <label className="block text-slate-600 font-medium mb-1">
+                          Parent SKU
+                        </label>
                         <input
                           type="text"
                           value={editFormData.sku || ""}
                           onChange={(e) =>
-                            setEditFormData({ ...editFormData, sku: e.target.value })
+                            setEditFormData({
+                              ...editFormData,
+                              sku: e.target.value,
+                            })
                           }
                           placeholder="Auto-generate if empty"
                           className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white font-mono"
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-600 font-medium mb-1">Weight (kg)</label>
+                        <label className="block text-slate-600 font-medium mb-1">
+                          Weight (kg)
+                        </label>
                         <input
                           type="number"
                           step="0.01"
@@ -785,7 +877,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                       </div>
                       {editFormData.productType === "simple" && (
                         <div>
-                          <label className="block text-slate-600 font-medium mb-1">Stock Quantity</label>
+                          <label className="block text-slate-600 font-medium mb-1">
+                            Stock Quantity
+                          </label>
                           <input
                             type="number"
                             value={editFormData.stock?.quantity ?? 0}
@@ -793,8 +887,11 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                               setEditFormData({
                                 ...editFormData,
                                 stock: {
-                                  warehouseId: editFormData.stock?.warehouseId || "1",
-                                  warehouseCode: editFormData.stock?.warehouseCode || "DEFAULT",
+                                  warehouseId:
+                                    editFormData.stock?.warehouseId || "1",
+                                  warehouseCode:
+                                    editFormData.stock?.warehouseCode ||
+                                    "DEFAULT",
                                   quantity: parseInt(e.target.value, 10) || 0,
                                 },
                               })
@@ -804,12 +901,17 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         </div>
                       )}
                       <div>
-                        <label className="block text-slate-600 font-medium mb-1">HSN Code</label>
+                        <label className="block text-slate-600 font-medium mb-1">
+                          HSN Code
+                        </label>
                         <input
                           type="text"
                           value={editFormData.hsnCode || ""}
                           onChange={(e) =>
-                            setEditFormData({ ...editFormData, hsnCode: e.target.value })
+                            setEditFormData({
+                              ...editFormData,
+                              hsnCode: e.target.value,
+                            })
                           }
                           className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white font-mono"
                         />
@@ -826,16 +928,26 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                           <button
                             type="button"
                             onClick={() => {
-                              const newVariants = [...(editFormData.variants || [])];
+                              const newVariants = [
+                                ...(editFormData.variants || []),
+                              ];
                               newVariants.push({
                                 sku: `${editFormData.sku || editFormData.productGroupId}-VAR-${newVariants.length + 1}`,
                                 size: "Free Size",
                                 color: "New Colour",
                                 fabric: "Pure Silk",
                                 sellingPrice: editFormData.sellingPrice,
-                                stock: { warehouseId: "1", warehouseCode: "DEFAULT", quantity: 1, lowStockThreshold: 5 },
+                                stock: {
+                                  warehouseId: "1",
+                                  warehouseCode: "DEFAULT",
+                                  quantity: 1,
+                                  lowStockThreshold: 5,
+                                },
                               });
-                              setEditFormData({ ...editFormData, variants: newVariants });
+                              setEditFormData({
+                                ...editFormData,
+                                variants: newVariants,
+                              });
                             }}
                             className="px-2.5 py-1 text-[11px] bg-blue-600 hover:bg-blue-700 text-white rounded-md font-semibold flex items-center gap-1 shadow-xs"
                           >
@@ -850,9 +962,15 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                 <th className="py-2 px-2.5">Size</th>
                                 <th className="py-2 px-2.5">Colour</th>
                                 <th className="py-2 px-2.5">Fabric</th>
-                                <th className="py-2 px-2.5 text-right">Price (₹)</th>
-                                <th className="py-2 px-2.5 text-right">Stock</th>
-                                <th className="py-2 px-2.5 text-center">Action</th>
+                                <th className="py-2 px-2.5 text-right">
+                                  Price (₹)
+                                </th>
+                                <th className="py-2 px-2.5 text-right">
+                                  Stock
+                                </th>
+                                <th className="py-2 px-2.5 text-center">
+                                  Action
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-blue-50">
@@ -863,9 +981,17 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       type="text"
                                       value={v.sku || ""}
                                       onChange={(e) => {
-                                        const nextVariants = [...(editFormData.variants || [])];
-                                        nextVariants[vIdx] = { ...nextVariants[vIdx], sku: e.target.value };
-                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                        const nextVariants = [
+                                          ...(editFormData.variants || []),
+                                        ];
+                                        nextVariants[vIdx] = {
+                                          ...nextVariants[vIdx],
+                                          sku: e.target.value,
+                                        };
+                                        setEditFormData({
+                                          ...editFormData,
+                                          variants: nextVariants,
+                                        });
                                       }}
                                       className="w-full px-2 py-1 border border-slate-300 rounded font-mono text-xs bg-white"
                                       placeholder="SKU"
@@ -876,9 +1002,17 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       type="text"
                                       value={v.size || ""}
                                       onChange={(e) => {
-                                        const nextVariants = [...(editFormData.variants || [])];
-                                        nextVariants[vIdx] = { ...nextVariants[vIdx], size: e.target.value };
-                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                        const nextVariants = [
+                                          ...(editFormData.variants || []),
+                                        ];
+                                        nextVariants[vIdx] = {
+                                          ...nextVariants[vIdx],
+                                          size: e.target.value,
+                                        };
+                                        setEditFormData({
+                                          ...editFormData,
+                                          variants: nextVariants,
+                                        });
                                       }}
                                       className="w-20 px-2 py-1 border border-slate-300 rounded text-xs bg-white"
                                       placeholder="Size"
@@ -889,9 +1023,17 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       type="text"
                                       value={v.color || ""}
                                       onChange={(e) => {
-                                        const nextVariants = [...(editFormData.variants || [])];
-                                        nextVariants[vIdx] = { ...nextVariants[vIdx], color: e.target.value };
-                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                        const nextVariants = [
+                                          ...(editFormData.variants || []),
+                                        ];
+                                        nextVariants[vIdx] = {
+                                          ...nextVariants[vIdx],
+                                          color: e.target.value,
+                                        };
+                                        setEditFormData({
+                                          ...editFormData,
+                                          variants: nextVariants,
+                                        });
                                       }}
                                       className="w-24 px-2 py-1 border border-slate-300 rounded text-xs bg-white"
                                       placeholder="Colour"
@@ -902,9 +1044,17 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       type="text"
                                       value={v.fabric || ""}
                                       onChange={(e) => {
-                                        const nextVariants = [...(editFormData.variants || [])];
-                                        nextVariants[vIdx] = { ...nextVariants[vIdx], fabric: e.target.value };
-                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                        const nextVariants = [
+                                          ...(editFormData.variants || []),
+                                        ];
+                                        nextVariants[vIdx] = {
+                                          ...nextVariants[vIdx],
+                                          fabric: e.target.value,
+                                        };
+                                        setEditFormData({
+                                          ...editFormData,
+                                          variants: nextVariants,
+                                        });
                                       }}
                                       className="w-28 px-2 py-1 border border-slate-300 rounded text-xs bg-white"
                                       placeholder="Fabric"
@@ -915,12 +1065,19 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       type="number"
                                       value={v.sellingPrice ?? ""}
                                       onChange={(e) => {
-                                        const nextVariants = [...(editFormData.variants || [])];
+                                        const nextVariants = [
+                                          ...(editFormData.variants || []),
+                                        ];
                                         nextVariants[vIdx] = {
                                           ...nextVariants[vIdx],
-                                          sellingPrice: e.target.value ? parseFloat(e.target.value) : undefined,
+                                          sellingPrice: e.target.value
+                                            ? parseFloat(e.target.value)
+                                            : undefined,
                                         };
-                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                        setEditFormData({
+                                          ...editFormData,
+                                          variants: nextVariants,
+                                        });
                                       }}
                                       className="w-24 px-2 py-1 border border-slate-300 rounded text-xs text-right bg-white"
                                       placeholder="Inherit"
@@ -931,16 +1088,26 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       type="number"
                                       value={v.stock?.quantity ?? 0}
                                       onChange={(e) => {
-                                        const nextVariants = [...(editFormData.variants || [])];
+                                        const nextVariants = [
+                                          ...(editFormData.variants || []),
+                                        ];
                                         nextVariants[vIdx] = {
                                           ...nextVariants[vIdx],
                                           stock: {
-                                            warehouseId: nextVariants[vIdx].stock?.warehouseId || "1",
-                                            warehouseCode: nextVariants[vIdx].stock?.warehouseCode || "DEFAULT",
-                                            quantity: parseInt(e.target.value, 10) || 0,
+                                            warehouseId:
+                                              nextVariants[vIdx].stock
+                                                ?.warehouseId || "1",
+                                            warehouseCode:
+                                              nextVariants[vIdx].stock
+                                                ?.warehouseCode || "DEFAULT",
+                                            quantity:
+                                              parseInt(e.target.value, 10) || 0,
                                           },
                                         };
-                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                        setEditFormData({
+                                          ...editFormData,
+                                          variants: nextVariants,
+                                        });
                                       }}
                                       className="w-20 px-2 py-1 border border-slate-300 rounded text-xs text-right bg-white"
                                       placeholder="Stock"
@@ -950,8 +1117,14 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const nextVariants = editFormData.variants?.filter((_, i) => i !== vIdx) || [];
-                                        setEditFormData({ ...editFormData, variants: nextVariants });
+                                        const nextVariants =
+                                          editFormData.variants?.filter(
+                                            (_, i) => i !== vIdx,
+                                          ) || [];
+                                        setEditFormData({
+                                          ...editFormData,
+                                          variants: nextVariants,
+                                        });
                                       }}
                                       className="p-1 text-slate-400 hover:text-rose-600 rounded transition"
                                       title="Remove variant"
@@ -994,7 +1167,8 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                       <div className="bg-white rounded-xl border border-rose-200 p-4 space-y-2 shadow-xs">
                         <h5 className="text-xs font-bold text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
                           <AlertTriangle className="h-4 w-4 text-rose-600" />
-                          Validation Issues for {product.productGroupId} ({product.errors.length})
+                          Validation Issues for {product.productGroupId} (
+                          {product.errors.length})
                         </h5>
                         <div className="space-y-1.5 pt-1">
                           {product.errors.map((err, idx) => (
@@ -1052,36 +1226,50 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                           <div>
                             <span className="text-slate-400">Dimensions:</span>{" "}
                             <strong>
-                              {product.length} × {product.breadth} × {product.height} cm
+                              {product.length} × {product.breadth} ×{" "}
+                              {product.height} cm
                             </strong>
                           </div>
                           <div>
                             <span className="text-slate-400">HSN Code:</span>{" "}
-                            <span className="font-mono">{product.hsnCode || "—"}</span>
+                            <span className="font-mono">
+                              {product.hsnCode || "—"}
+                            </span>
                           </div>
                           <div>
                             <span className="text-slate-400">Backorders:</span>{" "}
-                            <strong>{product.allowOutOfStockOrders ? "Allowed" : "No"}</strong>
+                            <strong>
+                              {product.allowOutOfStockOrders ? "Allowed" : "No"}
+                            </strong>
                           </div>
                         </div>
                       </div>
 
                       {/* Specifications */}
-                      {product.specifications && product.specifications.length > 0 && (
-                        <div className="bg-white rounded-lg p-3 border border-slate-200 col-span-full">
-                          <span className="font-semibold text-slate-500 uppercase tracking-wide block mb-2">
-                            Product Specifications ({product.specifications.length})
-                          </span>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                            {product.specifications.map((spec, sIdx) => (
-                              <div key={sIdx} className="bg-slate-50 border border-slate-200 rounded-lg p-2">
-                                <span className="text-[10px] text-slate-400 font-semibold uppercase block truncate">{spec.key}</span>
-                                <span className="text-xs font-medium text-slate-800 block truncate">{spec.value}</span>
-                              </div>
-                            ))}
+                      {product.specifications &&
+                        product.specifications.length > 0 && (
+                          <div className="bg-white rounded-lg p-3 border border-slate-200 col-span-full">
+                            <span className="font-semibold text-slate-500 uppercase tracking-wide block mb-2">
+                              Product Specifications (
+                              {product.specifications.length})
+                            </span>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                              {product.specifications.map((spec, sIdx) => (
+                                <div
+                                  key={sIdx}
+                                  className="bg-slate-50 border border-slate-200 rounded-lg p-2"
+                                >
+                                  <span className="text-[10px] text-slate-400 font-semibold uppercase block truncate">
+                                    {spec.key}
+                                  </span>
+                                  <span className="text-xs font-medium text-slate-800 block truncate">
+                                    {spec.value}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
                     </div>
 
                     {/* Variants Breakdown (Variable Products) */}
@@ -1104,9 +1292,15 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                   <th className="py-2.5 px-3">Color</th>
                                   <th className="py-2.5 px-3">Fabric</th>
                                   <th className="py-2.5 px-3">Photos</th>
-                                  <th className="py-2.5 px-3">Other Attributes</th>
-                                  <th className="py-2.5 px-3 text-right">Price Override</th>
-                                  <th className="py-2.5 px-3 text-right">Stock</th>
+                                  <th className="py-2.5 px-3">
+                                    Other Attributes
+                                  </th>
+                                  <th className="py-2.5 px-3 text-right">
+                                    Price Override
+                                  </th>
+                                  <th className="py-2.5 px-3 text-right">
+                                    Stock
+                                  </th>
                                   <th className="py-2.5 px-3">Warehouse</th>
                                 </tr>
                               </thead>
@@ -1115,39 +1309,83 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                   const isDuplicateColor = Boolean(
                                     v.color &&
                                     (product.variants || []).filter(
-                                      (other) => other.color?.trim().toLowerCase() === v.color?.trim().toLowerCase()
-                                    ).length > 1
+                                      (other) =>
+                                        other.color?.trim().toLowerCase() ===
+                                        v.color?.trim().toLowerCase(),
+                                    ).length > 1,
                                   );
-                                  const variantMedia = (v.media && v.media.length > 0)
-                                    ? v.media
-                                    : (product.media?.filter(
-                                        (m) => m.variantSku === v.sku || (!v.sku && m.variantSku === String(idx + 1))
-                                      ) || []);
+                                  const variantMedia =
+                                    v.media && v.media.length > 0
+                                      ? v.media
+                                      : product.media?.filter(
+                                          (m) =>
+                                            m.variantSku === v.sku ||
+                                            (!v.sku &&
+                                              m.variantSku === String(idx + 1)),
+                                        ) || [];
 
                                   const attrDisplay = (() => {
                                     if (!v.attributes) return "—";
                                     if (Array.isArray(v.attributes)) {
-                                      return v.attributes
-                                        .filter((a) => !["Size", "Color", "Fabric"].includes(a.name))
-                                        .map((a) => `${a.name}: ${a.value}`)
-                                        .join(", ") || "—";
+                                      return (
+                                        v.attributes
+                                          .filter(
+                                            (a) =>
+                                              ![
+                                                "Size",
+                                                "Color",
+                                                "Fabric",
+                                              ].includes(a.name),
+                                          )
+                                          .map((a) => `${a.name}: ${a.value}`)
+                                          .join(", ") || "—"
+                                      );
                                     }
-                                    return Object.entries(v.attributes)
-                                      .filter(([k]) => !["Size", "Color", "Fabric"].includes(k))
-                                      .map(([k, val]) => `${k}: ${val}`)
-                                      .join(", ") || "—";
+                                    return (
+                                      Object.entries(v.attributes)
+                                        .filter(
+                                          ([k]) =>
+                                            ![
+                                              "Size",
+                                              "Color",
+                                              "Fabric",
+                                            ].includes(k),
+                                        )
+                                        .map(([k, val]) => `${k}: ${val}`)
+                                        .join(", ") || "—"
+                                    );
                                   })();
 
-                                  const effectivePrice = v.price ?? v.sellingPrice;
+                                  const effectivePrice =
+                                    v.price ?? v.sellingPrice;
 
                                   return (
-                                    <tr key={idx} className="hover:bg-slate-50/50">
+                                    <tr
+                                      key={idx}
+                                      className="hover:bg-slate-50/50"
+                                    >
                                       <td className="py-2 px-3 font-mono font-medium text-slate-800">
-                                        <div>{v.sku || <span className="text-slate-400 italic">auto-generated</span>}</div>
-                                        {v.title && <div className="text-[10px] font-sans text-slate-500 font-normal">{v.title}</div>}
-                                        {v.id && <span className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded font-mono">ID: {v.id.slice(0, 8)}…</span>}
+                                        <div>
+                                          {v.sku || (
+                                            <span className="text-slate-400 italic">
+                                              auto-generated
+                                            </span>
+                                          )}
+                                        </div>
+                                        {v.title && (
+                                          <div className="text-[10px] font-sans text-slate-500 font-normal">
+                                            {v.title}
+                                          </div>
+                                        )}
+                                        {v.id && (
+                                          <span className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded font-mono">
+                                            ID: {v.id.slice(0, 8)}…
+                                          </span>
+                                        )}
                                       </td>
-                                      <td className="py-2 px-3 text-slate-700">{v.size || "—"}</td>
+                                      <td className="py-2 px-3 text-slate-700">
+                                        {v.size || "—"}
+                                      </td>
                                       <td className="py-2 px-3 text-slate-700">
                                         <span>{v.color || "—"}</span>
                                         {isDuplicateColor && (
@@ -1156,34 +1394,48 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                           </span>
                                         )}
                                       </td>
-                                      <td className="py-2 px-3 text-slate-700">{v.fabric || "—"}</td>
+                                      <td className="py-2 px-3 text-slate-700">
+                                        {v.fabric || "—"}
+                                      </td>
                                       <td className="py-2 px-3">
                                         {variantMedia.length > 0 ? (
                                           <div className="flex items-center gap-1.5 flex-wrap">
-                                            {variantMedia.slice(0, 2).map((vm, vi) => {
-                                              const vmSrc = resolveImageUrl(vm.url, vm.thumbnailUrl, getDriveProxyUrl, getDriveThumbnailUrl);
-                                              return vmSrc ? (
-                                                <img
-                                                  key={vi}
-                                                  src={vmSrc}
-                                                  alt=""
-                                                  className="w-7 h-7 object-cover rounded border border-slate-200"
-                                                />
-                                              ) : (
-                                                <span
-                                                  key={vi}
-                                                  className="w-7 h-7 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-[9px] text-slate-400"
-                                                >
-                                                  <ImageIcon className="w-3.5 h-3.5" />
-                                                </span>
-                                              );
-                                            })}
+                                            {variantMedia
+                                              .slice(0, 2)
+                                              .map((vm, vi) => {
+                                                const vmSrc = resolveImageUrl(
+                                                  vm.url,
+                                                  vm.thumbnailUrl,
+                                                  getDriveProxyUrl,
+                                                  getDriveThumbnailUrl,
+                                                );
+                                                return vmSrc ? (
+                                                  <img
+                                                    key={vi}
+                                                    src={vmSrc}
+                                                    alt=""
+                                                    className="w-7 h-7 object-cover rounded border border-slate-200"
+                                                  />
+                                                ) : (
+                                                  <span
+                                                    key={vi}
+                                                    className="w-7 h-7 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-[9px] text-slate-400"
+                                                  >
+                                                    <ImageIcon className="w-3.5 h-3.5" />
+                                                  </span>
+                                                );
+                                              })}
                                             <span className="text-[10px] text-slate-500 font-medium">
-                                              {variantMedia.length} photo{variantMedia.length !== 1 ? "s" : ""}
+                                              {variantMedia.length} photo
+                                              {variantMedia.length !== 1
+                                                ? "s"
+                                                : ""}
                                             </span>
                                           </div>
                                         ) : (
-                                          <span className="text-slate-400 italic text-[11px]">None</span>
+                                          <span className="text-slate-400 italic text-[11px]">
+                                            None
+                                          </span>
                                         )}
                                       </td>
                                       <td className="py-2 px-3 text-slate-600">
@@ -1191,9 +1443,13 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       </td>
                                       <td className="py-2 px-3 text-right font-medium text-slate-900">
                                         {effectivePrice ? (
-                                          <span>₹{effectivePrice.toLocaleString()}</span>
+                                          <span>
+                                            ₹{effectivePrice.toLocaleString()}
+                                          </span>
                                         ) : (
-                                          <span className="text-slate-400 italic">Inherits parent</span>
+                                          <span className="text-slate-400 italic">
+                                            Inherits parent
+                                          </span>
                                         )}
                                       </td>
                                       <td className="py-2 px-3 text-right font-bold text-slate-800">
@@ -1210,7 +1466,8 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                           </div>
                         ) : (
                           <div className="p-4 text-center text-xs text-rose-600 font-medium">
-                            No variants configured for this variable product. Add variants on the Variants sheet.
+                            No variants configured for this variable product.
+                            Add variants on the Variants sheet.
                           </div>
                         )}
                       </div>
@@ -1218,19 +1475,24 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
 
                     {/* Media & SEO Galleries */}
                     {(() => {
-                      const displayMedia = (product.allImages && product.allImages.length > 0)
-                        ? product.allImages
-                        : [
-                            ...(product.media || []).map((m, idx) => ({ ...m, source: m.source || ("product" as const), order: m.order ?? idx })),
-                            ...(product.variants || []).flatMap((v) =>
-                              (v.media || []).map((m, idx) => ({
+                      const displayMedia =
+                        product.allImages && product.allImages.length > 0
+                          ? product.allImages
+                          : [
+                              ...(product.media || []).map((m, idx) => ({
                                 ...m,
-                                source: "variant" as const,
-                                variantSku: m.variantSku || v.sku,
-                                order: m.order ?? (100 + idx),
-                              }))
-                            ),
-                          ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+                                source: m.source || ("product" as const),
+                                order: m.order ?? idx,
+                              })),
+                              ...(product.variants || []).flatMap((v) =>
+                                (v.media || []).map((m, idx) => ({
+                                  ...m,
+                                  source: "variant" as const,
+                                  variantSku: m.variantSku || v.sku,
+                                  order: m.order ?? 100 + idx,
+                                })),
+                              ),
+                            ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
                       return (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1243,7 +1505,10 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                               </span>
                               {displayMedia.length > 0 && (
                                 <span className="text-[10px] text-slate-500 font-medium">
-                                  {product.media?.length || 0} product · {displayMedia.length - (product.media?.length || 0)} variant
+                                  {product.media?.length || 0} product ·{" "}
+                                  {displayMedia.length -
+                                    (product.media?.length || 0)}{" "}
+                                  variant
                                 </span>
                               )}
                             </div>
@@ -1257,55 +1522,75 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                     {m.type === "VIDEO" ? (
                                       <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-white">
                                         <Video className="h-6 w-6 text-slate-300" />
-                                        <span className="text-[9px] uppercase mt-1">Video</span>
+                                        <span className="text-[9px] uppercase mt-1">
+                                          Video
+                                        </span>
                                       </div>
-                                    ) : (() => {
-                                      const resolvedSrc = resolveImageUrl(m.url, m.thumbnailUrl, getDriveProxyUrl, getDriveThumbnailUrl);
-                                      return resolvedSrc ? (
-                                        <img
-                                          src={resolvedSrc}
-                                          alt={m.altText || product.name}
-                                          loading="lazy"
-                                          decoding="async"
-                                          title="Click to view full-size"
-                                          onClick={() => {
-                                            setFailedDetailImageUrl(null);
-                                            setImageGallery({ product, images: displayMedia, index: mIdx });
-                                          }}
-                                          className="w-full h-full object-cover cursor-zoom-in"
-                                          onError={(e) => {
-                                            // Keep the thumbnail grid lightweight. Never load the
-                                            // original 40+ MB image as an automatic fallback.
-                                            const target = e.currentTarget;
-                                            target.dataset.thumbnailFailed = "true";
-                                            target.src =
-                                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
-                                          }}
-                                        />
-                                      ) : (
-                                        <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 p-2 text-center text-slate-400">
-                                          <ImageIcon className="h-6 w-6 text-slate-300 mb-1" />
-                                          <span className="text-[8px] font-mono truncate max-w-full text-slate-500">
-                                            {m.url || "Pending match"}
-                                          </span>
-                                        </div>
-                                      );
-                                    })()}
+                                    ) : (
+                                      (() => {
+                                        const resolvedSrc = resolveImageUrl(
+                                          m.url,
+                                          m.thumbnailUrl,
+                                          getDriveProxyUrl,
+                                          getDriveThumbnailUrl,
+                                        );
+                                        return resolvedSrc ? (
+                                          <img
+                                            src={resolvedSrc}
+                                            alt={m.altText || product.name}
+                                            loading="lazy"
+                                            decoding="async"
+                                            title="Click to view full-size"
+                                            onClick={() => {
+                                              setFailedDetailImageUrl(null);
+                                              setImageGallery({
+                                                product,
+                                                images: displayMedia,
+                                                index: mIdx,
+                                              });
+                                            }}
+                                            className="w-full h-full object-cover cursor-zoom-in"
+                                            onError={(e) => {
+                                              // Keep the thumbnail grid lightweight. Never load the
+                                              // original 40+ MB image as an automatic fallback.
+                                              const target = e.currentTarget;
+                                              target.dataset.thumbnailFailed =
+                                                "true";
+                                              target.src =
+                                                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
+                                            }}
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 p-2 text-center text-slate-400">
+                                            <ImageIcon className="h-6 w-6 text-slate-300 mb-1" />
+                                            <span className="text-[8px] font-mono truncate max-w-full text-slate-500">
+                                              {m.url || "Pending match"}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()
+                                    )}
                                     <button
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setFailedDetailImageUrl(null);
-                                        setImageGallery({ productName: product.name, images: displayMedia, index: mIdx });
+                                        setImageGallery({
+                                          productName: product.name,
+                                          images: displayMedia,
+                                          index: mIdx,
+                                        });
                                       }}
                                       className="absolute inset-0 z-[5] flex items-center justify-center bg-black/0 text-white opacity-0 transition hover:bg-black/20 hover:opacity-100 focus:opacity-100"
                                       aria-label={`View full-size image ${m.title || m.altText || mIdx + 1}`}
                                       title="View full-size image"
                                     >
-                                      <span className="rounded-full bg-slate-900/75 px-2.5 py-1 text-[10px] font-semibold shadow">View</span>
+                                      <span className="rounded-full bg-slate-900/75 px-2.5 py-1 text-[10px] font-semibold shadow">
+                                        View
+                                      </span>
                                     </button>
                                     <div className="absolute top-1 left-1 z-10">
-                                      {(m.order === 0 || mIdx === 0) ? (
+                                      {m.order === 0 || mIdx === 0 ? (
                                         <span className="bg-amber-500 text-white font-bold text-[9px] px-1 py-0.5 rounded shadow">
                                           ★ Primary
                                         </span>
@@ -1313,13 +1598,32 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            const nextMedia = [...(product.media || [])];
-                                            const matchIdx = nextMedia.findIndex((x) => x.url === m.url);
+                                            const nextMedia = [
+                                              ...(product.media || []),
+                                            ];
+                                            const matchIdx =
+                                              nextMedia.findIndex(
+                                                (x) => x.url === m.url,
+                                              );
                                             if (matchIdx >= 0) {
-                                              const [chosen] = nextMedia.splice(matchIdx, 1);
-                                              nextMedia.unshift({ ...chosen, order: 0 });
-                                              const reindexed = nextMedia.map((item, idx) => ({ ...item, order: idx }));
-                                              onUpdateProduct({ ...product, media: reindexed });
+                                              const [chosen] = nextMedia.splice(
+                                                matchIdx,
+                                                1,
+                                              );
+                                              nextMedia.unshift({
+                                                ...chosen,
+                                                order: 0,
+                                              });
+                                              const reindexed = nextMedia.map(
+                                                (item, idx) => ({
+                                                  ...item,
+                                                  order: idx,
+                                                }),
+                                              );
+                                              onUpdateProduct({
+                                                ...product,
+                                                media: reindexed,
+                                              });
                                             }
                                           }}
                                           className="opacity-0 group-hover:opacity-100 bg-slate-900/80 hover:bg-blue-600 text-white text-[9px] px-1 py-0.5 rounded transition shadow"
@@ -1333,12 +1637,20 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          const nextMedia = (product.media || []).filter((x) => x.url !== m.url);
-                                          const nextVariants = (product.variants || []).map((v) => ({
+                                          const nextMedia = (
+                                            product.media || []
+                                          ).filter((x) => x.url !== m.url);
+                                          const nextVariants = (
+                                            product.variants || []
+                                          ).map((v) => ({
                                             ...v,
-                                            media: (v.media || []).filter((x) => x.url !== m.url),
+                                            media: (v.media || []).filter(
+                                              (x) => x.url !== m.url,
+                                            ),
                                           }));
-                                          const nextAll = (product.allImages || []).filter((x) => x.url !== m.url);
+                                          const nextAll = (
+                                            product.allImages || []
+                                          ).filter((x) => x.url !== m.url);
                                           onUpdateProduct({
                                             ...product,
                                             media: nextMedia,
@@ -1353,8 +1665,11 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       </button>
                                     </div>
                                     <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[9px] px-1 py-0.5 truncate text-center">
-                                      {m.source === "variant" || m.variantSku ? (
-                                        <span className="text-purple-300 font-medium">Var: {m.variantSku || "Variant"}</span>
+                                      {m.source === "variant" ||
+                                      m.variantSku ? (
+                                        <span className="text-purple-300 font-medium">
+                                          Var: {m.variantSku || "Variant"}
+                                        </span>
                                       ) : (
                                         `Product #${m.order ?? mIdx}`
                                       )}
@@ -1363,7 +1678,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-slate-400 italic pt-1">No media specified.</p>
+                              <p className="text-slate-400 italic pt-1">
+                                No media specified.
+                              </p>
                             )}
                           </div>
 
@@ -1376,20 +1693,35 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                             {product.seo ? (
                               <div className="space-y-1.5 pt-1 text-slate-700">
                                 <div>
-                                  <span className="text-slate-400">Meta Title:</span>{" "}
-                                  <span className="font-medium">{product.seo.metaTitle || "—"}</span>
+                                  <span className="text-slate-400">
+                                    Meta Title:
+                                  </span>{" "}
+                                  <span className="font-medium">
+                                    {product.seo.metaTitle || "—"}
+                                  </span>
                                 </div>
                                 <div>
-                                  <span className="text-slate-400">Meta Description:</span>{" "}
-                                  <p className="text-slate-600 mt-0.5 italic">{product.seo.metaDesc || "—"}</p>
+                                  <span className="text-slate-400">
+                                    Meta Description:
+                                  </span>{" "}
+                                  <p className="text-slate-600 mt-0.5 italic">
+                                    {product.seo.metaDesc || "—"}
+                                  </p>
                                 </div>
                                 <div>
-                                  <span className="text-slate-400">Custom URL Slug:</span>{" "}
-                                  <span className="font-mono text-blue-700">{product.seo.slug || "Auto-generated"}</span>
+                                  <span className="text-slate-400">
+                                    Custom URL Slug:
+                                  </span>{" "}
+                                  <span className="font-mono text-blue-700">
+                                    {product.seo.slug || "Auto-generated"}
+                                  </span>
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-slate-400 italic pt-1">No custom SEO data specified (will use defaults).</p>
+                              <p className="text-slate-400 italic pt-1">
+                                No custom SEO data specified (will use
+                                defaults).
+                              </p>
                             )}
                           </div>
                         </div>
@@ -1408,7 +1740,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
         <BulkCategoryAssignModal
           isOpen={showBulkCategoryModal}
           onClose={() => setShowBulkCategoryModal(false)}
-          selectedProducts={products.filter((p) => selectedIds.has(p.productGroupId))}
+          selectedProducts={products.filter((p) =>
+            selectedIds.has(p.productGroupId),
+          )}
           flatCategories={flatCategories}
           categoriesTree={categoriesTree || []}
           onApplyCategory={handleBulkApplyCategory}
@@ -1435,7 +1769,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(viewingJsonProduct, null, 2));
+                    navigator.clipboard.writeText(
+                      JSON.stringify(viewingJsonProduct, null, 2),
+                    );
                     alert("Product JSON copied to clipboard!");
                   }}
                   className="flex items-center gap-1 px-2.5 py-1 text-xs border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition"
@@ -1470,239 +1806,382 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
         </div>
       )}
 
-      {storefrontPreviewProduct && (() => {
-        const previewProduct = storefrontPreviewProduct;
-        const selectedPreviewVariant = previewProduct.variants?.find(
-          (variant) => variant.sku === storefrontSelectedVariantSku,
-        );
-        const previewImages = getStorefrontPreviewMedia(previewProduct, storefrontSelectedVariantSku);
-        const activeIndex = Math.min(storefrontPreviewImageIndex, Math.max(0, previewImages.length - 1));
-        const activeImage = previewImages[activeIndex];
-        const currentImageUrl = activeImage?.url || "";
-        const detailImageUrl = /^(https?:\/\/|\/)/i.test(currentImageUrl) ? currentImageUrl : "";
-        const previewSellingPrice = Number(
-          selectedPreviewVariant?.sellingPrice ??
-          selectedPreviewVariant?.price ??
-          previewProduct.sellingPrice ??
-          0,
-        );
-        const previewBasePrice = Number(
-          selectedPreviewVariant?.basePrice ?? previewProduct.basePrice ?? 0,
-        );
-        const discountPercent = previewBasePrice > previewSellingPrice && previewBasePrice > 0
-          ? Math.round(((previewBasePrice - previewSellingPrice) / previewBasePrice) * 100)
-          : 0;
-        return (
-          <div
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-5"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Customer storefront preview for ${previewProduct.name}`}
-            onClick={() => setStorefrontPreviewProduct(null)}
-          >
+      {storefrontPreviewProduct &&
+        (() => {
+          const previewProduct = storefrontPreviewProduct;
+          const selectedPreviewVariant = previewProduct.variants?.find(
+            (variant) => variant.sku === storefrontSelectedVariantSku,
+          );
+          const previewImages = getStorefrontPreviewMedia(
+            previewProduct,
+            storefrontSelectedVariantSku,
+          );
+          const activeIndex = Math.min(
+            storefrontPreviewImageIndex,
+            Math.max(0, previewImages.length - 1),
+          );
+          const activeImage = previewImages[activeIndex];
+          const currentImageUrl = activeImage?.url || "";
+          const detailImageUrl = /^(https?:\/\/|\/)/i.test(currentImageUrl)
+            ? currentImageUrl
+            : "";
+          const previewSellingPrice = Number(
+            selectedPreviewVariant?.sellingPrice ??
+              selectedPreviewVariant?.price ??
+              previewProduct.sellingPrice ??
+              0,
+          );
+          const previewBasePrice = Number(
+            selectedPreviewVariant?.basePrice ?? previewProduct.basePrice ?? 0,
+          );
+          const discountPercent =
+            previewBasePrice > previewSellingPrice && previewBasePrice > 0
+              ? Math.round(
+                  ((previewBasePrice - previewSellingPrice) /
+                    previewBasePrice) *
+                    100,
+                )
+              : 0;
+          return (
             <div
-              className="flex max-h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-              onClick={(event) => event.stopPropagation()}
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-5"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Customer storefront preview for ${previewProduct.name}`}
+              onClick={() => setStorefrontPreviewProduct(null)}
             >
-              <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-900">Storefront preview</span>
-                    <span className="text-[10px] text-slate-400">Admin-only · read-only</span>
+              <div
+                className="flex max-h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-900">
+                        Storefront preview
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Admin-only · read-only
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">
+                      {previewProduct.name}
+                    </p>
                   </div>
-                  <p className="mt-1 truncate text-sm font-semibold text-slate-900">{previewProduct.name}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setStorefrontPreviewProduct(null)}
-                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                  aria-label="Close storefront preview"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </header>
+                  <button
+                    type="button"
+                    onClick={() => setStorefrontPreviewProduct(null)}
+                    className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                    aria-label="Close storefront preview"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </header>
 
-              <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-2">
-                <section className="border-b border-slate-200 bg-[#faf9f6] p-4 sm:p-6 lg:border-b-0 lg:border-r">
-                  <div className="mx-auto max-w-xl">
-                    <div className="relative flex aspect-[4/5] max-h-[58vh] items-center justify-center overflow-hidden rounded-xl bg-white">
-                      {activeImage && detailImageUrl && activeImage.type !== "VIDEO" && failedStorefrontImageUrl !== detailImageUrl ? (
-                        <img
-                          src={detailImageUrl}
-                          alt={activeImage.altText || activeImage.title || previewProduct.name}
-                          loading="eager"
-                          decoding="async"
-                          className="h-full w-full object-contain"
-                          onError={() => setFailedStorefrontImageUrl(detailImageUrl)}
-                        />
-                      ) : (
-                        <div className="flex max-w-sm flex-col items-center gap-2 p-8 text-center text-slate-500">
-                          <ImageIcon className="h-12 w-12 text-slate-300" />
-                          <p className="text-sm font-semibold text-slate-700">
-                            {failedStorefrontImageUrl === detailImageUrl && detailImageUrl
-                              ? "This image could not be loaded"
-                              : "No full-size product image available"}
-                          </p>
-                          <p className="text-xs leading-relaxed">Confirm the selected image is uploaded to storage, then reopen this preview.</p>
+                <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-2">
+                  <section className="border-b border-slate-200 bg-[#faf9f6] p-4 sm:p-6 lg:border-b-0 lg:border-r">
+                    <div className="mx-auto max-w-xl">
+                      <div className="relative flex aspect-[4/5] max-h-[58vh] items-center justify-center overflow-hidden rounded-xl bg-white">
+                        {activeImage &&
+                        detailImageUrl &&
+                        activeImage.type !== "VIDEO" &&
+                        failedStorefrontImageUrl !== detailImageUrl ? (
+                          <img
+                            src={detailImageUrl}
+                            alt={
+                              activeImage.altText ||
+                              activeImage.title ||
+                              previewProduct.name
+                            }
+                            loading="eager"
+                            decoding="async"
+                            className="h-full w-full object-contain"
+                            onError={() =>
+                              setFailedStorefrontImageUrl(detailImageUrl)
+                            }
+                          />
+                        ) : (
+                          <div className="flex max-w-sm flex-col items-center gap-2 p-8 text-center text-slate-500">
+                            <ImageIcon className="h-12 w-12 text-slate-300" />
+                            <p className="text-sm font-semibold text-slate-700">
+                              {failedStorefrontImageUrl === detailImageUrl &&
+                              detailImageUrl
+                                ? "This image could not be loaded"
+                                : "No full-size product image available"}
+                            </p>
+                            <p className="text-xs leading-relaxed">
+                              Confirm the selected image is uploaded to storage,
+                              then reopen this preview.
+                            </p>
+                          </div>
+                        )}
+                        {previewImages.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStorefrontPreviewImageIndex(
+                                  (activeIndex - 1 + previewImages.length) %
+                                    previewImages.length,
+                                );
+                                setFailedStorefrontImageUrl(null);
+                              }}
+                              className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-200 bg-white/95 p-2 text-slate-700 shadow transition hover:bg-white"
+                              aria-label="Previous product image"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStorefrontPreviewImageIndex(
+                                  (activeIndex + 1) % previewImages.length,
+                                );
+                                setFailedStorefrontImageUrl(null);
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-200 bg-white/95 p-2 text-slate-700 shadow transition hover:bg-white"
+                              aria-label="Next product image"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                        {discountPercent > 0 && (
+                          <span className="absolute left-3 top-3 rounded-sm bg-rose-700 px-2 py-1 text-[10px] font-bold text-white">
+                            {discountPercent}% OFF
+                          </span>
+                        )}
+                        {activeIndex === 0 && previewImages.length > 0 && (
+                          <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-medium text-slate-700 shadow-sm">
+                            Primary image
+                          </span>
+                        )}
+                      </div>
+
+                      {previewImages.length > 0 && (
+                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                          {previewImages.map((media, index) => {
+                            const thumbSrc = resolveImageUrl(
+                              media.url,
+                              media.thumbnailUrl,
+                              getDriveProxyUrl,
+                              getDriveThumbnailUrl,
+                            );
+                            return (
+                              <button
+                                key={`${media.url}-${index}`}
+                                type="button"
+                                onClick={() => {
+                                  setStorefrontPreviewImageIndex(index);
+                                  setFailedStorefrontImageUrl(null);
+                                }}
+                                className={`h-16 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${index === activeIndex ? "border-amber-700 ring-2 ring-amber-100" : "border-slate-200 hover:border-slate-400"}`}
+                                aria-label={`View product image ${index + 1}`}
+                              >
+                                {thumbSrc ? (
+                                  <img
+                                    src={thumbSrc}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-full items-center justify-center">
+                                    <ImageIcon className="h-5 w-5 text-slate-300" />
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
-                      {previewImages.length > 1 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setStorefrontPreviewImageIndex((activeIndex - 1 + previewImages.length) % previewImages.length);
-                              setFailedStorefrontImageUrl(null);
-                            }}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-200 bg-white/95 p-2 text-slate-700 shadow transition hover:bg-white"
-                            aria-label="Previous product image"
-                          >
-                            <ChevronLeft className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setStorefrontPreviewImageIndex((activeIndex + 1) % previewImages.length);
-                              setFailedStorefrontImageUrl(null);
-                            }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-200 bg-white/95 p-2 text-slate-700 shadow transition hover:bg-white"
-                            aria-label="Next product image"
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
-                        </>
-                      )}
-                      {discountPercent > 0 && (
-                        <span className="absolute left-3 top-3 rounded-sm bg-rose-700 px-2 py-1 text-[10px] font-bold text-white">{discountPercent}% OFF</span>
-                      )}
-                      {activeIndex === 0 && previewImages.length > 0 && (
-                        <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-medium text-slate-700 shadow-sm">Primary image</span>
-                      )}
-                    </div>
-
-                    {previewImages.length > 0 && (
-                      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                        {previewImages.map((media, index) => {
-                          const thumbSrc = resolveImageUrl(media.url, media.thumbnailUrl, getDriveProxyUrl, getDriveThumbnailUrl);
-                          return (
-                            <button
-                              key={`${media.url}-${index}`}
-                              type="button"
-                              onClick={() => {
-                                setStorefrontPreviewImageIndex(index);
-                                setFailedStorefrontImageUrl(null);
-                              }}
-                              className={`h-16 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${index === activeIndex ? "border-amber-700 ring-2 ring-amber-100" : "border-slate-200 hover:border-slate-400"}`}
-                              aria-label={`View product image ${index + 1}`}
-                            >
-                              {thumbSrc ? (
-                                <img src={thumbSrc} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                              ) : (
-                                <span className="flex h-full items-center justify-center"><ImageIcon className="h-5 w-5 text-slate-300" /></span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <p className="mt-2 text-center text-[10px] text-slate-400">{previewImages.length} product image{previewImages.length === 1 ? "" : "s"}</p>
-                  </div>
-                </section>
-
-                <section className="p-5 sm:p-7 lg:overflow-y-auto">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-800">{previewProduct.categoryPath || "Kankana Silks"}</p>
-                  <h2 className="mt-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{previewProduct.name}</h2>
-                  {previewProduct.artisanName && <p className="mt-2 text-sm text-slate-500">Woven by {previewProduct.artisanName}</p>}
-                  <div className="mt-5 flex flex-wrap items-baseline gap-2">
-                    <span className="text-2xl font-semibold text-slate-900">₹{previewSellingPrice.toLocaleString("en-IN")}</span>
-                    {previewBasePrice > previewSellingPrice && (
-                      <span className="text-sm text-slate-400 line-through">₹{previewBasePrice.toLocaleString("en-IN")}</span>
-                    )}
-                    {discountPercent > 0 && <span className="rounded bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700">{discountPercent}% OFF</span>}
-                  </div>
-                  {previewProduct.sku && <p className="mt-2 text-[11px] text-slate-400">SKU: {previewProduct.sku}</p>}
-
-                  <div className="mt-5 border-y border-slate-200 py-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Product details</p>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{previewProduct.description || "No product description provided."}</p>
-                  </div>
-
-                  {previewProduct.productType === "variable" && (previewProduct.variants?.length || 0) > 0 && (
-                    <div className="mt-5">
-                      <p className="text-xs font-semibold text-slate-800">Available options</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {previewProduct.variants!.map((variant, index) => {
-                          const optionName = variant.title || [variant.color, variant.size, variant.fabric].filter(Boolean).join(" / ") || variant.sku || `Option ${index + 1}`;
-                          const isSelectedOption = (variant.sku || null) === storefrontSelectedVariantSku;
-                          const optionPrice = Number(variant.sellingPrice ?? variant.price ?? previewProduct.sellingPrice);
-                          return (
-                            <button
-                              key={variant.sku || index}
-                              type="button"
-                              onClick={() => {
-                                setStorefrontSelectedVariantSku(variant.sku || null);
-                                setStorefrontPreviewImageIndex(0);
-                                setFailedStorefrontImageUrl(null);
-                              }}
-                              aria-pressed={isSelectedOption}
-                              className={`rounded-md border px-3 py-2 text-left text-xs transition ${isSelectedOption ? "border-amber-800 bg-amber-50 text-amber-950 ring-1 ring-amber-700" : "border-slate-300 text-slate-700 hover:border-slate-500"}`}
-                            >
-                              <span className="block font-medium">{optionName}</span>
-                              <span className="mt-1 block font-semibold">₹{optionPrice.toLocaleString("en-IN")}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {previewProduct.specifications && previewProduct.specifications.length > 0 && (
-                    <div className="mt-5">
-                      <p className="text-xs font-semibold text-slate-800">Specifications</p>
-                      <dl className="mt-2 divide-y divide-slate-100 border-y border-slate-100">
-                        {previewProduct.specifications.map((spec, index) => (
-                          <div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2 text-xs">
-                            <dt className="text-slate-500">{spec.key}</dt>
-                            <dd className="text-right font-medium text-slate-800">{spec.value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </div>
-                  )}
-
-                  <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-slate-50 p-3">
-                      <p className="text-slate-500">Weight</p>
-                      <p className="mt-1 font-semibold text-slate-800">{previewProduct.weight || "—"} kg</p>
-                    </div>
-                    <div className="rounded-lg bg-slate-50 p-3">
-                      <p className="text-slate-500">Availability</p>
-                      <p className="mt-1 font-semibold text-emerald-700">
-                        {previewProduct.productType === "variable"
-                          ? `${previewProduct.variants?.length || 0} options`
-                          : (previewProduct.stock?.quantity ?? 0) > 0 ? "In stock" : "Stock not set"}
+                      <p className="mt-2 text-center text-[10px] text-slate-400">
+                        {previewImages.length} product image
+                        {previewImages.length === 1 ? "" : "s"}
                       </p>
                     </div>
-                  </div>
+                  </section>
 
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-                    <button type="button" disabled className="cursor-not-allowed rounded-lg bg-slate-900 px-4 py-3 text-xs font-semibold text-white opacity-90">Add to cart</button>
-                    <button type="button" disabled className="cursor-not-allowed rounded-lg border border-slate-300 px-4 py-3 text-xs font-semibold text-slate-700 opacity-90">Buy now</button>
-                  </div>
-                  <p className="mt-2 text-center text-[10px] text-slate-400">Preview only — storefront actions are disabled in the admin preview.</p>
-                  {previewProduct.seo && (
-                    <div className="mt-6 rounded-lg border border-dashed border-slate-200 p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Search listing preview</p>
-                      <p className="mt-1 text-xs font-semibold text-blue-800">{previewProduct.seo.metaTitle || previewProduct.metaTitle || previewProduct.name}</p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{previewProduct.seo.metaDesc || previewProduct.metaDesc || previewProduct.description}</p>
+                  <section className="p-5 sm:p-7 lg:overflow-y-auto">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-800">
+                      {previewProduct.categoryPath || "Kankana Silks"}
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">
+                      {previewProduct.name}
+                    </h2>
+                    {previewProduct.artisanName && (
+                      <p className="mt-2 text-sm text-slate-500">
+                        Woven by {previewProduct.artisanName}
+                      </p>
+                    )}
+                    <div className="mt-5 flex flex-wrap items-baseline gap-2">
+                      <span className="text-2xl font-semibold text-slate-900">
+                        ₹{previewSellingPrice.toLocaleString("en-IN")}
+                      </span>
+                      {previewBasePrice > previewSellingPrice && (
+                        <span className="text-sm text-slate-400 line-through">
+                          ₹{previewBasePrice.toLocaleString("en-IN")}
+                        </span>
+                      )}
+                      {discountPercent > 0 && (
+                        <span className="rounded bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700">
+                          {discountPercent}% OFF
+                        </span>
+                      )}
                     </div>
-                  )}
-                </section>
+                    {previewProduct.sku && (
+                      <p className="mt-2 text-[11px] text-slate-400">
+                        SKU: {previewProduct.sku}
+                      </p>
+                    )}
+
+                    <div className="mt-5 border-y border-slate-200 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                        Product details
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+                        {previewProduct.description ||
+                          "No product description provided."}
+                      </p>
+                    </div>
+
+                    {previewProduct.productType === "variable" &&
+                      (previewProduct.variants?.length || 0) > 0 && (
+                        <div className="mt-5">
+                          <p className="text-xs font-semibold text-slate-800">
+                            Available options
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {previewProduct.variants!.map((variant, index) => {
+                              const optionName =
+                                variant.title ||
+                                [variant.color, variant.size, variant.fabric]
+                                  .filter(Boolean)
+                                  .join(" / ") ||
+                                variant.sku ||
+                                `Option ${index + 1}`;
+                              const isSelectedOption =
+                                (variant.sku || null) ===
+                                storefrontSelectedVariantSku;
+                              const optionPrice = Number(
+                                variant.sellingPrice ??
+                                  variant.price ??
+                                  previewProduct.sellingPrice,
+                              );
+                              return (
+                                <button
+                                  key={variant.sku || index}
+                                  type="button"
+                                  onClick={() => {
+                                    setStorefrontSelectedVariantSku(
+                                      variant.sku || null,
+                                    );
+                                    setStorefrontPreviewImageIndex(0);
+                                    setFailedStorefrontImageUrl(null);
+                                  }}
+                                  aria-pressed={isSelectedOption}
+                                  className={`rounded-md border px-3 py-2 text-left text-xs transition ${isSelectedOption ? "border-amber-800 bg-amber-50 text-amber-950 ring-1 ring-amber-700" : "border-slate-300 text-slate-700 hover:border-slate-500"}`}
+                                >
+                                  <span className="block font-medium">
+                                    {optionName}
+                                  </span>
+                                  <span className="mt-1 block font-semibold">
+                                    ₹{optionPrice.toLocaleString("en-IN")}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                    {previewProduct.specifications &&
+                      previewProduct.specifications.length > 0 && (
+                        <div className="mt-5">
+                          <p className="text-xs font-semibold text-slate-800">
+                            Specifications
+                          </p>
+                          <dl className="mt-2 divide-y divide-slate-100 border-y border-slate-100">
+                            {previewProduct.specifications.map(
+                              (spec, index) => (
+                                <div
+                                  key={`${spec.key}-${index}`}
+                                  className="flex items-start justify-between gap-4 py-2 text-xs"
+                                >
+                                  <dt className="text-slate-500">{spec.key}</dt>
+                                  <dd className="text-right font-medium text-slate-800">
+                                    {spec.value}
+                                  </dd>
+                                </div>
+                              ),
+                            )}
+                          </dl>
+                        </div>
+                      )}
+
+                    <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <p className="text-slate-500">Weight</p>
+                        <p className="mt-1 font-semibold text-slate-800">
+                          {previewProduct.weight || "—"} kg
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <p className="text-slate-500">Availability</p>
+                        <p className="mt-1 font-semibold text-emerald-700">
+                          {previewProduct.productType === "variable"
+                            ? `${previewProduct.variants?.length || 0} options`
+                            : (previewProduct.stock?.quantity ?? 0) > 0
+                              ? "In stock"
+                              : "Stock not set"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        disabled
+                        className="cursor-not-allowed rounded-lg bg-slate-900 px-4 py-3 text-xs font-semibold text-white opacity-90"
+                      >
+                        Add to cart
+                      </button>
+                      <button
+                        type="button"
+                        disabled
+                        className="cursor-not-allowed rounded-lg border border-slate-300 px-4 py-3 text-xs font-semibold text-slate-700 opacity-90"
+                      >
+                        Buy now
+                      </button>
+                    </div>
+                    <p className="mt-2 text-center text-[10px] text-slate-400">
+                      Preview only — storefront actions are disabled in the
+                      admin preview.
+                    </p>
+                    {previewProduct.seo && (
+                      <div className="mt-6 rounded-lg border border-dashed border-slate-200 p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                          Search listing preview
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-blue-800">
+                          {previewProduct.seo.metaTitle ||
+                            previewProduct.metaTitle ||
+                            previewProduct.name}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                          {previewProduct.seo.metaDesc ||
+                            previewProduct.metaDesc ||
+                            previewProduct.description}
+                        </p>
+                      </div>
+                    )}
+                  </section>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {imageGallery && imageGallery.images[imageGallery.index] && (
         <div
@@ -1718,9 +2197,12 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
               <div className="min-w-0">
-                <h3 className="truncate text-sm font-semibold text-slate-900">{imageGallery.product.name}</h3>
+                <h3 className="truncate text-sm font-semibold text-slate-900">
+                  {imageGallery.product.name}
+                </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Image {imageGallery.index + 1} of {imageGallery.images.length} · Full-size image loads only in this viewer
+                  Image {imageGallery.index + 1} of {imageGallery.images.length}{" "}
+                  · Full-size image loads only in this viewer
                 </p>
               </div>
               <button
@@ -1734,107 +2216,184 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
             </div>
             <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
               <div className="relative flex min-h-[36vh] items-center justify-center bg-slate-950 p-3 sm:p-6">
-              {imageGallery.index > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setImageGallery((current) => current ? { ...current, index: Math.max(0, current.index - 1) } : current)}
-                  className="absolute left-3 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow transition hover:bg-white"
-                  aria-label="Previous image"
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                </button>
-              )}
-              {(() => {
-                const active = imageGallery.images[imageGallery.index];
-                const detailSrc = /^(https?:\/\/|\/)/i.test(active.url || "") ? active.url : undefined;
-                return detailSrc && active.type !== "VIDEO" && failedDetailImageUrl !== detailSrc ? (
-                  <img
-                    src={detailSrc}
-                    alt={active.altText || active.title || imageGallery.product.name}
-                    loading="eager"
-                    decoding="async"
-                    className="max-h-[72vh] max-w-full object-contain"
-                    onError={() => setFailedDetailImageUrl(detailSrc)}
-                  />
-                ) : (
-                  <div className="flex max-w-md flex-col items-center gap-2 px-6 py-12 text-center text-white">
-                    <ImageIcon className="h-10 w-10 text-slate-400" />
-                    <p className="text-sm font-medium">
-                      {failedDetailImageUrl === detailSrc
-                        ? "This image could not be loaded."
-                        : "A full-size image URL is not available for this item."}
-                    </p>
-                    <p className="text-xs text-slate-400">Check that this image was uploaded or run Drive matching again.</p>
-                  </div>
-                );
-              })()}
-              {imageGallery.index < imageGallery.images.length - 1 && (
-                <button
-                  type="button"
-                  onClick={() => setImageGallery((current) => current ? { ...current, index: Math.min(current.images.length - 1, current.index + 1) } : current)}
-                  className="absolute right-3 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow transition hover:bg-white"
-                  aria-label="Next image"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </button>
-              )}
+                {imageGallery.index > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setImageGallery((current) =>
+                        current
+                          ? {
+                              ...current,
+                              index: Math.max(0, current.index - 1),
+                            }
+                          : current,
+                      )
+                    }
+                    className="absolute left-3 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow transition hover:bg-white"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                )}
+                {(() => {
+                  const active = imageGallery.images[imageGallery.index];
+                  const detailSrc = /^(https?:\/\/|\/)/i.test(active.url || "")
+                    ? active.url
+                    : undefined;
+                  return detailSrc &&
+                    active.type !== "VIDEO" &&
+                    failedDetailImageUrl !== detailSrc ? (
+                    <img
+                      src={detailSrc}
+                      alt={
+                        active.altText ||
+                        active.title ||
+                        imageGallery.product.name
+                      }
+                      loading="eager"
+                      decoding="async"
+                      className="max-h-[72vh] max-w-full object-contain"
+                      onError={() => setFailedDetailImageUrl(detailSrc)}
+                    />
+                  ) : (
+                    <div className="flex max-w-md flex-col items-center gap-2 px-6 py-12 text-center text-white">
+                      <ImageIcon className="h-10 w-10 text-slate-400" />
+                      <p className="text-sm font-medium">
+                        {failedDetailImageUrl === detailSrc
+                          ? "This image could not be loaded."
+                          : "A full-size image URL is not available for this item."}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Check that this image was uploaded or run Drive matching
+                        again.
+                      </p>
+                    </div>
+                  );
+                })()}
+                {imageGallery.index < imageGallery.images.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setImageGallery((current) =>
+                        current
+                          ? {
+                              ...current,
+                              index: Math.min(
+                                current.images.length - 1,
+                                current.index + 1,
+                              ),
+                            }
+                          : current,
+                      )
+                    }
+                    className="absolute right-3 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow transition hover:bg-white"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                )}
               </div>
               <aside className="max-h-[32vh] overflow-y-auto border-t border-slate-200 bg-white p-4 text-sm lg:max-h-[78vh] lg:border-l lg:border-t-0">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Product details</p>
-                <p className="mt-3 font-mono text-xs text-slate-500">{imageGallery.product.productGroupId}</p>
-                <h4 className="mt-1 text-base font-semibold leading-snug text-slate-900">{imageGallery.product.name}</h4>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Product details
+                </p>
+                <p className="mt-3 font-mono text-xs text-slate-500">
+                  {imageGallery.product.productGroupId}
+                </p>
+                <h4 className="mt-1 text-base font-semibold leading-snug text-slate-900">
+                  {imageGallery.product.name}
+                </h4>
                 {imageGallery.product.sku && (
-                  <p className="mt-1 text-xs text-slate-500">SKU: {imageGallery.product.sku}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    SKU: {imageGallery.product.sku}
+                  </p>
                 )}
                 <div className="mt-4 flex flex-wrap items-baseline gap-2">
-                  <span className="text-xl font-bold text-slate-900">₹{Number(imageGallery.product.sellingPrice || 0).toLocaleString("en-IN")}</span>
-                  {imageGallery.product.basePrice > imageGallery.product.sellingPrice && (
-                    <span className="text-xs text-slate-400 line-through">₹{Number(imageGallery.product.basePrice).toLocaleString("en-IN")}</span>
+                  <span className="text-xl font-bold text-slate-900">
+                    ₹
+                    {Number(
+                      imageGallery.product.sellingPrice || 0,
+                    ).toLocaleString("en-IN")}
+                  </span>
+                  {imageGallery.product.basePrice >
+                    imageGallery.product.sellingPrice && (
+                    <span className="text-xs text-slate-400 line-through">
+                      ₹
+                      {Number(imageGallery.product.basePrice).toLocaleString(
+                        "en-IN",
+                      )}
+                    </span>
                   )}
                 </div>
                 <p className="mt-3 text-xs text-slate-600">
-                  <span className="font-semibold text-slate-700">Category: </span>
+                  <span className="font-semibold text-slate-700">
+                    Category:{" "}
+                  </span>
                   {imageGallery.product.categoryPath || "Not assigned"}
                 </p>
                 {imageGallery.product.description && (
                   <div className="mt-4">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Description</p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{imageGallery.product.description}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      Description
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-700">
+                      {imageGallery.product.description}
+                    </p>
                   </div>
                 )}
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <div className="rounded-lg border border-slate-200 p-2">
                     <p className="text-[10px] text-slate-500">Type</p>
-                    <p className="mt-0.5 text-xs font-semibold capitalize text-slate-800">{imageGallery.product.productType}</p>
+                    <p className="mt-0.5 text-xs font-semibold capitalize text-slate-800">
+                      {imageGallery.product.productType}
+                    </p>
                   </div>
                   <div className="rounded-lg border border-slate-200 p-2">
                     <p className="text-[10px] text-slate-500">Weight</p>
-                    <p className="mt-0.5 text-xs font-semibold text-slate-800">{imageGallery.product.weight || "—"} kg</p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-800">
+                      {imageGallery.product.weight || "—"} kg
+                    </p>
                   </div>
                 </div>
                 {imageGallery.product.stock && (
                   <div className="mt-3 rounded-lg border border-slate-200 p-2">
                     <p className="text-[10px] text-slate-500">Stock quantity</p>
-                    <p className="mt-0.5 text-xs font-semibold text-slate-800">{imageGallery.product.stock.quantity}</p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-800">
+                      {imageGallery.product.stock.quantity}
+                    </p>
                   </div>
                 )}
-                {imageGallery.product.specifications && imageGallery.product.specifications.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Specifications</p>
-                    <dl className="mt-2 space-y-2">
-                      {imageGallery.product.specifications.map((spec, index) => (
-                        <div key={spec.key + "-" + index} className="flex items-start justify-between gap-3 border-b border-slate-100 pb-2 text-xs">
-                          <dt className="text-slate-500">{spec.key}</dt>
-                          <dd className="text-right font-medium text-slate-800">{spec.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </div>
-                )}
+                {imageGallery.product.specifications &&
+                  imageGallery.product.specifications.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                        Specifications
+                      </p>
+                      <dl className="mt-2 space-y-2">
+                        {imageGallery.product.specifications.map(
+                          (spec, index) => (
+                            <div
+                              key={spec.key + "-" + index}
+                              className="flex items-start justify-between gap-3 border-b border-slate-100 pb-2 text-xs"
+                            >
+                              <dt className="text-slate-500">{spec.key}</dt>
+                              <dd className="text-right font-medium text-slate-800">
+                                {spec.value}
+                              </dd>
+                            </div>
+                          ),
+                        )}
+                      </dl>
+                    </div>
+                  )}
               </aside>
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
-              <span className="truncate">{imageGallery.images[imageGallery.index].title || imageGallery.images[imageGallery.index].altText || "Product image"}</span>
+              <span className="truncate">
+                {imageGallery.images[imageGallery.index].title ||
+                  imageGallery.images[imageGallery.index].altText ||
+                  "Product image"}
+              </span>
               <button
                 type="button"
                 onClick={() => setImageGallery(null)}
@@ -1849,4 +2408,3 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
     </div>
   );
 };
-
