@@ -297,7 +297,9 @@ interface DriveMatchingPanelProps {
     mode: "replace" | "append",
   ) => void;
   getDriveProxyUrl: (fileId: string) => string;
+  getDriveThumbnailUrl: (fileId: string) => string;
   onPrepareDraft?: () => Promise<void>;
+  onMatchingChange?: (matching: boolean) => void;
 }
 
 const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
@@ -308,7 +310,9 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   onMatchComplete,
   onAssignMedia,
   getDriveProxyUrl,
+  getDriveThumbnailUrl,
   onPrepareDraft,
+  onMatchingChange,
 }) => {
   const [sourceMode, setSourceMode] = useState<ImageSourceMode>("references");
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
@@ -428,6 +432,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   const handleMatch = async () => {
     if (!draftId || !selectedFolderId) return;
     setMatching(true);
+    onMatchingChange?.(true);
     try {
       await onPrepareDraft?.();
       const res = await productApi.matchDriveImages(draftId, selectedFolderId);
@@ -461,6 +466,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       toast.error(humanError(err));
     } finally {
       setMatching(false);
+      onMatchingChange?.(false);
     }
   };
 
@@ -1072,7 +1078,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
                         <div className="aspect-square rounded-lg border overflow-hidden bg-gray-50">
                           <img
                             loading="lazy"
-                            src={getDriveProxyUrl(match.file.id)}
+                            src={getDriveThumbnailUrl(match.file.id)}
                             alt={match.file.name}
                             className="w-full h-full object-cover"
                           />
@@ -1129,7 +1135,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
                               >
                                 <img
                                   loading="lazy"
-                                  src={getDriveProxyUrl(candidate.id)}
+                                  src={getDriveThumbnailUrl(candidate.id)}
                                   alt={candidate.name}
                                   className="w-full h-full object-cover"
                                 />
@@ -1250,6 +1256,8 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
                     <img
                       src={item.previewUrl}
                       alt={item.file.name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full aspect-square object-cover bg-gray-50"
                     />
                     {index === 0 && (
@@ -1778,6 +1786,7 @@ const BulkProductUploadPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDriveMatching, setIsDriveMatching] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
   const [showDraftSelector, setShowDraftSelector] = useState(false);
@@ -1827,20 +1836,23 @@ const BulkProductUploadPage: React.FC = () => {
   const hasBlockers = (summary?.errorCount ?? 0) > 0;
   const canImport =
     !hasBlockers &&
+    !isDriveMatching &&
     products.length > 0 &&
     !!draftId &&
     job?.status !== "processing" &&
     job?.status !== "pending";
 
-  const importDisabledReason = !draftId
-    ? "Create or open a draft first."
-    : products.length === 0
-      ? "Parse products first."
-      : hasBlockers
-        ? `Fix ${summary!.errorCount} error(s) before importing.`
-        : job?.status === "processing" || job?.status === "pending"
-          ? "Import is already running."
-          : null;
+  const importDisabledReason = isDriveMatching
+    ? "Wait for Google Drive matching and image uploads to finish."
+    : !draftId
+      ? "Create or open a draft first."
+      : products.length === 0
+        ? "Parse products first."
+        : hasBlockers
+          ? `Fix ${summary!.errorCount} error(s) before importing.`
+          : job?.status === "processing" || job?.status === "pending"
+            ? "Import is already running."
+            : null;
 
   // ─ Poll job status ───────────────────────────────────────────────────────
 
@@ -2380,6 +2392,66 @@ const BulkProductUploadPage: React.FC = () => {
         { url: string; key?: string }
       >();
 
+      const toStorageMedia = (media: BulkParsedMedia): BulkParsedMedia => {
+        if (!media.key) return media;
+        const stored = uploadedByDriveId.get(media.key);
+        if (!stored || !media.url.includes("/products/bulk/drive-proxy/"))
+          return media;
+        // Preserve the lightweight Drive thumbnail for the grid; only the detail
+        // viewer uses the canonical S3 image URL.
+        return {
+          ...media,
+          url: stored.url,
+          thumbnailUrl: media.thumbnailUrl || stored.url,
+          key: stored.key,
+        };
+      };
+
+      const applyUploadedUrls = (
+        sourceProducts: BulkParsedProduct[],
+      ): BulkParsedProduct[] =>
+        sourceProducts.map((product) => {
+          const nextMedia = (product.media ?? []).map(toStorageMedia);
+          const nextVariants = (product.variants ?? []).map((variant) => ({
+            ...variant,
+            media: variant.media?.map(toStorageMedia),
+          }));
+          const allImages: BulkParsedMedia[] = [
+            ...nextMedia.map((media) => ({
+              ...media,
+              source: "product" as const,
+            })),
+            ...nextVariants.flatMap((variant) =>
+              (variant.media ?? []).map((media) => ({
+                ...media,
+                source: "variant" as const,
+                variantSku: variant.sku,
+              })),
+            ),
+          ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          return {
+            ...product,
+            media: nextMedia,
+            variants: nextVariants,
+            allImages,
+          };
+        });
+
+      // Show matched thumbnails immediately; each preview is replaced with its
+      // canonical S3 URL as that original finishes uploading.
+      const previewProducts = matches.matched.length
+        ? applyDriveMatchesToProducts(
+            products,
+            matches,
+            productApi.getDriveProxyUrl,
+            productApi.getDriveThumbnailUrl,
+          )
+        : products;
+      if (matches.matched.length) {
+        setProducts(previewProducts);
+        setImageMatches(matches);
+      }
+
       // Only download files the matcher confirmed. Never download the entire Drive folder.
       for (const entry of matches.matched) {
         if (uploadedByDriveId.has(entry.file.id)) continue;
@@ -2410,6 +2482,7 @@ const BulkProductUploadPage: React.FC = () => {
             url: storage.url,
             key: storage.key,
           });
+          setProducts(applyUploadedUrls(previewProducts));
         } catch {
           // Failed transfers are turned back into missing references below.
         }
@@ -2441,45 +2514,9 @@ const BulkProductUploadPage: React.FC = () => {
           products,
           finalMatches,
           productApi.getDriveProxyUrl,
+          productApi.getDriveThumbnailUrl,
         );
-        const toStorageMedia = (media: BulkParsedMedia): BulkParsedMedia => {
-          if (!media.key) return media;
-          const stored = uploadedByDriveId.get(media.key);
-          if (!stored || !media.url.includes("/products/bulk/drive-proxy/"))
-            return media;
-          return {
-            ...media,
-            url: stored.url,
-            thumbnailUrl: stored.url,
-            key: stored.key,
-          };
-        };
-        const updatedWithImages = matchedProducts.map((product) => {
-          const nextMedia = (product.media ?? []).map(toStorageMedia);
-          const nextVariants = (product.variants ?? []).map((variant) => ({
-            ...variant,
-            media: variant.media?.map(toStorageMedia),
-          }));
-          const allImages: BulkParsedMedia[] = [
-            ...nextMedia.map((media) => ({
-              ...media,
-              source: "product" as const,
-            })),
-            ...nextVariants.flatMap((variant) =>
-              (variant.media ?? []).map((media) => ({
-                ...media,
-                source: "variant" as const,
-                variantSku: variant.sku,
-              })),
-            ),
-          ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-          return {
-            ...product,
-            media: nextMedia,
-            variants: nextVariants,
-            allImages,
-          };
-        });
+        const updatedWithImages = applyUploadedUrls(matchedProducts);
         setProducts(updatedWithImages);
         const serialized = JSON.stringify(updatedWithImages, null, 2);
         setRawInput(serialized);
@@ -2689,7 +2726,9 @@ const BulkProductUploadPage: React.FC = () => {
                 <button
                   onClick={handleSaveDraft}
                   disabled={
-                    isSaving || (!rawInput.trim() && products.length === 0)
+                    isSaving ||
+                    isDriveMatching ||
+                    (!rawInput.trim() && products.length === 0)
                   }
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
                 >
@@ -2715,7 +2754,7 @@ const BulkProductUploadPage: React.FC = () => {
                 <div className="relative group">
                   <button
                     onClick={handleImport}
-                    disabled={!canImport || isImporting}
+                    disabled={!canImport || isImporting || isDriveMatching}
                     className={classNames(
                       "flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors",
                       canImport
@@ -2834,6 +2873,7 @@ const BulkProductUploadPage: React.FC = () => {
                     categoriesTree={categoriesTree}
                     onBulkUpdateProducts={handleBulkUpdateProducts}
                     getDriveProxyUrl={productApi.getDriveProxyUrl}
+                    getDriveThumbnailUrl={productApi.getDriveThumbnailUrl}
                     onDownloadErrorReport={() => {
                       const blob = new Blob(
                         [JSON.stringify(validationErrors, null, 2)],
@@ -2880,8 +2920,10 @@ const BulkProductUploadPage: React.FC = () => {
                 imageMatches={imageMatches}
                 confirmedAssignments={confirmedAssignments}
                 onMatchComplete={handleMatchComplete}
+                onMatchingChange={setIsDriveMatching}
                 onAssignMedia={handleAssignProductMedia}
                 getDriveProxyUrl={productApi.getDriveProxyUrl}
+                getDriveThumbnailUrl={productApi.getDriveThumbnailUrl}
                 onPrepareDraft={async () => {
                   if (draftId && products.length > 0) {
                     await productApi.updateDraft(draftId, {
@@ -2999,7 +3041,7 @@ const BulkProductUploadPage: React.FC = () => {
             handleUpdateProduct(updated);
             setEditingProduct(null);
           }}
-          getThumbnailUrl={productApi.getDriveProxyUrl}
+          getThumbnailUrl={productApi.getDriveThumbnailUrl}
         />
       )}
 

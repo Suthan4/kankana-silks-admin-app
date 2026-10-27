@@ -5,6 +5,7 @@ import {
   XCircle,
   Search,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Layers,
   Box,
@@ -28,6 +29,7 @@ import {
 import type {
   BulkParsedProduct,
   BulkParsedVariant,
+  BulkParsedMedia,
   BulkValidationError,
   BulkValidationSummary,
   BulkCategoryLookup,
@@ -55,6 +57,7 @@ interface BulkProductPreviewTableProps {
   categoriesTree?: BulkCategoryNode[];
   onBulkUpdateProducts?: (updatedProducts: BulkParsedProduct[]) => void;
   getDriveProxyUrl?: (fileId: string) => string;
+  getDriveThumbnailUrl?: (fileId: string) => string;
 }
 
 export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = ({
@@ -72,6 +75,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   categoriesTree,
   onBulkUpdateProducts,
   getDriveProxyUrl,
+  getDriveThumbnailUrl,
 }) => {
   const [internalFilterStatus, setInternalFilterStatus] = useState<"all" | "valid" | "error" | "warning">("all");
   const filterStatus = externalFilterStatus ?? internalFilterStatus;
@@ -84,6 +88,12 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
 
   // Editing state for inline edits
   const [viewingJsonProduct, setViewingJsonProduct] = useState<BulkParsedProduct | null>(null);
+  const [imageGallery, setImageGallery] = useState<{
+    product: BulkParsedProduct;
+    images: BulkParsedMedia[];
+    index: number;
+  } | null>(null);
+  const [failedDetailImageUrl, setFailedDetailImageUrl] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(null);
 
@@ -1101,7 +1111,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         {variantMedia.length > 0 ? (
                                           <div className="flex items-center gap-1.5 flex-wrap">
                                             {variantMedia.slice(0, 2).map((vm, vi) => {
-                                              const vmSrc = resolveImageUrl(vm.url, vm.thumbnailUrl, getDriveProxyUrl);
+                                              const vmSrc = resolveImageUrl(vm.url, vm.thumbnailUrl, getDriveProxyUrl, getDriveThumbnailUrl);
                                               return vmSrc ? (
                                                 <img
                                                   key={vi}
@@ -1200,15 +1210,38 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         <span className="text-[9px] uppercase mt-1">Video</span>
                                       </div>
                                     ) : (() => {
-                                      const resolvedSrc = resolveImageUrl(m.url, m.thumbnailUrl, getDriveProxyUrl);
+                                      const resolvedSrc = resolveImageUrl(m.url, m.thumbnailUrl, getDriveProxyUrl, getDriveThumbnailUrl);
                                       return resolvedSrc ? (
                                         <img
                                           src={resolvedSrc}
                                           alt={m.altText || product.name}
-                                          className="w-full h-full object-cover"
+                                          loading="lazy"
+                                          decoding="async"
+                                          title="Click to view full-size"
+                                          onClick={() => {
+                                            setFailedDetailImageUrl(null);
+                                            setImageGallery({ product, images: displayMedia, index: mIdx });
+                                          }}
+                                          className="w-full h-full object-cover cursor-zoom-in"
                                           onError={(e) => {
-                                            (e.currentTarget as any).src =
-                                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
+                                            const target = e.currentTarget;
+                                            const canonicalStorageUrl = /(?:cloudfront\.net|amazonaws\.com|localhost:4566)/i.test(m.url || "");
+                                            const isDriveThumbnail = (m.thumbnailUrl || "").includes("/products/bulk/drive-thumbnail/");
+                                            if (
+                                              canonicalStorageUrl &&
+                                              isDriveThumbnail &&
+                                              !target.dataset.storageFallback &&
+                                              !m.url.includes("/products/bulk/drive-proxy/")
+                                            ) {
+                                              // The stored S3/CloudFront image has already passed the backend
+                                              // optimizer. It is a safe fallback; never use the Drive original here.
+                                              target.dataset.storageFallback = "true";
+                                              target.src = m.url;
+                                              return;
+                                            }
+                                            target.dataset.thumbnailFailed = "true";
+                                            target.src =
+                                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
                                           }}
                                         />
                                       ) : (
@@ -1220,7 +1253,20 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         </div>
                                       );
                                     })()}
-                                    <div className="absolute top-1 left-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFailedDetailImageUrl(null);
+                                        setImageGallery({ productName: product.name, images: displayMedia, index: mIdx });
+                                      }}
+                                      className="absolute inset-0 z-[5] flex items-center justify-center bg-black/0 text-white opacity-0 transition hover:bg-black/20 hover:opacity-100 focus:opacity-100"
+                                      aria-label={`View full-size image ${m.title || m.altText || mIdx + 1}`}
+                                      title="View full-size image"
+                                    >
+                                      <span className="rounded-full bg-slate-900/75 px-2.5 py-1 text-[10px] font-semibold shadow">View</span>
+                                    </button>
+                                    <div className="absolute top-1 left-1 z-10">
                                       {(m.order === 0 || mIdx === 0) ? (
                                         <span className="bg-amber-500 text-white font-bold text-[9px] px-1 py-0.5 rounded shadow">
                                           ★ Primary
@@ -1245,7 +1291,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         </button>
                                       )}
                                     </div>
-                                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
+                                    <div className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition">
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1378,6 +1424,149 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                 type="button"
                 onClick={() => setViewingJsonProduct(null)}
                 className="px-4 py-1.5 text-xs font-medium border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageGallery && imageGallery.images[imageGallery.index] && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Product detail preview for ${imageGallery.product.name}`}
+          onClick={() => setImageGallery(null)}
+        >
+          <div
+            className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold text-slate-900">{imageGallery.product.name}</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Image {imageGallery.index + 1} of {imageGallery.images.length} · Full-size image loads only in this viewer
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImageGallery(null)}
+                className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Close image viewer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="relative flex min-h-[36vh] items-center justify-center bg-slate-950 p-3 sm:p-6">
+              {imageGallery.index > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setImageGallery((current) => current ? { ...current, index: Math.max(0, current.index - 1) } : current)}
+                  className="absolute left-3 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow transition hover:bg-white"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              )}
+              {(() => {
+                const active = imageGallery.images[imageGallery.index];
+                const detailSrc = /^(https?:\/\/|\/)/i.test(active.url || "") ? active.url : undefined;
+                return detailSrc && active.type !== "VIDEO" && failedDetailImageUrl !== detailSrc ? (
+                  <img
+                    src={detailSrc}
+                    alt={active.altText || active.title || imageGallery.product.name}
+                    loading="eager"
+                    decoding="async"
+                    className="max-h-[72vh] max-w-full object-contain"
+                    onError={() => setFailedDetailImageUrl(detailSrc)}
+                  />
+                ) : (
+                  <div className="flex max-w-md flex-col items-center gap-2 px-6 py-12 text-center text-white">
+                    <ImageIcon className="h-10 w-10 text-slate-400" />
+                    <p className="text-sm font-medium">
+                      {failedDetailImageUrl === detailSrc
+                        ? "This image could not be loaded."
+                        : "A full-size image URL is not available for this item."}
+                    </p>
+                    <p className="text-xs text-slate-400">Check that this image was uploaded or run Drive matching again.</p>
+                  </div>
+                );
+              })()}
+              {imageGallery.index < imageGallery.images.length - 1 && (
+                <button
+                  type="button"
+                  onClick={() => setImageGallery((current) => current ? { ...current, index: Math.min(current.images.length - 1, current.index + 1) } : current)}
+                  className="absolute right-3 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow transition hover:bg-white"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              )}
+              </div>
+              <aside className="max-h-[32vh] overflow-y-auto border-t border-slate-200 bg-white p-4 text-sm lg:max-h-[78vh] lg:border-l lg:border-t-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Product details</p>
+                <p className="mt-3 font-mono text-xs text-slate-500">{imageGallery.product.productGroupId}</p>
+                <h4 className="mt-1 text-base font-semibold leading-snug text-slate-900">{imageGallery.product.name}</h4>
+                {imageGallery.product.sku && (
+                  <p className="mt-1 text-xs text-slate-500">SKU: {imageGallery.product.sku}</p>
+                )}
+                <div className="mt-4 flex flex-wrap items-baseline gap-2">
+                  <span className="text-xl font-bold text-slate-900">₹{Number(imageGallery.product.sellingPrice || 0).toLocaleString("en-IN")}</span>
+                  {imageGallery.product.basePrice > imageGallery.product.sellingPrice && (
+                    <span className="text-xs text-slate-400 line-through">₹{Number(imageGallery.product.basePrice).toLocaleString("en-IN")}</span>
+                  )}
+                </div>
+                <p className="mt-3 text-xs text-slate-600">
+                  <span className="font-semibold text-slate-700">Category: </span>
+                  {imageGallery.product.categoryPath || "Not assigned"}
+                </p>
+                {imageGallery.product.description && (
+                  <div className="mt-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Description</p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{imageGallery.product.description}</p>
+                  </div>
+                )}
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-slate-200 p-2">
+                    <p className="text-[10px] text-slate-500">Type</p>
+                    <p className="mt-0.5 text-xs font-semibold capitalize text-slate-800">{imageGallery.product.productType}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-2">
+                    <p className="text-[10px] text-slate-500">Weight</p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-800">{imageGallery.product.weight || "—"} kg</p>
+                  </div>
+                </div>
+                {imageGallery.product.stock && (
+                  <div className="mt-3 rounded-lg border border-slate-200 p-2">
+                    <p className="text-[10px] text-slate-500">Stock quantity</p>
+                    <p className="mt-0.5 text-xs font-semibold text-slate-800">{imageGallery.product.stock.quantity}</p>
+                  </div>
+                )}
+                {imageGallery.product.specifications && imageGallery.product.specifications.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Specifications</p>
+                    <dl className="mt-2 space-y-2">
+                      {imageGallery.product.specifications.map((spec, index) => (
+                        <div key={spec.key + "-" + index} className="flex items-start justify-between gap-3 border-b border-slate-100 pb-2 text-xs">
+                          <dt className="text-slate-500">{spec.key}</dt>
+                          <dd className="text-right font-medium text-slate-800">{spec.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
+              </aside>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+              <span className="truncate">{imageGallery.images[imageGallery.index].title || imageGallery.images[imageGallery.index].altText || "Product image"}</span>
+              <button
+                type="button"
+                onClick={() => setImageGallery(null)}
+                className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Close
               </button>
