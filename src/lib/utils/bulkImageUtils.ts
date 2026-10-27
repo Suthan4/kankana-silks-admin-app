@@ -109,7 +109,8 @@ function stripExtension(name: string): string {
 export function applyDriveMatchesToProducts(
   products: BulkParsedProduct[],
   matches: ImageMatchResult,
-  getDriveProxyUrl: (fileId: string) => string
+  getDriveProxyUrl: (fileId: string) => string,
+  getDriveThumbnailUrl?: (fileId: string) => string
 ): BulkParsedProduct[] {
   if (!matches || !Array.isArray(matches.matched) || matches.matched.length === 0) {
     return products;
@@ -170,10 +171,11 @@ export function applyDriveMatchesToProducts(
 
         if (refMatch?.file) {
           const proxyUrl = getDriveProxyUrl(refMatch.file.id);
+          const thumbnailUrl = getDriveThumbnailUrl?.(refMatch.file.id) || refMatch.file.thumbnailLink || proxyUrl;
           return {
             ...m,
             url: proxyUrl,
-            thumbnailUrl: refMatch.file.thumbnailLink || proxyUrl,
+            thumbnailUrl,
             key: refMatch.file.id,
             source: "product" as const,
             productGroupId: product.productGroupId,
@@ -189,10 +191,11 @@ export function applyDriveMatchesToProducts(
       if (unassignedGroupMatches.length > 0) {
         updatedProductMedia = unassignedGroupMatches.map((gm, idx) => {
           const proxyUrl = getDriveProxyUrl(gm.file.id);
+          const thumbnailUrl = getDriveThumbnailUrl?.(gm.file.id) || gm.file.thumbnailLink || proxyUrl;
           return {
             type: "IMAGE" as const,
             url: proxyUrl,
-            thumbnailUrl: gm.file.thumbnailLink || proxyUrl,
+            thumbnailUrl,
             key: gm.file.id,
             source: "product" as const,
             productGroupId: product.productGroupId,
@@ -222,10 +225,11 @@ export function applyDriveMatchesToProducts(
 
           if (refMatch?.file) {
             const proxyUrl = getDriveProxyUrl(refMatch.file.id);
+            const thumbnailUrl = getDriveThumbnailUrl?.(refMatch.file.id) || refMatch.file.thumbnailLink || proxyUrl;
             return {
               ...m,
               url: proxyUrl,
-              thumbnailUrl: refMatch.file.thumbnailLink || proxyUrl,
+              thumbnailUrl,
               key: refMatch.file.id,
               source: "variant" as const,
               variantSku: v.sku,
@@ -239,10 +243,11 @@ export function applyDriveMatchesToProducts(
       } else if (variantMatches.length > 0) {
         updatedVMedia = variantMatches.map((vm, idx) => {
           const proxyUrl = getDriveProxyUrl(vm.file.id);
+          const thumbnailUrl = getDriveThumbnailUrl?.(vm.file.id) || vm.file.thumbnailLink || proxyUrl;
           return {
             type: "IMAGE" as const,
             url: proxyUrl,
-            thumbnailUrl: vm.file.thumbnailLink || proxyUrl,
+            thumbnailUrl,
             key: vm.file.id,
             source: "variant" as const,
             variantSku: v.sku,
