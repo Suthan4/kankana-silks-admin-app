@@ -1757,7 +1757,9 @@ const BulkProductUploadPage: React.FC = () => {
         if (!media.key) return media;
         const stored = uploadedByDriveId.get(media.key);
         if (!stored || !media.url.includes("/products/bulk/drive-proxy/")) return media;
-        return { ...media, url: stored.url, thumbnailUrl: stored.url, key: stored.key };
+        // Preserve the lightweight Drive thumbnail for the grid; only the detail
+        // viewer uses the canonical S3 image URL.
+        return { ...media, url: stored.url, thumbnailUrl: media.thumbnailUrl || stored.url, key: stored.key };
       };
 
       const applyUploadedUrls = (sourceProducts: BulkParsedProduct[]): BulkParsedProduct[] =>
@@ -1783,7 +1785,12 @@ const BulkProductUploadPage: React.FC = () => {
       // Show matched thumbnails immediately; each preview is replaced with its
       // canonical S3 URL as that original finishes uploading.
       const previewProducts = matches.matched.length
-        ? applyDriveMatchesToProducts(products, matches, productApi.getDriveProxyUrl)
+        ? applyDriveMatchesToProducts(
+            products,
+            matches,
+            productApi.getDriveProxyUrl,
+            productApi.getDriveThumbnailUrl,
+          )
         : products;
       if (matches.matched.length) {
         setProducts(previewProducts);
@@ -1840,6 +1847,7 @@ const BulkProductUploadPage: React.FC = () => {
           products,
           finalMatches,
           productApi.getDriveProxyUrl,
+          productApi.getDriveThumbnailUrl,
         );
         const updatedWithImages = applyUploadedUrls(matchedProducts);
         setProducts(updatedWithImages);
@@ -2188,6 +2196,7 @@ const BulkProductUploadPage: React.FC = () => {
                     categoriesTree={categoriesTree}
                     onBulkUpdateProducts={handleBulkUpdateProducts}
                     getDriveProxyUrl={productApi.getDriveProxyUrl}
+                    getDriveThumbnailUrl={productApi.getDriveThumbnailUrl}
                     onDownloadErrorReport={() => {
                       const blob = new Blob(
                         [JSON.stringify(validationErrors, null, 2)],
