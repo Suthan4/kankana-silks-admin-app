@@ -128,13 +128,14 @@ export const BulkImageGallery: React.FC<BulkImageGalleryProps> = ({
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       const target = e.currentTarget;
-                      const storageUrl = /(?:cloudfront\.net|amazonaws\.com|localhost:4566)/i.test(m.url || "");
+                      const storageUrl = /^https?:\/\//i.test(m.url || "");
                       const isDriveThumbnail = (m.thumbnailUrl || "").includes("/products/bulk/drive-thumbnail/");
+                      const isDriveOriginalProxy = (m.url || "").includes("/products/bulk/drive-proxy/");
                       if (
                         storageUrl &&
                         isDriveThumbnail &&
                         !target.dataset.storageFallback &&
-                        !m.url.includes("/products/bulk/drive-proxy/")
+                        !isDriveOriginalProxy
                       ) {
                         target.dataset.storageFallback = "true";
                         target.src = m.url;
