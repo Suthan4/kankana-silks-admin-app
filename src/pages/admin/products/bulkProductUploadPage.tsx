@@ -1623,6 +1623,19 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
     job.stage === "failed" ? "Failed" :
     isRunning ? "Queued…" : job.status;
 
+  const progressNote =
+    job.status === "completed"
+      ? "The import finished successfully. Required images were stored and the products were created."
+      : job.stage === "images_failed"
+        ? "Product creation was stopped because one or more images could not be stored. Your draft is kept so you can retry the failed images."
+        : job.status === "failed"
+          ? "Some products need attention. Your draft is kept, and the failed items below can be corrected and retried."
+          : job.stage === "importing_products"
+            ? "Image preparation passed. Products are being created now; any failed product will be listed below."
+            : job.stage === "uploading_images" || job.stage === "preparing_images"
+              ? "The server is downloading selected Drive images and saving them to permanent storage. Product creation starts only after all required images succeed."
+              : "Your import is queued on the server. Progress refreshes automatically, so do not click Import again.";
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm mt-4">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -1675,6 +1688,21 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
               style={{ width: `${pct}%` }}
             />
           </div>
+        </div>
+
+        <div
+          role="status"
+          aria-live="polite"
+          className={classNames(
+            "rounded-lg border px-3 py-2 text-xs leading-relaxed",
+            job.status === "failed"
+              ? "border-amber-200 bg-amber-50 text-amber-900"
+              : job.status === "completed"
+                ? "border-green-200 bg-green-50 text-green-800"
+                : "border-blue-100 bg-blue-50 text-blue-900",
+          )}
+        >
+          {progressNote}
         </div>
 
         {(job.imagesTotal ?? 0) > 0 && (
