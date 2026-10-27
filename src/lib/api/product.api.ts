@@ -19,7 +19,6 @@ import type {
   BulkImportJob,
   ImageMatchResult,
   DriveFolder,
-  DriveFile,
   BulkWarehouse,
 } from "../types/product/bulkProduct";
 
@@ -451,30 +450,6 @@ export const productApi = {
   ): Promise<ApiResponse<DriveFolder[] | { folders: DriveFolder[] }>> => {
     return apiCall("GET", "/products/bulk/drive/folders", undefined, {
       params: parentId ? { parentId } : undefined,
-    });
-  },
-
-  /**
-   * Browse Drive image metadata without downloading image contents.
-   * The bulk-drive backend route should return { files, folders, nextPageToken }.
-   */
-  listDriveFiles: async (params: {
-    parentId: string;
-    pageToken?: string;
-    query?: string;
-    pageSize?: number;
-  }): Promise<ApiResponse<{
-    files: DriveFile[];
-    folders: DriveFolder[];
-    nextPageToken?: string | null;
-  }>> => {
-    return apiCall("GET", "/products/bulk/drive/files", undefined, {
-      params: {
-        parentId: params.parentId,
-        pageToken: params.pageToken,
-        query: params.query || undefined,
-        pageSize: params.pageSize ?? 60,
-      },
     });
   },
 
