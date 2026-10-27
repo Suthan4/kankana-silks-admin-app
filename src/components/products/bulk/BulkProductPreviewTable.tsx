@@ -66,12 +66,10 @@ function getStorefrontPreviewMedia(
   // Some parser formats store variant media in products[].media with
   // variantSku/source="variant", instead of nesting it under the variant.
   const embeddedVariantImages = selectedSku
-    ? (product.media ?? []).filter((media) =>
-        media.type === "IMAGE" &&
-        (
-          (media.variantSku || "").trim().toLocaleLowerCase("en-US") === selectedSku ||
-          (media.source === "variant" && !media.variantSku)
-        ),
+    ? (product.media ?? []).filter(
+        (media) =>
+          media.type === "IMAGE" &&
+          (media.variantSku || "").trim().toLocaleLowerCase("en-US") === selectedSku,
       )
     : [];
   if (embeddedVariantImages.length) {
@@ -2049,6 +2047,7 @@ export const BulkProductPreviewTable: React.FC<
 
             let updatedProduct: BulkParsedProduct;
             if (editVariantMedia && selectedVariantForMedia) {
+              const selectedSku = (storefrontSelectedVariantSku || "").trim().toLocaleLowerCase("en-US");
               const variants = (previewProduct.variants || []).map((variant) => {
                 if (variant.sku !== storefrontSelectedVariantSku) return variant;
                 const nonImages = (variant.media || [])
@@ -2056,14 +2055,31 @@ export const BulkProductPreviewTable: React.FC<
                   .map((media, index) => ({ ...media, order: orderedImages.length + index }));
                 return { ...variant, media: [...orderedImages, ...nonImages] };
               });
-              updatedProduct = { ...previewProduct, variants };
+              // Some imports duplicate variant media inside products[].media.
+              // Remove those copies when editing this variant; otherwise a
+              // future retry could reintroduce an image removed in this modal.
+              const productMedia = (previewProduct.media || []).filter((media) =>
+                !(
+                  media.type === "IMAGE" &&
+                  (media.variantSku || "").trim().toLocaleLowerCase("en-US") === selectedSku
+                ),
+              );
+              updatedProduct = { ...previewProduct, media: productMedia, variants };
             } else {
-              const nonImages = (previewProduct.media || [])
-                .filter((media) => media.type !== "IMAGE")
-                .map((media, index) => ({ ...media, order: orderedImages.length + index }));
+              // Keep video media and any variant-specific records that live in
+              // products[].media; editing the shared product gallery must not
+              // delete a variant's independent photographs.
+              const otherMedia = (previewProduct.media || [])
+                .filter((media) =>
+                  media.type !== "IMAGE" || Boolean(media.variantSku) || media.source === "variant",
+                )
+                .map((media, index) => ({
+                  ...media,
+                  order: media.type === "IMAGE" ? 10000 + index : orderedImages.length + index,
+                }));
               updatedProduct = {
                 ...previewProduct,
-                media: [...orderedImages, ...nonImages],
+                media: [...orderedImages, ...otherMedia],
               };
             }
 
