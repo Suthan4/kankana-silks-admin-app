@@ -141,7 +141,7 @@ function summaryFromProducts(
   };
 }
 
-const POLLING_INTERVAL = 5000; // Avoid excessive status traffic; backend work continues independently.
+const POLLING_INTERVAL = 10000; // Status refresh only; pause while the browser tab is hidden.
 
 // ─── Draft Selector modal ────────────────────────────────────────────────────
 
@@ -1979,9 +1979,17 @@ const BulkProductUploadPage: React.FC = () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let requestInFlight = false;
 
+    // Poll only while this page is visible. The server job keeps running when
+    // the admin navigates away; returning to this page triggers an immediate refresh.
+    const scheduleRefresh = (delay = POLLING_INTERVAL) => {
+      if (disposed || document.visibilityState === "hidden") return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void refreshJob(); }, delay);
+    };
+
     // Recursive timeout prevents overlapping status requests when the API is slow.
     const refreshJob = async () => {
-      if (disposed || requestInFlight) return;
+      if (disposed || requestInFlight || document.visibilityState === "hidden") return;
       requestInFlight = true;
       try {
         const res = await productApi.getJobStatus(jobId);
@@ -2067,16 +2075,25 @@ const BulkProductUploadPage: React.FC = () => {
         // Polling is the realtime fallback if a transient network request fails.
       } finally {
         requestInFlight = false;
-        if (!disposed) {
-          timer = setTimeout(() => { void refreshJob(); }, POLLING_INTERVAL);
-        }
+        scheduleRefresh();
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshJob();
+      } else if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     void refreshJob();
     return () => {
       disposed = true;
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [jobId, job?.status, draftId, queryClient, setSearchParams]);
 
