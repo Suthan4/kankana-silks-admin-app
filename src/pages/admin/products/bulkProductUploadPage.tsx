@@ -2357,8 +2357,8 @@ const BulkProductUploadPage: React.FC = () => {
     const tid = toast.loading("Preparing product images for import…");
 
     try {
-      const matchesById = new Map(
-        (imageMatches?.matched ?? []).map((entry) => [entry.file.id, entry]),
+      const matchesById = new Map<string, MatchedEntry>(
+        (imageMatches?.matched ?? []).map((entry) => [entry.file.id, entry] as const),
       );
 
       const getDriveFileId = (media: BulkParsedMedia): string | null => {
@@ -2532,12 +2532,12 @@ const BulkProductUploadPage: React.FC = () => {
         setProducts(productsReadyForImport);
         const serialized = JSON.stringify(productsReadyForImport, null, 2);
         setRawInput(serialized);
-        setIsDirty(false);
         await productApi.updateDraft(draftId, {
           rawInput: serialized,
           parsedData: productsReadyForImport,
           confirmedAssignments,
         });
+        setIsDirty(false);
       }
 
       toast.loading("Starting product import…", { id: tid });
