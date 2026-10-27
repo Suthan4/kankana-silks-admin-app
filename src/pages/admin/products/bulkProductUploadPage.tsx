@@ -274,6 +274,18 @@ const DeleteDraftModal: React.FC<DeleteDraftModalProps> = ({
 
 type ImageSourceMode = "references" | "local" | "drive";
 
+/** Build the backend Google OAuth redirect URL using the existing auth flow. */
+function buildDriveConnectUrl(draftId?: string | null): string {
+  const token = localStorage.getItem("accessToken") ?? "";
+  const apiBase = (
+    import.meta.env.VITE_API_URL || "http://localhost:3000/api"
+  ).replace(/\/+$/, "");
+  const params = new URLSearchParams({ token });
+  if (draftId) params.set("draftId", draftId);
+  return apiBase + "/auth/google?" + params.toString();
+}
+
+
 interface DriveBrowseResult {
   files: DriveFile[];
   folders: DriveFolder[];
