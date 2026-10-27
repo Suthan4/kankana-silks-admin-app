@@ -1901,6 +1901,9 @@ const BulkProductUploadPage: React.FC = () => {
 
   // ─ Computed ─────────────────────────────────────────────────────────────
 
+  const isJobRunning = job?.status === "pending" || job?.status === "processing";
+  const isWorkspaceLocked = isJobRunning || draftStatus === "COMPLETED";
+
   const summary =
     products.length > 0 ? summaryFromProducts(products) : undefined;
   const hasBlockers = (summary?.errorCount ?? 0) > 0;
@@ -2124,7 +2127,7 @@ const BulkProductUploadPage: React.FC = () => {
   );
 
   const handleReloadDraft = useCallback(async () => {
-    if (!draftId) return;
+    if (!draftId || isJobRunning || draftStatus === "COMPLETED") return;
     const tid = toast.loading(`Reloading draft #${draftId.slice(-8)}…`);
     try {
       const res = await productApi.getDraft(draftId);
@@ -2135,7 +2138,7 @@ const BulkProductUploadPage: React.FC = () => {
     } catch (err) {
       toast.error(humanError(err), { id: tid });
     }
-  }, [draftId, loadDraft]);
+  }, [draftId, loadDraft, isJobRunning, draftStatus]);
 
   // ─ Auto-enrich in-memory products when categories/warehouses load ──────────
   useEffect(() => {
@@ -2302,6 +2305,7 @@ const BulkProductUploadPage: React.FC = () => {
   }, [searchParams, loadDraft, syncDraftUrl]);
 
   const handleSaveDraft = async () => {
+    if (isJobRunning || draftStatus === "COMPLETED") return;
     const safeProducts = sanitizeProductsForStorage(products);
     const serializedProducts =
       products.length > 0 ? JSON.stringify(safeProducts, null, 2) : "";
@@ -2503,7 +2507,7 @@ const BulkProductUploadPage: React.FC = () => {
   };
 
   const handleDeleteDraft = async () => {
-    if (!draftId) return;
+    if (!draftId || isJobRunning || draftStatus === "COMPLETED") return;
     try {
       await productApi.deleteDraft(draftId);
       loadedDraftIdRef.current = null;
@@ -2900,13 +2904,14 @@ const BulkProductUploadPage: React.FC = () => {
 
                 <button
                   onClick={() => setShowDraftSelector(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  disabled={isJobRunning}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                 >
                   <FolderOpen className="w-4 h-4" />
                   Open Draft
                 </button>
 
-                {draftId && draftStatus !== "COMPLETED" && (
+                {draftId && draftStatus !== "COMPLETED" && !isJobRunning && (
                   <button
                     onClick={handleReloadDraft}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
@@ -2921,6 +2926,7 @@ const BulkProductUploadPage: React.FC = () => {
                 <button
                   onClick={handleSaveDraft}
                   disabled={
+                    isJobRunning ||
                     isSaving ||
                     isDriveMatching ||
                     (!rawInput.trim() && products.length === 0)
@@ -2936,7 +2942,7 @@ const BulkProductUploadPage: React.FC = () => {
                 </button>
                 )}
 
-                {draftId && draftStatus !== "COMPLETED" && (
+                {draftId && draftStatus !== "COMPLETED" && !isJobRunning && (
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
                     className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -3024,6 +3030,9 @@ const BulkProductUploadPage: React.FC = () => {
                 )}
                 {job.currentFile && <span className="max-w-full truncate">Current: {job.currentFile}</span>}
               </div>
+              <p className="text-[11px] font-medium text-indigo-800">
+                This import is running in the background. Editing, saving, draft switching, and draft deletion are paused until the job finishes.
+              </p>
               <p className="text-[11px] text-slate-500">
                 {job.stage === "preparing_images"
                   ? "Checking which selected photos are still attached to these products. Nothing is published yet."
@@ -3036,7 +3045,13 @@ const BulkProductUploadPage: React.FC = () => {
         )}
 
         {/* ── Body ───────────────────────────────────────────────────────────── */}
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div
+          aria-busy={isJobRunning}
+          className={classNames(
+            "max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-opacity",
+            isWorkspaceLocked ? "pointer-events-none select-none opacity-75" : "",
+          )}
+        >
           <div className="flex flex-col xl:flex-row gap-6">
             {/* ── Left column (input + products) ─────────────────────────────── */}
             <div className="flex-1 min-w-0 space-y-5">
