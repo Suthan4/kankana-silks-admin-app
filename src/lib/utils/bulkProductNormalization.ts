@@ -120,6 +120,9 @@ export function normalizeMedia(
     order,
     isActive: raw.isActive !== undefined ? Boolean(raw.isActive) : true,
     key: raw.key ? String(raw.key).trim() : undefined,
+    sourceDriveFileId: raw.sourceDriveFileId
+      ? String(raw.sourceDriveFileId).trim()
+      : undefined,
     mimeType: raw.mimeType,
     fileSize: typeof raw.fileSize === "number" ? raw.fileSize : undefined,
     duration: typeof raw.duration === "number" ? raw.duration : undefined,
