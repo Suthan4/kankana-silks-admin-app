@@ -136,7 +136,7 @@ function summaryFromProducts(
   };
 }
 
-const POLLING_INTERVAL = 2500; // ms
+const POLLING_INTERVAL = 1000; // ms - refresh background image/product progress promptly
 
 // ─── Draft Selector modal ────────────────────────────────────────────────────
 
@@ -1607,12 +1607,16 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
 }) => {
   if (!job) return null;
 
-  const pct =
-    job.total > 0
-      ? Math.round((job.processed / job.total) * 100)
-      : (job.progress ?? 0);
-  const isDone = job.status === "completed" || job.status === "failed";
+  const pct = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
   const isRunning = job.status === "pending" || job.status === "processing";
+  const stageLabel =
+    job.stage === "preparing_images" ? "Preparing image batch…" :
+    job.stage === "uploading_images" ? "Downloading from Drive and uploading to S3…" :
+    job.stage === "images_failed" ? "Image uploads need attention" :
+    job.stage === "importing_products" ? "Importing products…" :
+    job.stage === "completed" ? "Completed" :
+    job.stage === "failed" ? "Failed" :
+    isRunning ? "Queued…" : job.status;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm mt-4">
@@ -1627,7 +1631,11 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
           {job.status === "failed" && (
             <XCircle className="w-4 h-4 text-red-600" />
           )}
-          Import Progress
+          {job.stage === "uploading_images" || job.stage === "preparing_images"
+            ? "Image Upload Progress"
+            : job.stage === "images_failed"
+              ? "Image Upload Errors"
+              : "Import Progress"}
         </h3>
         <span
           className={classNames(
@@ -1641,7 +1649,7 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
                   : "bg-gray-100 text-gray-600",
           )}
         >
-          {job.status}
+          {stageLabel}
         </span>
       </div>
       <div className="p-4 space-y-3">
@@ -1663,6 +1671,44 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
             />
           </div>
         </div>
+
+        {(job.imagesTotal ?? 0) > 0 && (
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-semibold text-indigo-900">Drive images → S3</span>
+              <span className="font-semibold text-indigo-800">
+                {job.imagesProcessed ?? 0}/{job.imagesTotal} processed
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white">
+              <div
+                className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+                style={{
+                  width: `${Math.round(((job.imagesProcessed ?? 0) / Math.max(1, job.imagesTotal || 0)) * 100)}%`,
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded bg-white p-2">
+                <span className="block font-bold text-slate-900">{job.imagesTotal}</span>
+                <span className="text-slate-500">Total</span>
+              </div>
+              <div className="rounded bg-white p-2">
+                <span className="block font-bold text-emerald-700">{job.imagesUploaded ?? 0}</span>
+                <span className="text-slate-500">Uploaded</span>
+              </div>
+              <div className="rounded bg-white p-2">
+                <span className="block font-bold text-red-700">{job.imagesFailed ?? 0}</span>
+                <span className="text-slate-500">Failed</span>
+              </div>
+            </div>
+            {isRunning && job.currentFile && (
+              <p className="break-words text-[11px] text-indigo-800">
+                Processing: <span className="font-semibold">{job.currentFile}</span>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Counts */}
         <div className="grid grid-cols-3 gap-2 text-center">
@@ -1690,6 +1736,22 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
         {job.error && (
           <div className="bg-red-50 rounded-lg p-3 text-xs text-red-700">
             {job.error}
+          </div>
+        )}
+
+        {(job.imageResults || []).some((result) => result.status === "failed") && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <div className="mb-2 text-xs font-semibold text-red-800">
+              Failed image uploads — exact server errors
+            </div>
+            <div className="max-h-56 space-y-2 overflow-y-auto">
+              {job.imageResults!.filter((result) => result.status === "failed").map((result) => (
+                <div key={result.fileId} className="rounded border border-red-100 bg-white p-2 text-xs">
+                  <div className="font-semibold text-red-800">{result.name}</div>
+                  <div className="mt-1 break-words text-red-700">{result.error || "Unknown image upload error"}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -1742,7 +1804,7 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
             ) : (
               <RefreshCw className="w-4 h-4" />
             )}
-            Retry Failed Items
+            {job.stage === "images_failed" ? "Retry Failed Images" : "Retry Failed Items"}
           </button>
         )}
 
