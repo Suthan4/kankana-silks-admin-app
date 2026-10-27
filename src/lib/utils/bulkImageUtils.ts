@@ -138,6 +138,127 @@ function normalizeMediaReference(value?: string): string {
 }
 
 /**
+ * Keep Drive match entries aligned with the product media that the admin has
+ * actually retained. This is important after deleting thumbnails in the
+ * storefront preview: a stale match must not upload the deleted file.
+ */
+export function filterImageMatchesToProductMedia(
+  matches: ImageMatchResult | null | undefined,
+  products: BulkParsedProduct[],
+): ImageMatchResult | null {
+  if (!matches) return null;
+
+  const normalize = (value?: string): string => {
+    if (!value || typeof value !== "string") return "";
+    let name = value.trim();
+    const proxy = name.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+    if (proxy?.[1]) {
+      try { name = decodeURIComponent(proxy[1]); } catch { name = proxy[1]; }
+    } else {
+      try {
+        const url = new URL(name);
+        name = decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() || name);
+      } catch {
+        name = name.split(/[?#]/, 1)[0].split(/[\\/]/).pop() || name;
+      }
+    }
+    name = name.normalize("NFKC").trim().toLocaleLowerCase("en-US").replace(/\.[^.]+$/, "");
+    const cameraRef = name.match(/^([a-z]{2,5})[o0](\d{4,})$/);
+    return cameraRef ? cameraRef[1] + "0" + cameraRef[2] : name;
+  };
+
+  const entries = matches.matched || [];
+  const mediaForEntry = (
+    entry: ImageMatchResult["matched"][number],
+  ): BulkParsedMedia[] => {
+    const media: BulkParsedMedia[] = [];
+    const wantedSku = (entry.variantSku || "").trim().toLocaleLowerCase("en-US");
+    for (const product of products) {
+      if (entry.productGroupId && product.productGroupId !== entry.productGroupId) continue;
+      if (wantedSku) {
+        for (const variant of product.variants || []) {
+          if ((variant.sku || "").trim().toLocaleLowerCase("en-US") !== wantedSku) continue;
+          media.push(...(variant.media || []));
+        }
+        // Some workbook formats keep variant media in products[].media, tagged
+        // with variantSku/source="variant". Include it as well so match
+        // filtering and upload totals reflect the current persisted structure.
+        media.push(
+          ...(product.media || []).filter(
+            (item) =>
+              (item.variantSku || "").trim().toLocaleLowerCase("en-US") === wantedSku ||
+              (item.source === "variant" && !item.variantSku),
+          ),
+        );
+      } else {
+        media.push(
+          ...(product.media || []).filter(
+            (item) => !item.variantSku && item.source !== "variant",
+          ),
+        );
+      }
+    }
+    return media;
+  };
+
+  const isEntryStillUsed = (
+    entry: ImageMatchResult["matched"][number],
+  ): boolean => {
+    const wanted = new Set([entry.reference, entry.file?.name].map(normalize).filter(Boolean));
+    return mediaForEntry(entry).some((media) => {
+      if (media.sourceDriveFileId === entry.file.id || media.key === entry.file.id) return true;
+      const proxy = (media.url || "").match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+      if (proxy?.[1]) {
+        try { if (decodeURIComponent(proxy[1]) === entry.file.id) return true; } catch { if (proxy[1] === entry.file.id) return true; }
+      }
+      return [media.url, media.title, media.altText]
+        .map(normalize)
+        .some((value) => value && wanted.has(value));
+    });
+  };
+
+  const retainedMatched = entries.filter(isEntryStillUsed);
+
+  // Reconcile unresolved references by their original filename/label, and keep
+  // only records that still correspond to media in the edited product payload.
+  const unresolvedStillUsed = (
+    entry: { reference: string; productGroupId?: string; variantSku?: string },
+  ): boolean => {
+    const wanted = normalize(entry.reference);
+    if (!wanted) return false;
+    return products.some((product) => {
+      if (entry.productGroupId && product.productGroupId !== entry.productGroupId) return false;
+      const lists = entry.variantSku
+        ? (product.variants || [])
+            .filter((variant) => (variant.sku || "").trim().toLocaleLowerCase("en-US") === entry.variantSku!.trim().toLocaleLowerCase("en-US"))
+            .map((variant) => variant.media || [])
+        : [product.media || []];
+      return lists.some((list) => list.some((media) =>
+        [media.url, media.title, media.altText].map(normalize).includes(wanted)
+      ));
+    });
+  };
+
+  return {
+    ...matches,
+    matched: retainedMatched,
+    missing: (matches.missing || []).filter(unresolvedStillUsed),
+    ambiguous: (matches.ambiguous || []).filter(unresolvedStillUsed),
+    duplicates: (matches.duplicates || []).filter((duplicate) => {
+      const ref = normalize(duplicate.reference);
+      return products.some((product) =>
+        [...(product.media || []), ...(product.variants || []).flatMap((variant) => variant.media || [])]
+          .some((media) => [media.url, media.title, media.altText].map(normalize).includes(ref))
+      );
+    }),
+    totalMedia:
+      retainedMatched.length +
+      (matches.missing || []).filter(unresolvedStillUsed).length +
+      (matches.ambiguous || []).filter(unresolvedStillUsed).length,
+  };
+}
+
+/**
  * Applies matched Google Drive images to the product collection.
  * Updates both product-level and variant-level media with authenticated proxy URLs,
  * preserving metadata, ordering, and existing valid media.
@@ -217,6 +338,7 @@ export function applyDriveMatchesToProducts(
         url: proxyUrl,
         thumbnailUrl: refMatch.file.thumbnailLink || getDriveThumbnailUrl?.(refMatch.file.id) || proxyUrl,
         key: refMatch.file.id,
+        sourceDriveFileId: refMatch.file.id,
         source: "product" as const,
         productGroupId: product.productGroupId,
         altText: media.altText || refMatch.file.name,
@@ -254,6 +376,7 @@ export function applyDriveMatchesToProducts(
           url: proxyUrl,
           thumbnailUrl: refMatch.file.thumbnailLink || getDriveThumbnailUrl?.(refMatch.file.id) || proxyUrl,
           key: refMatch.file.id,
+          sourceDriveFileId: refMatch.file.id,
           source: "variant" as const,
           variantSku: variant.sku,
           productGroupId: product.productGroupId,

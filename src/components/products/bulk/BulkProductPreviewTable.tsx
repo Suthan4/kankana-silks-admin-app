@@ -14,6 +14,8 @@ import {
   Eye,
   Globe,
   Trash2,
+  GripVertical,
+  Star,
   Edit2,
   Plus,
   FileSpreadsheet,
@@ -48,8 +50,9 @@ function getStorefrontPreviewMedia(
   product: BulkParsedProduct,
   selectedVariantSku?: string | null,
 ): BulkParsedMedia[] {
+  const selectedSku = (selectedVariantSku || "").trim().toLocaleLowerCase("en-US");
   const selectedVariant = product.variants?.find(
-    (variant) => variant.sku === selectedVariantSku,
+    (variant) => (variant.sku || "").trim().toLocaleLowerCase("en-US") === selectedSku,
   );
   const selectedVariantImages = (selectedVariant?.media ?? []).filter(
     (media) => media.type === "IMAGE",
@@ -60,8 +63,23 @@ function getStorefrontPreviewMedia(
     );
   }
 
+  // Some parser formats store variant media in products[].media with
+  // variantSku/source="variant", instead of nesting it under the variant.
+  const embeddedVariantImages = selectedSku
+    ? (product.media ?? []).filter(
+        (media) =>
+          media.type === "IMAGE" &&
+          (media.variantSku || "").trim().toLocaleLowerCase("en-US") === selectedSku,
+      )
+    : [];
+  if (embeddedVariantImages.length) {
+    return [...embeddedVariantImages].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0),
+    );
+  }
+
   const productImages = (product.media ?? []).filter(
-    (media) => media.type === "IMAGE",
+    (media) => media.type === "IMAGE" && !media.variantSku && media.source !== "variant",
   );
   if (productImages.length) {
     return [...productImages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -69,7 +87,13 @@ function getStorefrontPreviewMedia(
 
   // Fallback for imports where media is only present in the unified image list.
   if (product.allImages?.length) {
-    const images = product.allImages.filter((media) => media.type === "IMAGE");
+    const images = product.allImages.filter((media) =>
+      media.type === "IMAGE" &&
+      (selectedSku
+        ? (media.variantSku || "").trim().toLocaleLowerCase("en-US") === selectedSku ||
+          (media.source === "product" && !media.variantSku)
+        : !media.variantSku && media.source !== "variant"),
+    );
     return [...images].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
 
@@ -99,8 +123,23 @@ function getMatchedStorefrontPreviewMedia(
   if (!groupMatches.length) return [];
 
   const existingProductMedia = getStorefrontPreviewMedia(product, selectedVariantSku);
-  const normalizeLabel = (value?: string) =>
-    (value || "").trim().toLocaleLowerCase("en-US").replace(/\.[^.]+$/, "");
+  const normalizeLabel = (value?: string) => {
+    let name = (value || "").trim();
+    const proxy = name.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+    if (proxy?.[1]) {
+      try { name = decodeURIComponent(proxy[1]); } catch { name = proxy[1]; }
+    } else {
+      try {
+        const url = new URL(name);
+        name = decodeURIComponent(url.pathname.split("/").filter(Boolean).pop() || name);
+      } catch {
+        name = name.split(/[?#]/, 1)[0].split(/[\\/]/).pop() || name;
+      }
+    }
+    name = name.toLocaleLowerCase("en-US").replace(/\.[^.]+$/, "");
+    const cameraRef = name.match(/^([a-z]{2,5})[o0](\d{4,})$/);
+    return cameraRef ? cameraRef[1] + "0" + cameraRef[2] : name;
+  };
   const isPermanentStorageUrl = (value?: string) =>
     /^https:\/\//i.test(value || "") &&
     !/drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\//i.test(value || "");
@@ -109,8 +148,14 @@ function getMatchedStorefrontPreviewMedia(
     .map((entry, index) => {
       const fileId = entry.file.id;
       const matchedName = normalizeLabel(entry.file.name);
+      const matchedReference = normalizeLabel(entry.reference);
       const storedMedia = existingProductMedia.find((media) =>
-        [media.title, media.altText].some((label) => normalizeLabel(label) === matchedName),
+        media.sourceDriveFileId === fileId ||
+        media.key === fileId ||
+        [media.url, media.title, media.altText].some((label) => {
+          const normalized = normalizeLabel(label);
+          return normalized === matchedName || normalized === matchedReference;
+        }),
       );
       const storedUrl = isPermanentStorageUrl(storedMedia?.url) ? storedMedia?.url : undefined;
       const originalUrl =
@@ -130,16 +175,18 @@ function getMatchedStorefrontPreviewMedia(
         url: originalUrl,
         thumbnailUrl,
         key: storedMedia?.key || fileId,
+        sourceDriveFileId: fileId,
         altText: storedMedia?.altText || entry.file.name,
         title: storedMedia?.title || entry.file.name,
-        order: index,
+        order: storedMedia?.order ?? index,
         isActive: true,
         source: entry.variantSku ? ("variant" as const) : ("product" as const),
         variantSku: entry.variantSku,
         productGroupId: product.productGroupId,
       };
     })
-    .filter((media) => Boolean(media.url));
+    .filter((media) => Boolean(media.url))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
 interface BulkProductPreviewTableProps {
@@ -212,6 +259,10 @@ export const BulkProductPreviewTable: React.FC<
   const [failedStorefrontImageUrl, setFailedStorefrontImageUrl] = useState<
     string | null
   >(null);
+  const [storefrontDraggedImageIndex, setStorefrontDraggedImageIndex] =
+    useState<number | null>(null);
+  const [selectedStorefrontImageKeys, setSelectedStorefrontImageKeys] =
+    useState<Set<string>>(new Set());
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(
     null,
@@ -795,6 +846,8 @@ export const BulkProductPreviewTable: React.FC<
                           );
                           setStorefrontPreviewImageIndex(0);
                           setFailedStorefrontImageUrl(null);
+                          setSelectedStorefrontImageKeys(new Set());
+                          setStorefrontDraggedImageIndex(null);
                         }}
                         title="Preview as customer"
                         aria-label={`Preview ${product.name} as a customer`}
@@ -1899,13 +1952,37 @@ export const BulkProductPreviewTable: React.FC<
             getDriveProxyUrl,
             getDriveThumbnailUrl,
           );
-          const previewImages =
-            matchedPreviewImages.length > 0
-              ? matchedPreviewImages
-              : getStorefrontPreviewMedia(
-                  previewProduct,
-                  storefrontSelectedVariantSku,
-                );
+          // Product media is the editable source of truth. Use the match report
+          // only as a fallback when an older draft has not yet attached media to
+          // the product payload; otherwise deletions/reordering would be undone
+          // by rebuilding the gallery from the original match list.
+          const retainedProductImages = getStorefrontPreviewMedia(
+            previewProduct,
+            storefrontSelectedVariantSku,
+          );
+          const hasRemainingMatchForCurrentGallery = (imageMatches?.matched || []).some(
+            (entry) =>
+              entry.productGroupId === previewProduct.productGroupId &&
+              (
+                storefrontSelectedVariantSku
+                  ? (entry.variantSku || "").trim().toLocaleLowerCase("en-US") ===
+                    storefrontSelectedVariantSku.trim().toLocaleLowerCase("en-US")
+                  : !entry.variantSku
+              ),
+          );
+          const hasExplicitlyClearedGallery =
+            !hasRemainingMatchForCurrentGallery &&
+            Array.isArray(previewProduct.allImages) &&
+            previewProduct.allImages.length === 0 &&
+            !(previewProduct.media || []).some((media) => media.type === "IMAGE") &&
+            !(previewProduct.variants || []).some((variant) =>
+              (variant.media || []).some((media) => media.type === "IMAGE"),
+            );
+          const previewImages = hasExplicitlyClearedGallery
+            ? []
+            : retainedProductImages.length > 0
+              ? retainedProductImages
+              : matchedPreviewImages;
           const activeIndex = Math.min(
             storefrontPreviewImageIndex,
             Math.max(0, previewImages.length - 1),
@@ -1939,13 +2016,158 @@ export const BulkProductPreviewTable: React.FC<
                     100,
                 )
               : 0;
+
+          const selectedVariantForMedia = previewProduct.variants?.find(
+            (variant) => variant.sku === storefrontSelectedVariantSku,
+          );
+          const editVariantMedia =
+            Boolean(storefrontSelectedVariantSku) &&
+            Boolean(selectedVariantForMedia) &&
+            (previewImages.some(
+              (media) =>
+                media.source === "variant" ||
+                media.variantSku === storefrontSelectedVariantSku,
+            ) ||
+              (selectedVariantForMedia?.media || []).some(
+                (media) => media.type === "IMAGE",
+              ));
+          const imageIdentity = (media: BulkParsedMedia, index: number) => {
+            if (media.sourceDriveFileId) return "drive:" + media.sourceDriveFileId;
+            const proxyId = (media.url || "").match(
+              /\/products\/bulk\/drive-proxy\/([^/?#]+)/,
+            );
+            if (proxyId?.[1]) {
+              try { return "drive:" + decodeURIComponent(proxyId[1]); } catch {
+                return "drive:" + proxyId[1];
+              }
+            }
+            if (media.key) return "key:" + media.key;
+            if (media.url) return "url:" + media.url;
+            return "label:" + (media.title || media.altText || "image") + ":" + index;
+          };
+
+          const updatePreviewImages = (images: BulkParsedMedia[]) => {
+            const orderedImages = images.map((media, index) => ({
+              ...media,
+              order: index,
+              isActive: true,
+              source: editVariantMedia ? ("variant" as const) : ("product" as const),
+              productGroupId: previewProduct.productGroupId,
+              variantSku: editVariantMedia ? (storefrontSelectedVariantSku || undefined) : undefined,
+            }));
+
+            let updatedProduct: BulkParsedProduct;
+            if (editVariantMedia && selectedVariantForMedia) {
+              const selectedSku = (storefrontSelectedVariantSku || "").trim().toLocaleLowerCase("en-US");
+              const variants = (previewProduct.variants || []).map((variant) => {
+                if (variant.sku !== storefrontSelectedVariantSku) return variant;
+                const nonImages = (variant.media || [])
+                  .filter((media) => media.type !== "IMAGE")
+                  .map((media, index) => ({ ...media, order: orderedImages.length + index }));
+                return { ...variant, media: [...orderedImages, ...nonImages] };
+              });
+              // Some imports duplicate variant media inside products[].media.
+              // Remove those copies when editing this variant; otherwise a
+              // future retry could reintroduce an image removed in this modal.
+              const productMedia = (previewProduct.media || []).filter((media) =>
+                !(
+                  media.type === "IMAGE" &&
+                  (media.variantSku || "").trim().toLocaleLowerCase("en-US") === selectedSku
+                ),
+              );
+              updatedProduct = { ...previewProduct, media: productMedia, variants };
+            } else {
+              // Keep video media and any variant-specific records that live in
+              // products[].media; editing the shared product gallery must not
+              // delete a variant's independent photographs.
+              const otherMedia = (previewProduct.media || [])
+                .filter((media) =>
+                  media.type !== "IMAGE" || Boolean(media.variantSku) || media.source === "variant",
+                )
+                .map((media, index) => ({
+                  ...media,
+                  order: media.type === "IMAGE" ? 10000 + index : orderedImages.length + index,
+                }));
+              updatedProduct = {
+                ...previewProduct,
+                media: [...orderedImages, ...otherMedia],
+              };
+            }
+
+            const allImages: BulkParsedMedia[] = [
+              ...(updatedProduct.media || []).map((media, index) => ({
+                ...media,
+                source: "product" as const,
+                order: media.order ?? index,
+              })),
+              ...(updatedProduct.variants || []).flatMap((variant) =>
+                (variant.media || []).map((media, index) => ({
+                  ...media,
+                  source: "variant" as const,
+                  variantSku: variant.sku,
+                  order: media.order ?? (10000 + index),
+                })),
+              ),
+            ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            updatedProduct = { ...updatedProduct, allImages };
+            setStorefrontPreviewProduct(updatedProduct);
+            onUpdateProduct(updatedProduct);
+            setStorefrontPreviewImageIndex((current) =>
+              Math.min(current, Math.max(0, orderedImages.length - 1)),
+            );
+            setFailedStorefrontImageUrl(null);
+          };
+
+          const movePreviewImage = (fromIndex: number, toIndex: number) => {
+            if (
+              fromIndex === toIndex ||
+              fromIndex < 0 ||
+              toIndex < 0 ||
+              fromIndex >= previewImages.length ||
+              toIndex >= previewImages.length
+            ) return;
+            const activeKey = previewImages[activeIndex]
+              ? imageIdentity(previewImages[activeIndex], activeIndex)
+              : "";
+            const nextImages = [...previewImages];
+            const [moved] = nextImages.splice(fromIndex, 1);
+            if (!moved) return;
+            nextImages.splice(toIndex, 0, moved);
+            updatePreviewImages(nextImages);
+            const nextIndex = nextImages.findIndex(
+              (media, index) => imageIdentity(media, index) === activeKey,
+            );
+            setStorefrontPreviewImageIndex(nextIndex >= 0 ? nextIndex : 0);
+            setStorefrontDraggedImageIndex(null);
+            setSelectedStorefrontImageKeys(new Set());
+          };
+
+          const removePreviewImages = (indexes: number[]) => {
+            if (indexes.length === 0) return;
+            const removed = new Set(indexes);
+            const nextImages = previewImages.filter((_media, index) => !removed.has(index));
+            updatePreviewImages(nextImages);
+            setSelectedStorefrontImageKeys(new Set());
+            setStorefrontDraggedImageIndex(null);
+            setStorefrontPreviewImageIndex(0);
+          };
+
+          const selectedImagesCount = previewImages.reduce(
+            (count, media, index) =>
+              count + (selectedStorefrontImageKeys.has(imageIdentity(media, index)) ? 1 : 0),
+            0,
+          );
           return (
             <div
               className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-5"
               role="dialog"
               aria-modal="true"
               aria-label={`Customer storefront preview for ${previewProduct.name}`}
-              onClick={() => setStorefrontPreviewProduct(null)}
+              onClick={() => {
+                setStorefrontPreviewProduct(null);
+                setSelectedStorefrontImageKeys(new Set());
+                setStorefrontDraggedImageIndex(null);
+              }}
             >
               <div
                 className="flex max-h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
@@ -1958,7 +2180,7 @@ export const BulkProductPreviewTable: React.FC<
                         Storefront preview
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        Admin-only · read-only
+                        Admin-only · image changes update the draft
                       </span>
                     </div>
                     <p className="mt-1 truncate text-sm font-semibold text-slate-900">
@@ -1967,7 +2189,11 @@ export const BulkProductPreviewTable: React.FC<
                   </div>
                   <button
                     type="button"
-                    onClick={() => setStorefrontPreviewProduct(null)}
+                    onClick={() => {
+                      setStorefrontPreviewProduct(null);
+                      setSelectedStorefrontImageKeys(new Set());
+                      setStorefrontDraggedImageIndex(null);
+                    }}
                     className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                     aria-label="Close storefront preview"
                   >
@@ -2019,14 +2245,16 @@ export const BulkProductPreviewTable: React.FC<
                           <div className="flex max-w-sm flex-col items-center gap-2 p-8 text-center text-slate-500">
                             <ImageIcon className="h-12 w-12 text-slate-300" />
                             <p className="text-sm font-semibold text-slate-700">
-                              {failedStorefrontImageUrl === detailImageUrl &&
-                              detailImageUrl
-                                ? "This image could not be loaded"
-                                : "No full-size product image available"}
+                              {previewImages.length === 0
+                                ? "No product images selected"
+                                : failedStorefrontImageUrl === detailImageUrl && detailImageUrl
+                                  ? "This image could not be loaded"
+                                  : "No full-size product image available"}
                             </p>
                             <p className="text-xs leading-relaxed">
-                              Confirm the selected image is uploaded to storage,
-                              then reopen this preview.
+                              {previewImages.length === 0
+                                ? "Add images from Google Drive or local upload before importing this product."
+                                : "Use the image controls below to reorder, set a primary image, or remove photos from this import."}
                             </p>
                           </div>
                         )}
@@ -2074,62 +2302,182 @@ export const BulkProductPreviewTable: React.FC<
                       </div>
 
                       {previewImages.length > 0 && (
-                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                          {previewImages.map((media, index) => {
-                            const thumbSrc = resolveImageUrl(
-                              media.url,
-                              media.thumbnailUrl,
-                              getDriveProxyUrl,
-                              getDriveThumbnailUrl,
-                            );
-                            return (
+                        <>
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px]">
+                            <div className="flex items-center gap-2 font-semibold text-slate-700">
+                              <GripVertical className="h-3.5 w-3.5 text-slate-400" />
+                              Manage product images
+                              <span className="font-normal text-slate-400">· Drag to reorder</span>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <button
-                                key={`${media.url}-${index}`}
                                 type="button"
                                 onClick={() => {
-                                  setStorefrontPreviewImageIndex(index);
-                                  setFailedStorefrontImageUrl(null);
+                                  setSelectedStorefrontImageKeys(
+                                    selectedImagesCount === previewImages.length
+                                      ? new Set()
+                                      : new Set(previewImages.map(imageIdentity)),
+                                  );
                                 }}
-                                className={`h-16 w-14 shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${index === activeIndex ? "border-amber-700 ring-2 ring-amber-100" : "border-slate-200 hover:border-slate-400"}`}
-                                aria-label={`View product image ${index + 1}`}
+                                className="rounded-md border border-slate-300 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50"
                               >
-                                {thumbSrc ? (
-                                  <img
-                                    key={thumbSrc}
-                                    src={thumbSrc}
-                                    alt=""
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="h-full w-full object-cover"
-                                    onError={(event) => {
-                                      const target = event.currentTarget;
-                                      const proxyMatch = (media.url || "").match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
-                                      if (proxyMatch?.[1] && getDriveThumbnailUrl && !target.dataset.thumbnailFallback) {
-                                        let fileId = proxyMatch[1];
-                                        try { fileId = decodeURIComponent(fileId); } catch { /* keep encoded ID */ }
-                                        const fallback = getDriveThumbnailUrl(fileId);
-                                        if (fallback && target.src !== fallback) {
-                                          target.dataset.thumbnailFallback = "true";
-                                          target.src = fallback;
-                                          return;
-                                        }
-                                      }
-                                      target.style.visibility = "hidden";
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="flex h-full items-center justify-center">
-                                    <ImageIcon className="h-5 w-5 text-slate-300" />
-                                  </span>
-                                )}
+                                {selectedImagesCount === previewImages.length ? "Deselect all" : "Select all"}
                               </button>
-                            );
-                          })}
-                        </div>
+                              <button
+                                type="button"
+                                disabled={selectedImagesCount === 0}
+                                onClick={() => {
+                                  const count = selectedImagesCount;
+                                  if (window.confirm(`Remove ${count} selected image(s) from this product? Only the remaining images will be imported.`)) {
+                                    removePreviewImages(
+                                      previewImages
+                                        .map((media, index) => ({ media, index }))
+                                        .filter(({ media, index }) => selectedStorefrontImageKeys.has(imageIdentity(media, index)))
+                                        .map(({ index }) => index),
+                                    );
+                                  }
+                                }}
+                                className="rounded-md border border-rose-200 px-2 py-1 font-semibold text-rose-700 enabled:hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <span className="inline-flex items-center gap-1"><Trash2 className="h-3 w-3" /> Remove selected ({selectedImagesCount})</span>
+                              </button>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+                            {previewImages.map((media, index) => {
+                              const thumbSrc = resolveImageUrl(
+                                media.url,
+                                media.thumbnailUrl,
+                                getDriveProxyUrl,
+                                getDriveThumbnailUrl,
+                              );
+                              const stableKey = imageIdentity(media, index);
+                              const isSelected = selectedStorefrontImageKeys.has(stableKey);
+                              const isPrimary = index === 0;
+                              return (
+                                <div
+                                  key={stableKey}
+                                  draggable={previewImages.length > 1}
+                                  onDragStart={(event) => {
+                                    setStorefrontDraggedImageIndex(index);
+                                    event.dataTransfer.effectAllowed = "move";
+                                    event.dataTransfer.setData("text/plain", stableKey);
+                                  }}
+                                  onDragOver={(event) => {
+                                    event.preventDefault();
+                                    event.dataTransfer.dropEffect = "move";
+                                  }}
+                                  onDrop={(event) => {
+                                    event.preventDefault();
+                                    if (storefrontDraggedImageIndex !== null) {
+                                      movePreviewImage(storefrontDraggedImageIndex, index);
+                                    }
+                                  }}
+                                  onDragEnd={() => setStorefrontDraggedImageIndex(null)}
+                                  className={`group relative h-[88px] w-[66px] shrink-0 overflow-hidden rounded-md border-2 bg-white transition ${index === activeIndex ? "border-amber-700 ring-2 ring-amber-100" : isSelected ? "border-indigo-500 ring-1 ring-indigo-100" : "border-slate-200 hover:border-slate-400"} ${storefrontDraggedImageIndex === index ? "opacity-50" : ""}`}
+                                  title="Drag to reorder. The first image is the primary image."
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setStorefrontPreviewImageIndex(index);
+                                      setFailedStorefrontImageUrl(null);
+                                    }}
+                                    className="absolute inset-0 z-0"
+                                    aria-label={`View product image ${index + 1}`}
+                                  >
+                                    {thumbSrc ? (
+                                      <img
+                                        key={thumbSrc}
+                                        src={thumbSrc}
+                                        alt=""
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="h-full w-full object-cover"
+                                        onError={(event) => {
+                                          const target = event.currentTarget;
+                                          const proxyMatch = (media.url || "").match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+                                          if (proxyMatch?.[1] && getDriveThumbnailUrl && !target.dataset.thumbnailFallback) {
+                                            let fileId = proxyMatch[1];
+                                            try { fileId = decodeURIComponent(fileId); } catch { /* keep encoded ID */ }
+                                            const fallback = getDriveThumbnailUrl(fileId);
+                                            if (fallback && target.src !== fallback) {
+                                              target.dataset.thumbnailFallback = "true";
+                                              target.src = fallback;
+                                              return;
+                                            }
+                                          }
+                                          target.style.visibility = "hidden";
+                                        }}
+                                      />
+                                    ) : (
+                                      <span className="flex h-full items-center justify-center">
+                                        <ImageIcon className="h-5 w-5 text-slate-300" />
+                                      </span>
+                                    )}
+                                  </button>
+                                  <div className="absolute left-1 top-1 z-10">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setSelectedStorefrontImageKeys((current) => {
+                                          const next = new Set(current);
+                                          if (next.has(stableKey)) next.delete(stableKey);
+                                          else next.add(stableKey);
+                                          return next;
+                                        });
+                                      }}
+                                      className={`flex h-4 w-4 items-center justify-center rounded border shadow-sm ${isSelected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-400 bg-white/95 text-transparent hover:border-indigo-600"}`}
+                                      aria-label={isSelected ? "Deselect image" : "Select image"}
+                                      aria-pressed={isSelected}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-between gap-1 bg-slate-950/75 px-1 py-1">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (index > 0) movePreviewImage(index, 0);
+                                      }}
+                                      disabled={isPrimary}
+                                      title={isPrimary ? "Primary image" : "Set as primary"}
+                                      className="flex min-w-0 items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-semibold text-white hover:bg-white/20 disabled:cursor-default disabled:opacity-100"
+                                    >
+                                      <Star className={`h-3 w-3 shrink-0 ${isPrimary ? "fill-amber-400 text-amber-400" : ""}`} />
+                                      <span>{isPrimary ? "Primary" : "Set"}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (window.confirm(`Remove "${media.title || media.altText || `image ${index + 1}`}" from this product? It will not be uploaded.`)) {
+                                          removePreviewImages([index]);
+                                        }
+                                      }}
+                                      title="Remove image from import"
+                                      aria-label={`Remove image ${index + 1}`}
+                                      className="rounded p-0.5 text-white hover:bg-rose-600"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  {isPrimary && (
+                                    <span className="absolute left-1 top-6 z-10 rounded bg-amber-500 px-1 py-0.5 text-[8px] font-bold text-white">
+                                      PRIMARY
+                                    </span>
+                                  )}
+                                  <span className="sr-only">{media.title || media.altText || `Image ${index + 1}`}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
                       )}
                       <p className="mt-2 text-center text-[10px] text-slate-400">
-                        {previewImages.length} product image
-                        {previewImages.length === 1 ? "" : "s"}
+                        {previewImages.length} retained product image{previewImages.length === 1 ? "" : "s"} · first image is primary
                       </p>
                     </div>
                   </section>

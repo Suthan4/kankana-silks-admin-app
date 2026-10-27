@@ -58,7 +58,10 @@ import {
   resolveCategory,
   validateBulkProduct,
 } from "@/lib/utils/bulkProductNormalization";
-import { applyDriveMatchesToProducts } from "@/lib/utils/bulkImageUtils";
+import {
+  applyDriveMatchesToProducts,
+  filterImageMatchesToProductMedia,
+} from "@/lib/utils/bulkImageUtils";
 import type {
   BulkImportDraft,
   BulkImportJob,
@@ -2022,14 +2025,29 @@ const BulkProductUploadPage: React.FC = () => {
         flatCategoriesRef.current,
         warehousesRef.current,
       );
-      setProducts(normalized);
+      const savedImageMatches = draft.imageMatches ?? null;
+      // Re-attach Drive proxy URLs and stable source IDs when reopening a draft.
+      // The saved image list (including admin reorder/delete edits) stays the
+      // source of truth; only matches still present in that list are decorated.
+      const productsWithDriveMedia =
+        savedImageMatches?.matched?.length
+          ? applyDriveMatchesToProducts(
+              normalized,
+              savedImageMatches,
+              productApi.getDriveProxyUrl,
+              productApi.getDriveThumbnailUrl,
+            )
+          : normalized;
+      setProducts(productsWithDriveMedia);
       setRawInput(
         draft.rawInput ??
-          (normalized.length > 0 ? JSON.stringify(normalized, null, 2) : ""),
+          (productsWithDriveMedia.length > 0
+            ? JSON.stringify(productsWithDriveMedia, null, 2)
+            : ""),
       );
-      setImageMatches(draft.imageMatches ?? null);
+      setImageMatches(savedImageMatches);
       setConfirmedAssignments(draft.confirmedAssignments ?? {});
-      setValidationErrors(normalized.flatMap((p) => p.errors || []));
+      setValidationErrors(productsWithDriveMedia.flatMap((p) => p.errors || []));
       setJob(null);
       setJobId(null);
       setIsDirty(false);
@@ -2235,11 +2253,17 @@ const BulkProductUploadPage: React.FC = () => {
     setIsSaving(true);
     try {
       if (draftId) {
+        const currentImageMatches = filterImageMatchesToProductMedia(
+          imageMatches,
+          products,
+        );
         const res = await productApi.updateDraft(draftId, {
           rawInput: effectiveInput,
           parsedData: products.length > 0 ? products : undefined,
           confirmedAssignments,
+          imageMatches: currentImageMatches,
         });
+        setImageMatches(currentImageMatches);
         if (res.data) {
           setDraftStatus(res.data.status);
           setRawInput(effectiveInput);
@@ -2452,23 +2476,33 @@ const BulkProductUploadPage: React.FC = () => {
       // Matching only builds the preview. Persist the matched Drive proxy URLs
       // and report first; original image downloads and multi-file S3 uploads
       // now run inside the backend job.
-      const productsForImport = imageMatches?.matched?.length
+      const retainedMatches = filterImageMatchesToProductMedia(
+        imageMatches,
+        products,
+      );
+      const productsForImport = retainedMatches?.matched?.length
         ? applyDriveMatchesToProducts(
             products,
-            imageMatches,
+            retainedMatches,
             productApi.getDriveProxyUrl,
             productApi.getDriveThumbnailUrl,
           )
         : products;
+      const importImageMatches = filterImageMatchesToProductMedia(
+        retainedMatches,
+        productsForImport,
+      );
 
       const serialized = JSON.stringify(productsForImport, null, 2);
       await productApi.updateDraft(draftId, {
         rawInput: serialized,
         parsedData: productsForImport,
         confirmedAssignments,
+        imageMatches: importImageMatches,
       });
       setProducts(productsForImport);
       setRawInput(serialized);
+      setImageMatches(importImageMatches);
       setIsDirty(false);
 
       const res = await productApi.startDraftImport(draftId);
@@ -2488,7 +2522,7 @@ const BulkProductUploadPage: React.FC = () => {
         jobId: resolvedJobId,
         draftId: returned.draftId || draftId,
         stage: returned.stage || "preparing_images",
-        imagesTotal: returned.imagesTotal ?? (imageMatches?.matched?.length || 0),
+        imagesTotal: returned.imagesTotal ?? (importImageMatches?.matched?.length || 0),
         imagesProcessed: returned.imagesProcessed ?? 0,
         imagesUploaded: returned.imagesUploaded ?? 0,
         imagesFailed: returned.imagesFailed ?? 0,
@@ -2508,10 +2542,22 @@ const BulkProductUploadPage: React.FC = () => {
 
   const handleRetryJob = async () => {
     if (job?.stage === "images_failed" && draftId) {
-      // Successful image URLs are saved after each backend batch, so starting
-      // another draft job retries only the images that remain as Drive refs.
+      // Save the latest gallery edits before retrying; deleted images must not
+      // reappear from a stale draft snapshot.
       setIsImporting(true);
       try {
+        const retainedMatches = filterImageMatchesToProductMedia(imageMatches, products);
+        const serialized = JSON.stringify(products, null, 2);
+        await productApi.updateDraft(draftId, {
+          rawInput: serialized,
+          parsedData: products,
+          confirmedAssignments,
+          imageMatches: retainedMatches,
+        });
+        setRawInput(serialized);
+        setImageMatches(retainedMatches);
+        setIsDirty(false);
+
         const res = await productApi.startDraftImport(draftId);
         const returned = res.data as (BulkImportJob & { id?: string }) | undefined;
         const nextJobId = returned?.jobId || returned?.id;
@@ -2617,6 +2663,9 @@ const BulkProductUploadPage: React.FC = () => {
       });
       setProducts(updatedProducts);
       setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setImageMatches((current) =>
+        filterImageMatchesToProductMedia(current, updatedProducts),
+      );
       setValidationErrors(
         updatedProducts.flatMap((product) => product.errors || []),
       );
@@ -2631,13 +2680,17 @@ const BulkProductUploadPage: React.FC = () => {
   );
 
   const handleUpdateProduct = useCallback((updated: BulkParsedProduct) => {
-    setProducts((prev) => {
-      const next = prev.map((p) =>
-        p.productGroupId === updated.productGroupId ? updated : p,
-      );
-      setRawInput(JSON.stringify(next, null, 2));
-      return next;
-    });
+    const nextProducts = products.map((p) =>
+      p.productGroupId === updated.productGroupId ? updated : p,
+    );
+    setProducts(nextProducts);
+    setRawInput(JSON.stringify(nextProducts, null, 2));
+
+    // Remove stale match entries as soon as an admin deletes media. The saved
+    // draft and subsequent background job must use this filtered set.
+    setImageMatches((current) =>
+      filterImageMatchesToProductMedia(current, nextProducts),
+    );
     setValidationErrors((prev) => {
       const remaining = prev.filter(
         (e) => e.productGroupId !== updated.productGroupId,
@@ -2645,24 +2698,28 @@ const BulkProductUploadPage: React.FC = () => {
       return [...remaining, ...(updated.errors || [])];
     });
     setIsDirty(true);
-  }, []);
+  }, [products]);
 
   const handleDeleteProduct = useCallback((productGroupId: string) => {
-    setProducts((prev) => {
-      const next = prev.filter((p) => p.productGroupId !== productGroupId);
-      setRawInput(JSON.stringify(next, null, 2));
-      return next;
-    });
+    const nextProducts = products.filter((p) => p.productGroupId !== productGroupId);
+    setProducts(nextProducts);
+    setRawInput(JSON.stringify(nextProducts, null, 2));
+    setImageMatches((current) =>
+      filterImageMatchesToProductMedia(current, nextProducts),
+    );
     setValidationErrors((prev) =>
       prev.filter((e) => e.productGroupId !== productGroupId),
     );
     setIsDirty(true);
-  }, []);
+  }, [products]);
 
   const handleBulkUpdateProducts = useCallback(
     (updatedProducts: BulkParsedProduct[]) => {
       setProducts(updatedProducts);
       setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setImageMatches((current) =>
+        filterImageMatchesToProductMedia(current, updatedProducts),
+      );
       setValidationErrors(updatedProducts.flatMap((p) => p.errors || []));
       setIsDirty(true);
     },
