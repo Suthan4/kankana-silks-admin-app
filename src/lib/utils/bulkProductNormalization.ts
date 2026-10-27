@@ -191,9 +191,9 @@ export function normalizeVariant(
 
   // Variant media
   const rawMedia: any[] = Array.isArray(raw.media) ? raw.media : [];
-  const media = rawMedia
-    .map((m: any, mIdx: number) => normalizeMedia(m, mIdx, "variant", sku))
-    .filter((m) => m.url);
+  const media: BulkParsedMedia[] = rawMedia
+    .map((m: BulkParsedMedia, mIdx: number) => normalizeMedia(m, mIdx, "variant", sku))
+    .filter((m: BulkParsedMedia) => m.url);
 
   // Normalize dynamic attributes
   let attributes = raw.attributes;
@@ -348,7 +348,7 @@ export function normalizeProduct(
   const rawMedia = Array.isArray(raw.media) ? raw.media : [];
   const media = rawMedia
     .map((m: any, mIdx: number) => normalizeMedia(m, mIdx, "product"))
-    .filter((m) => m.url);
+    .filter((m: BulkParsedMedia) => m.url);
 
   // Variants (if variable product)
   let variants: BulkParsedVariant[] | undefined = undefined;
@@ -373,7 +373,7 @@ export function normalizeProduct(
 
   // Build unified allImages
   const allImages: BulkParsedMedia[] = [
-    ...media.map((m, idx) => ({ ...m, source: "product" as const, order: m.order ?? idx })),
+    ...media.map((m: BulkParsedMedia, idx: number) => ({ ...m, source: "product" as const, order: m.order ?? idx })),
     ...(variants || []).flatMap((v) =>
       (v.media || []).map((m, idx) => ({
         ...m,

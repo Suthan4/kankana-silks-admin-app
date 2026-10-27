@@ -41,20 +41,9 @@ export function resolveImageUrl(
   getDriveProxyUrl?: (fileId: string) => string | undefined,
   getDriveThumbnailUrl?: (fileId: string) => string | undefined
 ): string | undefined {
-  // A matched Drive proxy URL points to the original. Use the separate
-  // thumbnail endpoint for the grid to avoid loading 40+ MB originals.
-  if (url && getDriveThumbnailUrl) {
-    const proxyMatch = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
-    if (proxyMatch?.[1]) {
-      try {
-        return getDriveThumbnailUrl(decodeURIComponent(proxyMatch[1]));
-      } catch {
-        return getDriveThumbnailUrl(proxyMatch[1]);
-      }
-    }
-  }
-
-  // 1. If a valid external or blob/data thumbnailUrl is provided, prioritize it
+  // Prefer a known thumbnail URL first; Drive match results may expose
+  // an already-accessible googleusercontent thumbnail for the selected file.
+  // This is small preview data, not the original image content.
   if (thumbnailUrl && typeof thumbnailUrl === "string") {
     const trimmedThumb = thumbnailUrl.trim();
     if (
@@ -64,12 +53,24 @@ export function resolveImageUrl(
       trimmedThumb.startsWith("blob:") ||
       trimmedThumb.startsWith("/")
     ) {
-      // Check if it's a private Google Drive web link that won't load in <img>
-      const driveId = extractDriveFileId(trimmedThumb);
-      if (driveId && getDriveProxyUrl && trimmedThumb.includes("drive.google.com")) {
-        return getDriveProxyUrl(driveId);
+      const thumbDriveId = extractDriveFileId(trimmedThumb);
+      if (thumbDriveId && getDriveProxyUrl && trimmedThumb.includes("drive.google.com")) {
+        return getDriveProxyUrl(thumbDriveId);
       }
       return trimmedThumb;
+    }
+  }
+
+  // If no known thumbnail URL exists, use the backend's authenticated thumbnail
+  // endpoint for URLs that point to Drive originals. Never load the original in a grid.
+  if (url && getDriveThumbnailUrl) {
+    const proxyMatch = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+    if (proxyMatch?.[1]) {
+      try {
+        return getDriveThumbnailUrl(decodeURIComponent(proxyMatch[1]));
+      } catch {
+        return getDriveThumbnailUrl(proxyMatch[1]);
+      }
     }
   }
 
@@ -195,6 +196,12 @@ export function applyDriveMatchesToProducts(
     const groupMatches = byGroup.get(product.productGroupId) || [];
 
     const updatedProductMedia: BulkParsedMedia[] = productMedia.map((media, index) => {
+      const currentUrl = media.url?.trim() || "";
+      const alreadyStoredUrl =
+        /^https?:\/\//i.test(currentUrl) &&
+        !/drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\//i.test(currentUrl);
+      // Keep permanent HTTPS product-image URLs when a draft is rematched or retried.
+      if (alreadyStoredUrl) return media;
       const normalizedRef = normalizeMediaReference(media.url);
       const refMatch =
         (normalizedRef ? byReference.get(normalizedRef) : undefined) ||
@@ -208,7 +215,7 @@ export function applyDriveMatchesToProducts(
       return {
         ...media,
         url: proxyUrl,
-        thumbnailUrl: getDriveThumbnailUrl?.(refMatch.file.id) || refMatch.file.thumbnailLink || proxyUrl,
+        thumbnailUrl: refMatch.file.thumbnailLink || getDriveThumbnailUrl?.(refMatch.file.id) || proxyUrl,
         key: refMatch.file.id,
         source: "product" as const,
         productGroupId: product.productGroupId,
@@ -224,7 +231,13 @@ export function applyDriveMatchesToProducts(
       const variantMatches = skuKey ? (byVariantSku.get(skuKey) || []) : [];
 
       const updatedVariantMedia = variantMedia.map((media, index) => {
-        const normalizedRef = normalizeMediaReference(media.url);
+        const currentUrl = media.url?.trim() || "";
+      const alreadyStoredUrl =
+        /^https?:\/\//i.test(currentUrl) &&
+        !/drive\.google\.com|docs\.google\.com|\/products\/bulk\/drive-proxy\//i.test(currentUrl);
+      // Keep permanent HTTPS product-image URLs when a draft is rematched or retried.
+      if (alreadyStoredUrl) return media;
+      const normalizedRef = normalizeMediaReference(media.url);
         const refMatch =
           (normalizedRef ? byReference.get(normalizedRef) : undefined) ||
           variantMatches.find((entry) => entry.mediaIndex === variantMediaStart + index) ||
@@ -239,7 +252,7 @@ export function applyDriveMatchesToProducts(
         return {
           ...media,
           url: proxyUrl,
-          thumbnailUrl: getDriveThumbnailUrl?.(refMatch.file.id) || refMatch.file.thumbnailLink || proxyUrl,
+          thumbnailUrl: refMatch.file.thumbnailLink || getDriveThumbnailUrl?.(refMatch.file.id) || proxyUrl,
           key: refMatch.file.id,
           source: "variant" as const,
           variantSku: variant.sku,

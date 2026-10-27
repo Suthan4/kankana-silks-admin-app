@@ -98,26 +98,40 @@ function getMatchedStorefrontPreviewMedia(
 
   if (!groupMatches.length) return [];
 
+  const existingProductMedia = getStorefrontPreviewMedia(product, selectedVariantSku);
+  const normalizeLabel = (value?: string) =>
+    (value || "").trim().toLocaleLowerCase("en-US").replace(/\.[^.]+$/, "");
+  const isPermanentStorageUrl = (value?: string) =>
+    /^https:\/\//i.test(value || "") &&
+    !/drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\//i.test(value || "");
+
   return groupMatches
     .map((entry, index) => {
       const fileId = entry.file.id;
+      const matchedName = normalizeLabel(entry.file.name);
+      const storedMedia = existingProductMedia.find((media) =>
+        [media.title, media.altText].some((label) => normalizeLabel(label) === matchedName),
+      );
+      const storedUrl = isPermanentStorageUrl(storedMedia?.url) ? storedMedia?.url : undefined;
       const originalUrl =
+        storedUrl ||
         getDriveProxyUrl?.(fileId) ||
         entry.file.previewUrl ||
         entry.file.webContentLink ||
         "";
       const thumbnailUrl =
-        getDriveThumbnailUrl?.(fileId) ||
+        storedUrl ||
         entry.file.thumbnailLink ||
+        getDriveThumbnailUrl?.(fileId) ||
         originalUrl;
 
       return {
         type: "IMAGE" as const,
         url: originalUrl,
         thumbnailUrl,
-        key: fileId,
-        altText: entry.file.name,
-        title: entry.file.name,
+        key: storedMedia?.key || fileId,
+        altText: storedMedia?.altText || entry.file.name,
+        title: storedMedia?.title || entry.file.name,
         order: index,
         isActive: true,
         source: entry.variantSku ? ("variant" as const) : ("product" as const),
@@ -1606,11 +1620,20 @@ export const BulkProductPreviewTable: React.FC<
                                             }}
                                             className="w-full h-full object-cover cursor-zoom-in"
                                             onError={(e) => {
-                                              // Keep the thumbnail grid lightweight. Never load the
-                                              // original 40+ MB image as an automatic fallback.
                                               const target = e.currentTarget;
-                                              target.dataset.thumbnailFailed =
-                                                "true";
+                                              const proxyMatch = (m.url || "").match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+                                              if (proxyMatch?.[1] && getDriveThumbnailUrl && !target.dataset.thumbnailFallback) {
+                                                let fileId = proxyMatch[1];
+                                                try { fileId = decodeURIComponent(fileId); } catch { /* keep encoded ID */ }
+                                                const fallback = getDriveThumbnailUrl(fileId);
+                                                if (fallback && target.src !== fallback) {
+                                                  target.dataset.thumbnailFallback = "true";
+                                                  target.src = fallback;
+                                                  return;
+                                                }
+                                              }
+                                              // Never load the full original as a thumbnail fallback.
+                                              target.dataset.thumbnailFailed = "true";
                                               target.src =
                                                 "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
                                             }}
@@ -1867,18 +1890,37 @@ export const BulkProductPreviewTable: React.FC<
           const selectedPreviewVariant = previewProduct.variants?.find(
             (variant) => variant.sku === storefrontSelectedVariantSku,
           );
-          const previewImages = getStorefrontPreviewMedia(
+          // Use the exact same matched Drive entries shown in the Matched images
+          // panel. Raw references in the product JSON (e.g. NAVO2845) are not URLs.
+          const matchedPreviewImages = getMatchedStorefrontPreviewMedia(
             previewProduct,
+            imageMatches,
             storefrontSelectedVariantSku,
+            getDriveProxyUrl,
+            getDriveThumbnailUrl,
           );
+          const previewImages =
+            matchedPreviewImages.length > 0
+              ? matchedPreviewImages
+              : getStorefrontPreviewMedia(
+                  previewProduct,
+                  storefrontSelectedVariantSku,
+                );
           const activeIndex = Math.min(
             storefrontPreviewImageIndex,
             Math.max(0, previewImages.length - 1),
           );
           const activeImage = previewImages[activeIndex];
           const currentImageUrl = activeImage?.url || "";
-          const detailImageUrl = /^(https?:\/\/|\/)/i.test(currentImageUrl)
-            ? currentImageUrl
+          const isDriveOriginalProxy = currentImageUrl.includes("/products/bulk/drive-proxy/");
+          // Before Import, show the lightweight thumbnail in the large preview area.
+          // This lets admins inspect the complete photo without downloading a 40+ MB original.
+          const previewSourceUrl =
+            isDriveOriginalProxy && activeImage?.thumbnailUrl
+              ? activeImage.thumbnailUrl
+              : currentImageUrl;
+          const detailImageUrl = /^(https?:\/\/|\/)/i.test(previewSourceUrl)
+            ? previewSourceUrl
             : "";
           const previewSellingPrice = Number(
             selectedPreviewVariant?.sellingPrice ??
@@ -1942,6 +1984,7 @@ export const BulkProductPreviewTable: React.FC<
                         activeImage.type !== "VIDEO" &&
                         failedStorefrontImageUrl !== detailImageUrl ? (
                           <img
+                            key={detailImageUrl}
                             src={detailImageUrl}
                             alt={
                               activeImage.altText ||
@@ -1951,9 +1994,26 @@ export const BulkProductPreviewTable: React.FC<
                             loading="eager"
                             decoding="async"
                             className="h-full w-full object-contain"
-                            onError={() =>
-                              setFailedStorefrontImageUrl(detailImageUrl)
-                            }
+                            onError={(event) => {
+                              const target = event.currentTarget;
+                              const proxyMatch = currentImageUrl.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+                              if (
+                                isDriveOriginalProxy &&
+                                proxyMatch?.[1] &&
+                                getDriveThumbnailUrl &&
+                                !target.dataset.thumbnailFallback
+                              ) {
+                                let fileId = proxyMatch[1];
+                                try { fileId = decodeURIComponent(fileId); } catch { /* keep encoded ID */ }
+                                const fallback = getDriveThumbnailUrl(fileId);
+                                if (fallback && target.src !== fallback) {
+                                  target.dataset.thumbnailFallback = "true";
+                                  target.src = fallback;
+                                  return;
+                                }
+                              }
+                              setFailedStorefrontImageUrl(detailImageUrl);
+                            }}
                           />
                         ) : (
                           <div className="flex max-w-sm flex-col items-center gap-2 p-8 text-center text-slate-500">
@@ -2035,11 +2095,27 @@ export const BulkProductPreviewTable: React.FC<
                               >
                                 {thumbSrc ? (
                                   <img
+                                    key={thumbSrc}
                                     src={thumbSrc}
                                     alt=""
                                     loading="lazy"
                                     decoding="async"
                                     className="h-full w-full object-cover"
+                                    onError={(event) => {
+                                      const target = event.currentTarget;
+                                      const proxyMatch = (media.url || "").match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+                                      if (proxyMatch?.[1] && getDriveThumbnailUrl && !target.dataset.thumbnailFallback) {
+                                        let fileId = proxyMatch[1];
+                                        try { fileId = decodeURIComponent(fileId); } catch { /* keep encoded ID */ }
+                                        const fallback = getDriveThumbnailUrl(fileId);
+                                        if (fallback && target.src !== fallback) {
+                                          target.dataset.thumbnailFallback = "true";
+                                          target.src = fallback;
+                                          return;
+                                        }
+                                      }
+                                      target.style.visibility = "hidden";
+                                    }}
                                   />
                                 ) : (
                                   <span className="flex h-full items-center justify-center">
@@ -2299,6 +2375,7 @@ export const BulkProductPreviewTable: React.FC<
                     active.type !== "VIDEO" &&
                     failedDetailImageUrl !== detailSrc ? (
                     <img
+                      key={detailSrc}
                       src={detailSrc}
                       alt={
                         active.altText ||
