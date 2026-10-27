@@ -292,12 +292,13 @@ interface DriveMatchingPanelProps {
   onMatchComplete: (matches: ImageMatchResult, assignments: Record<string, string>) => Promise<ImageMatchResult | void> | ImageMatchResult | void;
   onAssignMedia: (productGroupId: string, media: BulkParsedMedia[], mode: "replace" | "append") => void;
   getDriveProxyUrl: (fileId: string) => string;
+  getDriveThumbnailUrl: (fileId: string) => string;
   onPrepareDraft?: () => Promise<void>;
   onMatchingChange?: (matching: boolean) => void;
 }
 
 const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
-  draftId, products, imageMatches, confirmedAssignments, onMatchComplete, onAssignMedia, getDriveProxyUrl, onPrepareDraft, onMatchingChange,
+  draftId, products, imageMatches, confirmedAssignments, onMatchComplete, onAssignMedia, getDriveProxyUrl, getDriveThumbnailUrl, onPrepareDraft, onMatchingChange,
 }) => {
   const [sourceMode, setSourceMode] = useState<ImageSourceMode>("references");
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
@@ -757,10 +758,10 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
                 <div className="max-h-28 overflow-y-auto text-xs text-red-700 space-y-1">{imageMatches.missing.slice(0, 100).map((entry, index) => <p key={entry.mediaIndex + "-" + index} className="truncate">{entry.reference}{entry.productGroupId ? " — " + entry.productGroupId : ""}</p>)}</div>
                 <p className="text-[11px] text-red-600 mt-2">References that cannot be verified are not assigned automatically. Use the Google Drive tab to select images manually.</p>
               </div>}
-              {imageMatches && imageMatches.matched.length > 0 && <div><p className="text-xs font-medium text-gray-700 mb-2">Matched images ({imageMatches.matched.length})</p><div className="grid grid-cols-4 gap-2">{imageMatches.matched.slice(0, 8).map((match) => <div key={match.file.id + "-" + match.mediaIndex} className="min-w-0"><div className="aspect-square rounded-lg border overflow-hidden bg-gray-50"><img loading="lazy" src={getDriveProxyUrl(match.file.id)} alt={match.file.name} className="w-full h-full object-cover" /></div><p className="mt-1 truncate text-[10px] text-gray-500" title={match.file.name}>{match.file.name}</p></div>)}</div></div>}
+              {imageMatches && imageMatches.matched.length > 0 && <div><p className="text-xs font-medium text-gray-700 mb-2">Matched images ({imageMatches.matched.length})</p><div className="grid grid-cols-4 gap-2">{imageMatches.matched.slice(0, 8).map((match) => <div key={match.file.id + "-" + match.mediaIndex} className="min-w-0"><div className="aspect-square rounded-lg border overflow-hidden bg-gray-50"><img loading="lazy" src={getDriveThumbnailUrl(match.file.id)} alt={match.file.name} className="w-full h-full object-cover" /></div><p className="mt-1 truncate text-[10px] text-gray-500" title={match.file.name}>{match.file.name}</p></div>)}</div></div>}
               {imageMatches && imageMatches.ambiguous.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <button type="button" onClick={() => setShowAmbiguous((value) => !value)} className="flex items-center gap-1 text-xs font-medium text-amber-800">{showAmbiguous ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}Resolve {imageMatches.ambiguous.length} ambiguous match(es)</button>
-                {showAmbiguous && <div className="mt-3 space-y-3">{imageMatches.ambiguous.map((entry) => <div key={entry.mediaIndex}><p className="text-xs text-amber-900 mb-1">{entry.reference}</p><div className="flex flex-wrap gap-2">{entry.candidates.map((candidate) => <button type="button" key={candidate.id} title={candidate.name} onClick={() => void assignCandidate(entry, candidate.id)} className={classNames("w-14 h-14 rounded border overflow-hidden", pendingAssignments[String(entry.mediaIndex)] === candidate.id ? "border-indigo-500 ring-2 ring-indigo-300" : "border-gray-300")}><img loading="lazy" src={getDriveProxyUrl(candidate.id)} alt={candidate.name} className="w-full h-full object-cover" /></button>)}</div></div>)}</div>}
+                {showAmbiguous && <div className="mt-3 space-y-3">{imageMatches.ambiguous.map((entry) => <div key={entry.mediaIndex}><p className="text-xs text-amber-900 mb-1">{entry.reference}</p><div className="flex flex-wrap gap-2">{entry.candidates.map((candidate) => <button type="button" key={candidate.id} title={candidate.name} onClick={() => void assignCandidate(entry, candidate.id)} className={classNames("w-14 h-14 rounded border overflow-hidden", pendingAssignments[String(entry.mediaIndex)] === candidate.id ? "border-indigo-500 ring-2 ring-indigo-300" : "border-gray-300")}><img loading="lazy" src={getDriveThumbnailUrl(candidate.id)} alt={candidate.name} className="w-full h-full object-cover" /></button>)}</div></div>)}</div>}
               </div>}
             </>
           )}
@@ -2246,6 +2247,7 @@ const BulkProductUploadPage: React.FC = () => {
                 onMatchingChange={setIsDriveMatching}
                 onAssignMedia={handleAssignProductMedia}
                 getDriveProxyUrl={productApi.getDriveProxyUrl}
+                getDriveThumbnailUrl={productApi.getDriveThumbnailUrl}
                 onPrepareDraft={async () => {
                   if (draftId && products.length > 0) {
                     await productApi.updateDraft(draftId, {
@@ -2363,7 +2365,7 @@ const BulkProductUploadPage: React.FC = () => {
             handleUpdateProduct(updated);
             setEditingProduct(null);
           }}
-          getThumbnailUrl={productApi.getDriveProxyUrl}
+          getThumbnailUrl={productApi.getDriveThumbnailUrl}
         />
       )}
 
