@@ -35,6 +35,7 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
   const media = useWatch({ control, name: "media" }) || [];
   const [isDragOver, setIsDragOver] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [failedPreviewIds, setFailedPreviewIds] = useState<Set<string>>(new Set());
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
@@ -192,7 +193,13 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-2">
           {media.map((item: any, idx: number) => {
             const isCover = idx === 0;
+            const mediaKey = String(item.id || idx);
             const displayUrl = item.preview || item.url;
+            const hasLegacyDriveLink =
+              /drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\/|[?&]token=/i.test(
+                `${item.url || ""} ${item.preview || ""}`,
+              );
+            const previewFailed = failedPreviewIds.has(mediaKey);
 
             return (
               <div
@@ -211,11 +218,44 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
                     playsInline
                   />
                 ) : (
-                  <img
-                    src={displayUrl}
-                    alt={item.altText || `Product photo ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
+                  previewFailed ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-1 p-2 text-center text-[10px] text-slate-500">
+                      <ImageIcon className="h-5 w-5 text-slate-300" />
+                      <span>Image unavailable</span>
+                      {hasLegacyDriveLink && <span className="font-semibold text-amber-700">Remove and re-upload</span>}
+                    </div>
+                  ) : (
+                    <img
+                      src={displayUrl}
+                      alt={item.altText || `Product photo ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                      onError={(event) => {
+                        const image = event.currentTarget;
+                        if (
+                          item.url &&
+                          displayUrl !== item.url &&
+                          image.dataset.urlFallback !== "true"
+                        ) {
+                          image.dataset.urlFallback = "true";
+                          image.src = item.url;
+                          return;
+                        }
+                        setFailedPreviewIds((current) => {
+                          const next = new Set(current);
+                          next.add(mediaKey);
+                          return next;
+                        });
+                      }}
+                      onLoad={() => {
+                        setFailedPreviewIds((current) => {
+                          if (!current.has(mediaKey)) return current;
+                          const next = new Set(current);
+                          next.delete(mediaKey);
+                          return next;
+                        });
+                      }}
+                    />
+                  )
                 )}
 
                 {/* Badges */}
@@ -223,6 +263,14 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
                   <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-blue-600 text-white text-3xs font-bold rounded shadow-xs flex items-center gap-0.5 z-10">
                     <Check className="h-2.5 w-2.5" />
                     Cover
+                  </div>
+                )}
+                {hasLegacyDriveLink && (
+                  <div
+                    className="absolute bottom-1.5 left-1.5 rounded bg-amber-600/95 px-1.5 py-1 text-[9px] font-bold text-white shadow-sm z-10"
+                    title="This is a temporary Google Drive link, not a permanent uploaded image URL."
+                  >
+                    Needs re-upload
                   </div>
                 )}
                 {item.type === "VIDEO" && (
