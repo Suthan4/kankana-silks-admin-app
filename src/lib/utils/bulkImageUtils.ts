@@ -309,6 +309,50 @@ export function sanitizeProductsForStorage(
 }
 
 /**
+ * Remove any signed Drive-proxy URL/token from a raw JSON editor value before
+ * storing it. Non-JSON text is kept intact apart from token query values.
+ */
+export function sanitizeBulkRawInput(rawInput: string): string {
+  const scrub = (value: any): any => {
+    if (Array.isArray(value)) return value.map(scrub);
+    if (!value || typeof value !== "object") return value;
+
+    const next: Record<string, any> = {};
+    for (const [key, child] of Object.entries(value)) next[key] = scrub(child);
+
+    if (
+      typeof next.url === "string" &&
+      /drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\/|[?&]token=/i.test(next.url)
+    ) {
+      const url = next.url as string;
+      const proxyId = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/)?.[1];
+      let id = String(next.sourceDriveFileId || next.key || "");
+      if (!id && proxyId) {
+        try { id = decodeURIComponent(proxyId); } catch { id = proxyId; }
+      }
+      next.url = next.title || next.altText || id;
+      next.key = next.key || id || undefined;
+      next.sourceDriveFileId = next.sourceDriveFileId || id || undefined;
+    }
+
+    if (
+      typeof next.thumbnailUrl === "string" &&
+      /drive\.google\.com|docs\.google\.com|googleusercontent\.com|[?&]token=/i.test(next.thumbnailUrl)
+    ) {
+      delete next.thumbnailUrl;
+    }
+    return next;
+  };
+
+  try {
+    const parsed = JSON.parse(rawInput);
+    return JSON.stringify(scrub(parsed), null, 2);
+  } catch {
+    return rawInput.replace(/([?&])token=[^&#\s"'\\]+/g, "$1[redacted]");
+  }
+}
+
+/**
  * Applies matched Google Drive images to the product collection.
  * Updates both product-level and variant-level media with authenticated proxy URLs,
  * preserving metadata, ordering, and existing valid media.
