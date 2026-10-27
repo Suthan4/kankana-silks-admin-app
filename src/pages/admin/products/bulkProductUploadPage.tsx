@@ -1851,6 +1851,7 @@ const BulkProductUploadPage: React.FC = () => {
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<BulkImportJob | null>(null);
+  const completedJobIdsRef = useRef<Set<string>>(new Set());
 
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -1957,13 +1958,18 @@ const BulkProductUploadPage: React.FC = () => {
         setJob(normalized);
 
         if (normalized.status === "completed") {
+          // Polls can overlap while the final draft snapshot is being fetched.
+          // Handle the terminal state only once per job.
+          if (completedJobIdsRef.current.has(resolvedId)) return;
+          completedJobIdsRef.current.add(resolvedId);
+
           const completedDraftId = normalized.draftId || draftId;
           // Reload the server's final product payload. The backend must have
           // replaced all matched Drive references with permanent storage URLs.
           if (completedDraftId) {
             try {
               const completedDraftRes = await productApi.getDraft(completedDraftId);
-              if (!disposed && completedDraftRes.data) {
+              if (completedDraftRes.data) {
                 const completedProducts = normalizeProducts(
                   extractProducts(completedDraftRes.data.parsedData),
                   flatCategoriesRef.current,
@@ -1982,6 +1988,9 @@ const BulkProductUploadPage: React.FC = () => {
             }
           }
 
+          // Close this draft as the active workspace, but keep the completed
+          // record in server history. The job result panel remains available
+          // until the admin chooses Start New Import.
           setDraftId(null);
           setDraftStatus("COMPLETED");
           setImageMatches(null);
@@ -2085,10 +2094,12 @@ const BulkProductUploadPage: React.FC = () => {
           : normalized;
       setProducts(productsWithDriveMedia);
       setRawInput(
-        draft.rawInput ??
-          (productsWithDriveMedia.length > 0
-            ? JSON.stringify(productsWithDriveMedia, null, 2)
-            : ""),
+        sanitizeBulkRawInput(
+          draft.rawInput ??
+            (productsWithDriveMedia.length > 0
+              ? JSON.stringify(productsWithDriveMedia, null, 2)
+              : ""),
+        ),
       );
       setImageMatches(savedImageMatches);
       setConfirmedAssignments(draft.confirmedAssignments ?? {});
