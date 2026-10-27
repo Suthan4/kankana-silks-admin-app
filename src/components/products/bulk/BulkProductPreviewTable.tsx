@@ -100,10 +100,10 @@ function getMatchedStorefrontPreviewMedia(
 
   const existingProductMedia = getStorefrontPreviewMedia(product, selectedVariantSku);
   const normalizeLabel = (value?: string) =>
-    (value || "").trim().toLocaleLowerCase("en-US").replace(/\\.[^.]+$/, "");
+    (value || "").trim().toLocaleLowerCase("en-US").replace(/\.[^.]+$/, "");
   const isPermanentStorageUrl = (value?: string) =>
     /^https:\/\//i.test(value || "") &&
-    !/drive\\.google\\.com|docs\\.google\\.com|googleusercontent\\.com|\\/products\\/bulk\\/drive-proxy\\//i.test(value || "");
+    !/drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\//i.test(value || "");
 
   return groupMatches
     .map((entry, index) => {
@@ -1996,7 +1996,7 @@ export const BulkProductPreviewTable: React.FC<
                             className="h-full w-full object-contain"
                             onError={(event) => {
                               const target = event.currentTarget;
-                              const proxyMatch = currentImageUrl.match(/\\/products\\/bulk\\/drive-proxy\\/([^/?#]+)/);
+                              const proxyMatch = currentImageUrl.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
                               if (
                                 isDriveOriginalProxy &&
                                 proxyMatch?.[1] &&
