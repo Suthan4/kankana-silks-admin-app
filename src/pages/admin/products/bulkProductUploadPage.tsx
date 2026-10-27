@@ -286,7 +286,7 @@ interface DriveMatchingPanelProps {
   imageMatches: ImageMatchResult | null;
   confirmedAssignments: Record<string, string>;
   onMatchComplete: (matches: ImageMatchResult, assignments: Record<string, string>) => void;
-  onAssignMedia: (productGroupId: string, media: BulkParsedMedia[]) => void;
+  onAssignMedia: (productGroupId: string, media: BulkParsedMedia[], mode: "replace" | "append") => void;
   getDriveProxyUrl: (fileId: string) => string;
   onPrepareDraft?: () => Promise<void>;
 }
@@ -304,6 +304,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   const [showAmbiguous, setShowAmbiguous] = useState(false);
   const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>(confirmedAssignments ?? {});
   const [targetProductGroupId, setTargetProductGroupId] = useState("");
+  const [assignmentMode, setAssignmentMode] = useState<"replace" | "append">("replace");
 
   const [localFiles, setLocalFiles] = useState<Array<{ id: string; file: File; previewUrl: string }>>([]);
   const [uploadingLocal, setUploadingLocal] = useState(false);
@@ -449,7 +450,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
           if (!result?.url || !/^https:\/\//i.test(result.url)) throw new Error("Storage did not return a valid HTTPS URL.");
           media.push({
             type: "IMAGE", url: result.url, key: result.key, altText: targetProduct.name,
-            order: (targetProduct.media?.length ?? 0) + media.length, isActive: true, source: "product",
+            order: (assignmentMode === "append" ? (targetProduct.media?.length ?? 0) : 0) + media.length, isActive: true, source: "product",
             mimeType: item.file.type, fileSize: item.file.size,
           });
           uploadedIds.push(item.id);
@@ -457,7 +458,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
         finally { setLocalProgress({ completed: index + 1, total: localFiles.length }); }
       }
       if (media.length) {
-        onAssignMedia(targetProduct.productGroupId, media);
+        onAssignMedia(targetProduct.productGroupId, media, assignmentMode);
         setLocalFiles((previous) => previous.filter((item) => {
           if (!uploadedIds.includes(item.id)) return true;
           URL.revokeObjectURL(item.previewUrl);
@@ -552,14 +553,14 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
           if (!result?.url || !/^https:\/\//i.test(result.url)) throw new Error("Storage did not return a valid HTTPS URL.");
           media.push({
             type: "IMAGE", url: result.url, key: result.key, altText: targetProduct.name,
-            order: (targetProduct.media?.length ?? 0) + media.length, isActive: true, source: "product",
+            order: (assignmentMode === "append" ? (targetProduct.media?.length ?? 0) : 0) + media.length, isActive: true, source: "product",
             mimeType: file.type, fileSize: file.size,
           });
         } catch { failedNames.push(driveFile.name); }
         finally { setDriveProgress({ completed: index + 1, total: selected.length }); }
       }
       if (media.length) {
-        onAssignMedia(targetProduct.productGroupId, media);
+        onAssignMedia(targetProduct.productGroupId, media, assignmentMode);
         setSelectedDriveFiles({});
         toast.success("Uploaded " + media.length + " selected Drive image(s) to storage.");
       }
@@ -644,6 +645,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       {sourceMode === "local" && (
         <div className="p-4 space-y-4">
           <div><label className="block text-xs font-medium text-gray-700 mb-1">Assign images to product</label><select value={targetProductGroupId} onChange={(event) => setTargetProductGroupId(event.target.value)} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white" disabled={!products.length}>{products.length === 0 ? <option value="">Parse or add a product first</option> : products.map((product) => <option key={product.productGroupId} value={product.productGroupId}>{product.productGroupId} — {product.name}</option>)}</select></div>
+          <div><label className="block text-xs font-medium text-gray-700 mb-1">How should these images be assigned?</label><select value={assignmentMode} onChange={(event) => setAssignmentMode(event.target.value as "replace" | "append")} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"><option value="replace">Replace existing product images (recommended for missing references)</option><option value="append">Append to existing product images</option></select><p className="mt-1 text-[11px] text-gray-500">When replacing, the first selected image becomes the primary image (order 0). Variant-specific media is preserved.</p></div>
           <label onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); addLocalFiles(event.dataTransfer.files); }} className="block cursor-pointer rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 text-center hover:border-indigo-400 transition-colors"><MonitorUp className="w-7 h-7 text-indigo-600 mx-auto mb-2" /><span className="block text-sm font-semibold text-gray-800">Choose or drop images from your computer</span><span className="block text-xs text-gray-500 mt-1">Select multiple supported image files.</span><input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { addLocalFiles(event.target.files); event.currentTarget.value = ""; }} /></label>
           {localFiles.length > 0 && <>
             <div className="flex items-center justify-between text-xs text-gray-600"><span>{localFiles.length} image(s) selected</span><button type="button" onClick={() => { localFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl)); setLocalFiles([]); }} className="text-red-600 hover:underline">Clear all</button></div>
@@ -658,6 +660,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       {sourceMode === "drive" && (
         <div className="p-4 space-y-4">
           <div><label className="block text-xs font-medium text-gray-700 mb-1">Assign images to product</label><select value={targetProductGroupId} onChange={(event) => setTargetProductGroupId(event.target.value)} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white" disabled={!products.length}>{products.length === 0 ? <option value="">Parse or add a product first</option> : products.map((product) => <option key={product.productGroupId} value={product.productGroupId}>{product.productGroupId} — {product.name}</option>)}</select></div>
+          <div><label className="block text-xs font-medium text-gray-700 mb-1">How should these images be assigned?</label><select value={assignmentMode} onChange={(event) => setAssignmentMode(event.target.value as "replace" | "append")} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"><option value="replace">Replace existing product images (recommended for missing references)</option><option value="append">Append to existing product images</option></select><p className="mt-1 text-[11px] text-gray-500">When replacing, the first selected image becomes the primary image (order 0). Variant-specific media is preserved.</p></div>
           {!driveConnected ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3"><p className="text-xs text-amber-800">Connect Google Drive to browse and select images.</p><button type="button" onClick={handleConnectDrive} className="w-full rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700"><Cloud className="w-4 h-4 inline mr-2" />Connect Google Drive</button></div> : <>
             <div><label className="block text-xs font-medium text-gray-700 mb-1">Starting folder</label><select value={selectedFolderId} onChange={(event) => setSelectedFolderId(event.target.value)} disabled={loadingFolders} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white"><option value="">Select a folder…</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></div>
             <button type="button" onClick={openDrivePicker} disabled={!selectedFolderId || !targetProduct || driveConnected !== true} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-3 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"><Cloud className="w-4 h-4" />Browse and select Drive images</button>
@@ -1647,16 +1650,29 @@ const BulkProductUploadPage: React.FC = () => {
   );
 
   const handleAssignProductMedia = useCallback(
-    (productGroupId: string, mediaToAdd: BulkParsedMedia[]) => {
+    (productGroupId: string, mediaToAdd: BulkParsedMedia[], mode: "replace" | "append") => {
       const updatedProducts = products.map((product) => {
         if (product.productGroupId !== productGroupId) return product;
         const existingMedia = product.media ?? [];
-        const existingUrls = new Set(existingMedia.map((media) => media.url));
-        const uniqueAdditions = mediaToAdd
+        const baseMedia = mode === "replace" ? [] : existingMedia;
+        const existingUrls = new Set(baseMedia.map((media) => media.url));
+        const additions = mediaToAdd
           .filter((media) => !existingUrls.has(media.url))
-          .map((media, index) => ({ ...media, order: existingMedia.length + index, source: "product" as const }));
-        const nextMedia = [...existingMedia, ...uniqueAdditions];
-        const nextAllImages = [...(product.allImages ?? existingMedia), ...uniqueAdditions]
+          .map((media, index) => ({
+            ...media,
+            order: baseMedia.length + index,
+            source: "product" as const,
+          }));
+        const nextMedia = [...baseMedia, ...additions];
+        const variantImages = (product.variants ?? []).flatMap((variant) =>
+          (variant.media ?? []).map((media, index) => ({
+            ...media,
+            source: "variant" as const,
+            variantSku: media.variantSku || variant.sku,
+            order: media.order ?? (10000 + index),
+          })),
+        );
+        const nextAllImages = [...nextMedia, ...variantImages]
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         return { ...product, media: nextMedia, allImages: nextAllImages };
       });
@@ -1664,7 +1680,10 @@ const BulkProductUploadPage: React.FC = () => {
       setRawInput(JSON.stringify(updatedProducts, null, 2));
       setValidationErrors(updatedProducts.flatMap((product) => product.errors || []));
       setIsDirty(true);
-      toast.success("Added " + mediaToAdd.length + " image(s). Save the draft to persist changes.");
+      toast.success(
+        (mode === "replace" ? "Replaced product images with " : "Added ") +
+        mediaToAdd.length + " image(s). Save the draft to persist changes.",
+      );
     },
     [products],
   );
