@@ -14,6 +14,8 @@ import {
   Eye,
   Globe,
   Trash2,
+  GripVertical,
+  Star,
   Edit2,
   Plus,
   FileSpreadsheet,
@@ -212,6 +214,10 @@ export const BulkProductPreviewTable: React.FC<
   const [failedStorefrontImageUrl, setFailedStorefrontImageUrl] = useState<
     string | null
   >(null);
+  const [storefrontDraggedImageIndex, setStorefrontDraggedImageIndex] =
+    useState<number | null>(null);
+  const [selectedStorefrontImageKeys, setSelectedStorefrontImageKeys] =
+    useState<Set<string>>(new Set());
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(
     null,
@@ -1899,13 +1905,18 @@ export const BulkProductPreviewTable: React.FC<
             getDriveProxyUrl,
             getDriveThumbnailUrl,
           );
+          // Product media is the editable source of truth. Use the match report
+          // only as a fallback when an older draft has not yet attached media to
+          // the product payload; otherwise deletions/reordering would be undone
+          // by rebuilding the gallery from the original match list.
+          const retainedProductImages = getStorefrontPreviewMedia(
+            previewProduct,
+            storefrontSelectedVariantSku,
+          );
           const previewImages =
-            matchedPreviewImages.length > 0
-              ? matchedPreviewImages
-              : getStorefrontPreviewMedia(
-                  previewProduct,
-                  storefrontSelectedVariantSku,
-                );
+            retainedProductImages.length > 0
+              ? retainedProductImages
+              : matchedPreviewImages;
           const activeIndex = Math.min(
             storefrontPreviewImageIndex,
             Math.max(0, previewImages.length - 1),
