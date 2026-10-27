@@ -107,8 +107,8 @@ function getMatchedStorefrontPreviewMedia(
         entry.file.webContentLink ||
         "";
       const thumbnailUrl =
-        getDriveThumbnailUrl?.(fileId) ||
         entry.file.thumbnailLink ||
+        getDriveThumbnailUrl?.(fileId) ||
         originalUrl;
 
       return {
