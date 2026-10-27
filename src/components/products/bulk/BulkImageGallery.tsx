@@ -127,21 +127,8 @@ export const BulkImageGallery: React.FC<BulkImageGalleryProps> = ({
                     decoding="async"
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      const target = e.currentTarget;
-                      const storageUrl = /^https?:\/\//i.test(m.url || "");
-                      const isDriveThumbnail = (m.thumbnailUrl || "").includes("/products/bulk/drive-thumbnail/");
-                      const isDriveOriginalProxy = (m.url || "").includes("/products/bulk/drive-proxy/");
-                      if (
-                        storageUrl &&
-                        isDriveThumbnail &&
-                        !target.dataset.storageFallback &&
-                        !isDriveOriginalProxy
-                      ) {
-                        target.dataset.storageFallback = "true";
-                        target.src = m.url;
-                        return;
-                      }
-                      target.style.display = "none";
+                      // Do not fetch a full-size original automatically just to fill a thumbnail.
+                      e.currentTarget.style.display = "none";
                     }}
                   />
                 ) : (
