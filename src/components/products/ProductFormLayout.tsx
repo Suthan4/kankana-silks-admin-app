@@ -341,7 +341,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
               media: (v.media || []).map((m: any, mIdx: number) => ({
                 id: m.id || crypto.randomUUID(),
                 url: m.url,
-                preview: m.url || m.thumbnailUrl,
+                preview: m.thumbnailUrl || m.url,
                 type: m.type || "IMAGE",
                 order: m.order ?? mIdx,
                 isActive: m.isActive ?? true,
@@ -363,7 +363,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
       media: (prod.media || []).map((m: any, idx: number) => ({
         id: m.id || crypto.randomUUID(),
         url: m.url,
-        preview: m.url || m.thumbnailUrl,
+        preview: m.thumbnailUrl || m.url,
         type: m.type || "IMAGE",
         order: m.order ?? idx,
         isActive: m.isActive ?? true,
