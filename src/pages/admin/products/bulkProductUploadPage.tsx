@@ -2253,6 +2253,14 @@ const BulkProductUploadPage: React.FC = () => {
     let isCancelled = false;
 
     const initDraft = async () => {
+      // An active background job owns the workspace. Restore its status first;
+      // do not fetch/reload the draft on every navigation back to this page.
+      const activeJobId = localStorage.getItem("active_bulk_job_id");
+      if (activeJobId) {
+        setJobId((current) => current || activeJobId);
+        return;
+      }
+
       const queryDraftId = searchParams.get("draftId");
       const targetId =
         queryDraftId || localStorage.getItem("active_bulk_draft_id");
