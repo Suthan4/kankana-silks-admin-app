@@ -10,6 +10,7 @@
  *   F. Import Progress
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
 import {
@@ -46,7 +47,15 @@ import { BackButton } from "@/components/ui/BackButton";
 import { BulkProductPreviewTable } from "@/components/products/bulk/BulkProductPreviewTable";
 import { BulkProductEditorModal } from "@/components/products/bulk/BulkProductEditorModal";
 import { BulkAddProductModal } from "@/components/products/bulk/BulkAddProductModal";
+import { BulkFormatExampleModal } from "@/components/products/bulk/BulkFormatExampleModal";
 import { productApi } from "@/lib/api/product.api";
+import {
+  normalizeProduct,
+  normalizeProducts,
+  resolveCategory,
+  validateBulkProduct,
+} from "@/lib/utils/bulkProductNormalization";
+import { applyDriveMatchesToProducts } from "@/lib/utils/bulkImageUtils";
 import type {
   BulkImportDraft,
   BulkImportJob,
@@ -90,22 +99,33 @@ function extractErrors(parsedData: any): BulkValidationError[] {
   return prods.flatMap((p) => p.errors ?? []);
 }
 
-function summaryFromProducts(products: BulkParsedProduct[]): BulkValidationSummary {
+function summaryFromProducts(
+  products: BulkParsedProduct[],
+): BulkValidationSummary {
   const errors: BulkValidationError[] = products.flatMap((p) => p.errors ?? []);
   return {
     totalProducts: products.length,
     simpleProducts: products.filter((p) => p.productType === "simple").length,
-    variableProducts: products.filter((p) => p.productType === "variable").length,
+    variableProducts: products.filter((p) => p.productType === "variable")
+      .length,
     totalVariants: products.reduce((s, p) => s + (p.variants?.length ?? 0), 0),
     totalMedia: products.reduce(
       (s, p) =>
         s +
-        (p.media?.length ?? 0) +
-        (p.variants?.reduce((vs, v) => vs + (v.media?.length ?? 0), 0) ?? 0),
-      0
+        (p.allImages?.length ??
+          (p.media?.length ?? 0) +
+            (p.variants?.reduce((vs, v) => vs + (v.media?.length ?? 0), 0) ??
+              0)),
+      0,
     ),
-    validProducts: products.filter((p) => p.isValid !== false && !p.errors?.some((e) => e.severity === "error")).length,
-    invalidProducts: products.filter((p) => p.isValid === false || p.errors?.some((e) => e.severity === "error")).length,
+    validProducts: products.filter(
+      (p) =>
+        p.isValid !== false && !p.errors?.some((e) => e.severity === "error"),
+    ).length,
+    invalidProducts: products.filter(
+      (p) =>
+        p.isValid === false || p.errors?.some((e) => e.severity === "error"),
+    ).length,
     errorCount: errors.filter((e) => e.severity === "error").length,
     warningCount: errors.filter((e) => e.severity === "warning").length,
   };
@@ -134,7 +154,10 @@ const DraftSelector: React.FC<DraftSelectorProps> = ({ onSelect, onClose }) => {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between p-5 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">Open Draft</h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 transition-colors">
+          <button
+            onClick={onClose}
+            className="p-1 rounded hover:bg-gray-100 transition-colors"
+          >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -148,7 +171,9 @@ const DraftSelector: React.FC<DraftSelectorProps> = ({ onSelect, onClose }) => {
             <p className="text-sm text-red-600 py-4">{humanError(error)}</p>
           )}
           {data?.length === 0 && (
-            <p className="text-sm text-gray-500 py-4 text-center">No saved drafts yet.</p>
+            <p className="text-sm text-gray-500 py-4 text-center">
+              No saved drafts yet.
+            </p>
           )}
           <div className="space-y-2">
             {data?.map((draft) => (
@@ -167,10 +192,10 @@ const DraftSelector: React.FC<DraftSelectorProps> = ({ onSelect, onClose }) => {
                       draft.status === "COMPLETED"
                         ? "bg-green-100 text-green-700"
                         : draft.status === "FAILED"
-                        ? "bg-red-100 text-red-700"
-                        : draft.status === "READY_FOR_IMPORT"
-                        ? "bg-blue-100 text-blue-700"
-                        : "bg-gray-100 text-gray-600"
+                          ? "bg-red-100 text-red-700"
+                          : draft.status === "READY_FOR_IMPORT"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-gray-100 text-gray-600",
                     )}
                   >
                     {draft.status}
@@ -181,7 +206,9 @@ const DraftSelector: React.FC<DraftSelectorProps> = ({ onSelect, onClose }) => {
                   {new Date(draft.updatedAt).toLocaleString()}
                 </p>
                 {draft.rawInput && (
-                  <p className="text-xs text-gray-400 mt-0.5 truncate">{draft.rawInput.slice(0, 80)}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">
+                    {draft.rawInput.slice(0, 80)}
+                  </p>
                 )}
               </button>
             ))}
@@ -209,10 +236,12 @@ const DeleteDraftModal: React.FC<DeleteDraftModalProps> = ({
 }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
     <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
-      <h2 className="text-base font-semibold text-gray-900 mb-2">Delete Draft?</h2>
+      <h2 className="text-base font-semibold text-gray-900 mb-2">
+        Delete Draft?
+      </h2>
       <p className="text-sm text-gray-600 mb-5">
-        Draft #{draftId.slice(-8)} and all its data will be permanently deleted. This cannot be
-        undone.
+        Draft #{draftId.slice(-8)} and all its data will be permanently deleted.
+        This cannot be undone.
       </p>
       <div className="flex gap-3 justify-end">
         <button
@@ -239,7 +268,9 @@ const DeleteDraftModal: React.FC<DeleteDraftModalProps> = ({
  *  backend can identify the user without a separate login step. */
 function buildDriveConnectUrl(draftId?: string | null): string {
   const token = localStorage.getItem("accessToken") ?? "";
-  const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:3000/api").replace(/\/+$/, "");
+  const apiBase = (
+    import.meta.env.VITE_API_URL || "http://localhost:3000/api"
+  ).replace(/\/+$/, "");
   const params = new URLSearchParams({ token });
   if (draftId) params.set("draftId", draftId);
   return `${apiBase}/auth/google?${params.toString()}`;
@@ -249,8 +280,12 @@ interface DriveMatchingPanelProps {
   draftId: string | null;
   imageMatches: ImageMatchResult | null;
   confirmedAssignments: Record<string, string>;
-  onMatchComplete: (matches: ImageMatchResult, assignments: Record<string, string>) => void;
+  onMatchComplete: (
+    matches: ImageMatchResult,
+    assignments: Record<string, string>,
+  ) => void;
   getDriveProxyUrl: (fileId: string) => string;
+  onPrepareDraft?: () => Promise<void>;
 }
 
 const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
@@ -259,6 +294,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   confirmedAssignments,
   onMatchComplete,
   getDriveProxyUrl,
+  onPrepareDraft,
 }) => {
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null); // null = loading
   const [folders, setFolders] = useState<DriveFolder[]>([]);
@@ -267,42 +303,45 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   const [matching, setMatching] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
   const [showAmbiguous, setShowAmbiguous] = useState(false);
-  const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>(
-    confirmedAssignments ?? {}
-  );
+  const [pendingAssignments, setPendingAssignments] = useState<
+    Record<string, string>
+  >(confirmedAssignments ?? {});
 
   // Check connection status first, then load folders if connected
-  const checkAndLoadFolders = useCallback(async (forceReload = false) => {
-    setLoadingFolders(true);
-    setFolderError(null);
-    try {
-      // 1. Check if Drive is connected for this user
-      const statusRes = await productApi.getDriveStatus(draftId ?? undefined);
-      const { connected } = statusRes.data ?? { connected: false };
-      setDriveConnected(connected);
+  const checkAndLoadFolders = useCallback(
+    async (forceReload = false) => {
+      setLoadingFolders(true);
+      setFolderError(null);
+      try {
+        // 1. Check if Drive is connected for this user
+        const statusRes = await productApi.getDriveStatus(draftId ?? undefined);
+        const { connected } = statusRes.data ?? { connected: false };
+        setDriveConnected(connected);
 
-      if (!connected) {
+        if (!connected) {
+          setLoadingFolders(false);
+          return;
+        }
+
+        // 2. Drive is connected — load the folder list
+        const res = await productApi.listDriveFolders();
+        const raw = res.data;
+        const folderList = Array.isArray(raw)
+          ? raw
+          : Array.isArray((raw as any)?.folders)
+            ? (raw as any).folders
+            : [];
+        setFolders(folderList);
+      } catch (err: any) {
+        const msg = humanError(err);
+        setDriveConnected(false);
+        setFolderError(msg);
+      } finally {
         setLoadingFolders(false);
-        return;
       }
-
-      // 2. Drive is connected — load the folder list
-      const res = await productApi.listDriveFolders();
-      const raw = res.data;
-      const folderList = Array.isArray(raw)
-        ? raw
-        : Array.isArray((raw as any)?.folders)
-        ? (raw as any).folders
-        : [];
-      setFolders(folderList);
-    } catch (err: any) {
-      const msg = humanError(err);
-      setDriveConnected(false);
-      setFolderError(msg);
-    } finally {
-      setLoadingFolders(false);
-    }
-  }, [draftId]);
+    },
+    [draftId],
+  );
 
   // On mount — also handle the ?drive_connected=true callback from Google OAuth
   useEffect(() => {
@@ -315,7 +354,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       window.history.replaceState(
         {},
         "",
-        window.location.pathname + (newSearch ? `?${newSearch}` : "")
+        window.location.pathname + (newSearch ? `?${newSearch}` : ""),
       );
       toast.success("Google Drive connected successfully!");
     }
@@ -328,20 +367,29 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     window.location.href = buildDriveConnectUrl(draftId);
   };
 
-  const loadFolders = useCallback(() => checkAndLoadFolders(true), [checkAndLoadFolders]);
+  const loadFolders = useCallback(
+    () => checkAndLoadFolders(true),
+    [checkAndLoadFolders],
+  );
 
   const handleMatch = async () => {
     if (!draftId || !selectedFolderId) return;
     setMatching(true);
     try {
+      if (onPrepareDraft) {
+        await onPrepareDraft();
+      }
       const res = await productApi.matchDriveImages(draftId, selectedFolderId);
-      const matchResult: ImageMatchResult = (res.data as any)?.imageMatches || (res.data as any);
+      const matchResult: ImageMatchResult =
+        (res.data as any)?.imageMatches || (res.data as any);
       if (matchResult && Array.isArray(matchResult.matched)) {
         await productApi.confirmDriveAssignment(draftId, pendingAssignments);
         onMatchComplete(matchResult, pendingAssignments);
         toast.success(
           `Matched ${matchResult.matched.length} image(s). ` +
-            (matchResult.missing.length > 0 ? `${matchResult.missing.length} missing.` : "")
+            (matchResult.missing.length > 0
+              ? `${matchResult.missing.length} missing.`
+              : ""),
         );
       } else {
         toast.error("Invalid image matching response from server.");
@@ -354,7 +402,10 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   };
 
   const assignCandidate = async (entry: AmbiguousEntry, fileId: string) => {
-    const newAssignments = { ...pendingAssignments, [String(entry.mediaIndex)]: fileId };
+    const newAssignments = {
+      ...pendingAssignments,
+      [String(entry.mediaIndex)]: fileId,
+    };
     setPendingAssignments(newAssignments);
     if (draftId) {
       try {
@@ -408,15 +459,20 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-medium text-amber-800">Google Drive not connected</p>
+              <p className="text-xs font-medium text-amber-800">
+                Google Drive not connected
+              </p>
               <p className="text-xs text-amber-700 mt-0.5">
-                Connect your Google account to browse Drive folders and match images to your products automatically.
+                Connect your Google account to browse Drive folders and match
+                images to your products automatically.
               </p>
             </div>
           </div>
 
           {folderError && (
-            <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{folderError}</p>
+            <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">
+              {folderError}
+            </p>
           )}
 
           <button
@@ -428,8 +484,8 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
           </button>
 
           <p className="text-xs text-gray-400 text-center">
-            You will be redirected to Google to authorize read-only Drive access.
-            After approving, you'll return here automatically.
+            You will be redirected to Google to authorize read-only Drive
+            access. After approving, you'll return here automatically.
           </p>
         </div>
       </div>
@@ -462,7 +518,9 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       <div className="p-4 space-y-4">
         {/* Folder selector */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Drive Folder</label>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Drive Folder
+          </label>
           <div className="flex gap-2">
             <select
               value={selectedFolderId}
@@ -490,9 +548,13 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
               )}
             </button>
           </div>
-          {folderError && <p className="text-xs text-red-600 mt-1">{folderError}</p>}
+          {folderError && (
+            <p className="text-xs text-red-600 mt-1">{folderError}</p>
+          )}
           {folders.length === 0 && !loadingFolders && !folderError && (
-            <p className="text-xs text-gray-400 mt-1">No folders found in your Drive.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              No folders found in your Drive.
+            </p>
           )}
         </div>
 
@@ -526,19 +588,27 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-green-50 rounded-lg p-2 text-center">
-                <span className="block text-lg font-bold text-green-700">{stats.matched}</span>
+                <span className="block text-lg font-bold text-green-700">
+                  {stats.matched}
+                </span>
                 <span className="text-xs text-green-600">Matched</span>
               </div>
               <div className="bg-red-50 rounded-lg p-2 text-center">
-                <span className="block text-lg font-bold text-red-700">{stats.missing}</span>
+                <span className="block text-lg font-bold text-red-700">
+                  {stats.missing}
+                </span>
                 <span className="text-xs text-red-600">Missing</span>
               </div>
               <div className="bg-amber-50 rounded-lg p-2 text-center">
-                <span className="block text-lg font-bold text-amber-700">{stats.ambiguous}</span>
+                <span className="block text-lg font-bold text-amber-700">
+                  {stats.ambiguous}
+                </span>
                 <span className="text-xs text-amber-600">Ambiguous</span>
               </div>
               <div className="bg-gray-50 rounded-lg p-2 text-center">
-                <span className="block text-lg font-bold text-gray-700">{stats.duplicates}</span>
+                <span className="block text-lg font-bold text-gray-700">
+                  {stats.duplicates}
+                </span>
                 <span className="text-xs text-gray-600">Duplicates</span>
               </div>
             </div>
@@ -546,30 +616,35 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
             {/* Matched thumbnails (first 6) */}
             {imageMatches!.matched.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-gray-700 mb-1">Matched Images</p>
+                <p className="text-xs font-medium text-gray-700 mb-1">
+                  Matched Images
+                </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {imageMatches!.matched.slice(0, 6).map((m: MatchedEntry, i) => (
-                    <div
-                      key={i}
-                      className="relative w-12 h-12 rounded border border-gray-200 overflow-hidden bg-gray-100"
-                      title={m.file.name}
-                    >
-                      {m.file.thumbnailLink ? (
-                        <img
-                          src={getDriveProxyUrl(m.file.id)}
-                          alt={m.file.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <ImageIcon className="w-4 h-4 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {imageMatches!.matched
+                    .slice(0, 6)
+                    .map((m: MatchedEntry, i) => (
+                      <div
+                        key={i}
+                        className="relative w-12 h-12 rounded border border-gray-200 overflow-hidden bg-gray-100"
+                        title={m.file.name}
+                      >
+                        {m.file.thumbnailLink ? (
+                          <img
+                            src={getDriveProxyUrl(m.file.id)}
+                            alt={m.file.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full">
+                            <ImageIcon className="w-4 h-4 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   {imageMatches!.matched.length > 6 && (
                     <div className="w-12 h-12 rounded border border-gray-200 flex items-center justify-center text-xs text-gray-500 bg-gray-50">
                       +{imageMatches!.matched.length - 6}
@@ -586,57 +661,74 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
                   onClick={() => setShowAmbiguous((s) => !s)}
                   className="text-xs text-amber-700 font-medium flex items-center gap-1 hover:underline"
                 >
-                  {showAmbiguous ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {showAmbiguous ? (
+                    <ChevronUp className="w-3 h-3" />
+                  ) : (
+                    <ChevronDown className="w-3 h-3" />
+                  )}
                   Resolve {imageMatches!.ambiguous.length} ambiguous match(es)
                 </button>
                 {showAmbiguous && (
                   <div className="mt-2 space-y-3">
-                    {imageMatches!.ambiguous.map((entry: AmbiguousEntry, ei) => (
-                      <div key={ei} className="border border-amber-200 rounded-lg p-2 bg-amber-50">
-                        <p className="text-xs font-medium text-amber-800 mb-1 truncate">
-                          {entry.reference || `Media #${entry.mediaIndex}`}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {entry.candidates.map((c) => (
-                            <button
-                              key={c.id}
-                              onClick={() => assignCandidate(entry, c.id)}
-                              className={classNames(
-                                "relative w-14 h-14 rounded border overflow-hidden",
-                                pendingAssignments[String(entry.mediaIndex)] === c.id
-                                  ? "border-indigo-500 ring-2 ring-indigo-300"
-                                  : "border-gray-300 hover:border-indigo-400"
-                              )}
-                              title={c.name}
-                            >
-                              {c.thumbnailLink ? (
-                                <img
-                                  src={getDriveProxyUrl(c.id)}
-                                  alt={c.name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = "none";
-                                  }}
-                                />
-                              ) : (
-                                <div className="flex items-center justify-center h-full bg-gray-100">
-                                  <ImageIcon className="w-4 h-4 text-gray-400" />
-                                </div>
-                              )}
-                              {pendingAssignments[String(entry.mediaIndex)] === c.id && (
-                                <div className="absolute top-0 right-0 bg-indigo-600 rounded-bl p-0.5">
-                                  <CheckCircle2 className="w-2.5 h-2.5 text-white" />
-                                </div>
-                              )}
-                            </button>
-                          ))}
+                    {imageMatches!.ambiguous.map(
+                      (entry: AmbiguousEntry, ei) => (
+                        <div
+                          key={ei}
+                          className="border border-amber-200 rounded-lg p-2 bg-amber-50"
+                        >
+                          <p className="text-xs font-medium text-amber-800 mb-1 truncate">
+                            {entry.reference || `Media #${entry.mediaIndex}`}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {entry.candidates.map((c) => (
+                              <button
+                                key={c.id}
+                                onClick={() => assignCandidate(entry, c.id)}
+                                className={classNames(
+                                  "relative w-14 h-14 rounded border overflow-hidden",
+                                  pendingAssignments[
+                                    String(entry.mediaIndex)
+                                  ] === c.id
+                                    ? "border-indigo-500 ring-2 ring-indigo-300"
+                                    : "border-gray-300 hover:border-indigo-400",
+                                )}
+                                title={c.name}
+                              >
+                                {c.thumbnailLink ? (
+                                  <img
+                                    src={getDriveProxyUrl(c.id)}
+                                    alt={c.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (
+                                        e.target as HTMLImageElement
+                                      ).style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="flex items-center justify-center h-full bg-gray-100">
+                                    <ImageIcon className="w-4 h-4 text-gray-400" />
+                                  </div>
+                                )}
+                                {pendingAssignments[
+                                  String(entry.mediaIndex)
+                                ] === c.id && (
+                                  <div className="absolute top-0 right-0 bg-indigo-600 rounded-bl p-0.5">
+                                    <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                                  </div>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs text-amber-700 mt-1">
+                            {entry.productGroupId &&
+                              `Product: ${entry.productGroupId}`}
+                            {entry.variantSku &&
+                              ` · Variant: ${entry.variantSku}`}
+                          </p>
                         </div>
-                        <p className="text-xs text-amber-700 mt-1">
-                          {entry.productGroupId && `Product: ${entry.productGroupId}`}
-                          {entry.variantSku && ` · Variant: ${entry.variantSku}`}
-                        </p>
-                      </div>
-                    ))}
+                      ),
+                    )}
                   </div>
                 )}
               </div>
@@ -684,31 +776,58 @@ const ValidationSummaryPanel: React.FC<ValidationSummaryProps> = ({
 
   const hasBlockers = summary.errorCount > 0;
   const matchedCount = imageMatches?.matched.length ?? 0;
-  const unresolvedCount = (imageMatches?.missing.length ?? 0) + (imageMatches?.ambiguous.length ?? 0);
+  const unresolvedCount =
+    (imageMatches?.missing.length ?? 0) + (imageMatches?.ambiguous.length ?? 0);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
       <div className="p-4 border-b border-gray-200">
-        <h3 className="text-sm font-semibold text-gray-900">Validation Summary</h3>
+        <h3 className="text-sm font-semibold text-gray-900">
+          Validation Summary
+        </h3>
       </div>
       <div className="p-4 space-y-3">
         <div className="grid grid-cols-2 gap-2 text-center">
           <div className="bg-gray-50 rounded-lg p-2">
-            <span className="block text-base font-bold text-gray-900">{summary.totalProducts}</span>
+            <span className="block text-base font-bold text-gray-900">
+              {summary.totalProducts}
+            </span>
             <span className="text-xs text-gray-500">Products</span>
           </div>
           <div className="bg-gray-50 rounded-lg p-2">
-            <span className="block text-base font-bold text-gray-900">{summary.totalVariants}</span>
+            <span className="block text-base font-bold text-gray-900">
+              {summary.totalVariants}
+            </span>
             <span className="text-xs text-gray-500">Variants</span>
           </div>
-          <div className={classNames("rounded-lg p-2", matchedCount > 0 ? "bg-green-50" : "bg-gray-50")}>
-            <span className={classNames("block text-base font-bold", matchedCount > 0 ? "text-green-700" : "text-gray-900")}>
+          <div
+            className={classNames(
+              "rounded-lg p-2",
+              matchedCount > 0 ? "bg-green-50" : "bg-gray-50",
+            )}
+          >
+            <span
+              className={classNames(
+                "block text-base font-bold",
+                matchedCount > 0 ? "text-green-700" : "text-gray-900",
+              )}
+            >
               {matchedCount}/{imageMatches?.totalMedia ?? summary.totalMedia}
             </span>
             <span className="text-xs text-gray-500">Images matched</span>
           </div>
-          <div className={classNames("rounded-lg p-2", unresolvedCount > 0 ? "bg-amber-50" : "bg-gray-50")}>
-            <span className={classNames("block text-base font-bold", unresolvedCount > 0 ? "text-amber-700" : "text-gray-900")}>
+          <div
+            className={classNames(
+              "rounded-lg p-2",
+              unresolvedCount > 0 ? "bg-amber-50" : "bg-gray-50",
+            )}
+          >
+            <span
+              className={classNames(
+                "block text-base font-bold",
+                unresolvedCount > 0 ? "text-amber-700" : "text-gray-900",
+              )}
+            >
               {unresolvedCount}
             </span>
             <span className="text-xs text-gray-500">Unresolved</span>
@@ -720,21 +839,29 @@ const ValidationSummaryPanel: React.FC<ValidationSummaryProps> = ({
           <div className="flex items-start gap-2 bg-red-50 rounded-lg p-2">
             <XCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-medium text-red-700">{summary.errorCount} blocking error(s)</p>
-              <p className="text-xs text-red-600 mt-0.5">Fix all errors before importing.</p>
+              <p className="text-xs font-medium text-red-700">
+                {summary.errorCount} blocking error(s)
+              </p>
+              <p className="text-xs text-red-600 mt-0.5">
+                Fix all errors before importing.
+              </p>
             </div>
           </div>
         )}
         {summary.warningCount > 0 && (
           <div className="flex items-start gap-2 bg-amber-50 rounded-lg p-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-700">{summary.warningCount} warning(s) — import still allowed.</p>
+            <p className="text-xs text-amber-700">
+              {summary.warningCount} warning(s) — import still allowed.
+            </p>
           </div>
         )}
         {!hasBlockers && summary.totalProducts > 0 && (
           <div className="flex items-start gap-2 bg-green-50 rounded-lg p-2">
             <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-green-700">All {summary.validProducts} product(s) are valid.</p>
+            <p className="text-xs text-green-700">
+              All {summary.validProducts} product(s) are valid.
+            </p>
           </div>
         )}
 
@@ -749,10 +876,16 @@ const ValidationSummaryPanel: React.FC<ValidationSummaryProps> = ({
                   "flex-1 text-xs py-1.5 rounded-md border transition-colors font-medium",
                   activeFilter === f
                     ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                    : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50",
                 )}
               >
-                {f === "all" ? "All" : f === "valid" ? "Valid" : f === "error" ? "Errors" : "Warnings"}
+                {f === "all"
+                  ? "All"
+                  : f === "valid"
+                    ? "Valid"
+                    : f === "error"
+                      ? "Errors"
+                      : "Warnings"}
               </button>
             ))}
           </div>
@@ -770,10 +903,17 @@ interface ImportProgressPanelProps {
   isRetrying: boolean;
 }
 
-const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({ job, onRetry, isRetrying }) => {
+const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
+  job,
+  onRetry,
+  isRetrying,
+}) => {
   if (!job) return null;
 
-  const pct = job.total > 0 ? Math.round((job.processed / job.total) * 100) : job.progress ?? 0;
+  const pct =
+    job.total > 0
+      ? Math.round((job.processed / job.total) * 100)
+      : (job.progress ?? 0);
   const isDone = job.status === "completed" || job.status === "failed";
   const isRunning = job.status === "pending" || job.status === "processing";
 
@@ -781,9 +921,15 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({ job, onRetry,
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm mt-4">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          {isRunning && <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />}
-          {job.status === "completed" && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-          {job.status === "failed" && <XCircle className="w-4 h-4 text-red-600" />}
+          {isRunning && (
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+          )}
+          {job.status === "completed" && (
+            <CheckCircle2 className="w-4 h-4 text-green-600" />
+          )}
+          {job.status === "failed" && (
+            <XCircle className="w-4 h-4 text-red-600" />
+          )}
           Import Progress
         </h3>
         <span
@@ -792,10 +938,10 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({ job, onRetry,
             job.status === "completed"
               ? "bg-green-100 text-green-700"
               : job.status === "failed"
-              ? "bg-red-100 text-red-700"
-              : job.status === "processing"
-              ? "bg-indigo-100 text-indigo-700"
-              : "bg-gray-100 text-gray-600"
+                ? "bg-red-100 text-red-700"
+                : job.status === "processing"
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-gray-100 text-gray-600",
           )}
         >
           {job.status}
@@ -805,14 +951,16 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({ job, onRetry,
         {/* Progress bar */}
         <div>
           <div className="flex justify-between text-xs text-gray-600 mb-1">
-            <span>{job.processed}/{job.total} processed</span>
+            <span>
+              {job.processed}/{job.total} processed
+            </span>
             <span>{pct}%</span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div
               className={classNames(
                 "h-full rounded-full transition-all duration-500",
-                job.status === "failed" ? "bg-red-500" : "bg-indigo-600"
+                job.status === "failed" ? "bg-red-500" : "bg-indigo-600",
               )}
               style={{ width: `${pct}%` }}
             />
@@ -822,11 +970,15 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({ job, onRetry,
         {/* Counts */}
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="bg-green-50 rounded-lg p-2">
-            <span className="block text-sm font-bold text-green-700">{job.successful}</span>
+            <span className="block text-sm font-bold text-green-700">
+              {job.successful}
+            </span>
             <span className="text-xs text-green-600">Successful</span>
           </div>
           <div className="bg-red-50 rounded-lg p-2">
-            <span className="block text-sm font-bold text-red-700">{job.failed}</span>
+            <span className="block text-sm font-bold text-red-700">
+              {job.failed}
+            </span>
             <span className="text-xs text-red-600">Failed</span>
           </div>
           <div className="bg-gray-50 rounded-lg p-2">
@@ -839,7 +991,9 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({ job, onRetry,
 
         {/* Job-level error */}
         {job.error && (
-          <div className="bg-red-50 rounded-lg p-3 text-xs text-red-700">{job.error}</div>
+          <div className="bg-red-50 rounded-lg p-3 text-xs text-red-700">
+            {job.error}
+          </div>
         )}
 
         {/* Per-item results */}
@@ -853,15 +1007,22 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({ job, onRetry,
                   r.status === "success"
                     ? "bg-green-50 text-green-700"
                     : r.status === "failed"
-                    ? "bg-red-50 text-red-700"
-                    : "bg-gray-50 text-gray-600"
+                      ? "bg-red-50 text-red-700"
+                      : "bg-gray-50 text-gray-600",
                 )}
               >
-                <span className="truncate font-medium">{r.name || r.productGroupId}</span>
+                <span className="truncate font-medium">
+                  {r.name || r.productGroupId}
+                </span>
                 <div className="flex items-center gap-1 shrink-0 ml-2">
-                  {r.status === "success" && <CheckCircle2 className="w-3 h-3" />}
+                  {r.status === "success" && (
+                    <CheckCircle2 className="w-3 h-3" />
+                  )}
                   {r.status === "failed" && (
-                    <span className="text-red-600 max-w-[120px] truncate" title={r.error}>
+                    <span
+                      className="text-red-600 max-w-[120px] truncate"
+                      title={r.error}
+                    >
                       {r.error}
                     </span>
                   )}
@@ -900,39 +1061,28 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({ job, onRetry,
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const FORMAT_EXAMPLE = `[
-  {
-    "name": "Kanchipuram Silk Saree",
-    "productGroupId": "KSS-001",
-    "productType": "variable",
-    "categoryPath": "Sarees > Silk Sarees",
-    "description": "Traditional handwoven saree",
-    "basePrice": 8000,
-    "sellingPrice": 6500,
-    "weight": 0.8,
-    "variants": [
-      { "color": "Red", "sku": "KSS-001-RED", "sellingPrice": 6500 },
-      { "color": "Blue", "sku": "KSS-001-BLU", "sellingPrice": 6200 }
-    ],
-    "media": [
-      { "url": "kss-001-red.jpg", "altText": "Red saree" }
-    ]
-  }
-]`;
-
 const BulkProductUploadPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // ─ State ────────────────────────────────────────────────────────────────
 
   const [rawInput, setRawInput] = useState("");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftStatus, setDraftStatus] = useState<string>("DRAFT");
-  const [imageMatches, setImageMatches] = useState<ImageMatchResult | null>(null);
-  const [confirmedAssignments, setConfirmedAssignments] = useState<Record<string, string>>({});
+  const [imageMatches, setImageMatches] = useState<ImageMatchResult | null>(
+    null,
+  );
+  const [confirmedAssignments, setConfirmedAssignments] = useState<
+    Record<string, string>
+  >({});
   const [products, setProducts] = useState<BulkParsedProduct[]>([]);
-  const [validationErrors, setValidationErrors] = useState<BulkValidationError[]>([]);
-  const [productFilter, setProductFilter] = useState<"all" | "valid" | "error" | "warning">("all");
+  const [validationErrors, setValidationErrors] = useState<
+    BulkValidationError[]
+  >([]);
+  const [productFilter, setProductFilter] = useState<
+    "all" | "valid" | "error" | "warning"
+  >("all");
   const [showFormatExample, setShowFormatExample] = useState(false);
 
   const [jobId, setJobId] = useState<string | null>(null);
@@ -945,7 +1095,8 @@ const BulkProductUploadPage: React.FC = () => {
 
   const [showDraftSelector, setShowDraftSelector] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<BulkParsedProduct | null>(null);
+  const [editingProduct, setEditingProduct] =
+    useState<BulkParsedProduct | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showJsonViewer, setShowJsonViewer] = useState(false);
 
@@ -974,9 +1125,18 @@ const BulkProductUploadPage: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ─ Lifecycle & In-flight guards ───────────────────────────────────────────
+  const loadedDraftIdRef = useRef<string | null>(null);
+  const inFlightDraftIdRef = useRef<string | null>(null);
+  const flatCategoriesRef = useRef(flatCategories);
+  flatCategoriesRef.current = flatCategories;
+  const warehousesRef = useRef(warehouses);
+  warehousesRef.current = warehouses;
+
   // ─ Computed ─────────────────────────────────────────────────────────────
 
-  const summary = products.length > 0 ? summaryFromProducts(products) : undefined;
+  const summary =
+    products.length > 0 ? summaryFromProducts(products) : undefined;
   const hasBlockers = (summary?.errorCount ?? 0) > 0;
   const canImport =
     !hasBlockers &&
@@ -988,17 +1148,18 @@ const BulkProductUploadPage: React.FC = () => {
   const importDisabledReason = !draftId
     ? "Create or open a draft first."
     : products.length === 0
-    ? "Parse products first."
-    : hasBlockers
-    ? `Fix ${summary!.errorCount} error(s) before importing.`
-    : job?.status === "processing" || job?.status === "pending"
-    ? "Import is already running."
-    : null;
+      ? "Parse products first."
+      : hasBlockers
+        ? `Fix ${summary!.errorCount} error(s) before importing.`
+        : job?.status === "processing" || job?.status === "pending"
+          ? "Import is already running."
+          : null;
 
   // ─ Poll job status ───────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!jobId || job?.status === "completed" || job?.status === "failed") return;
+    if (!jobId || job?.status === "completed" || job?.status === "failed")
+      return;
     const timer = setInterval(async () => {
       try {
         const res = await productApi.getJobStatus(jobId);
@@ -1033,64 +1194,249 @@ const BulkProductUploadPage: React.FC = () => {
 
   // ─ Actions ──────────────────────────────────────────────────────────────
 
-  const loadDraft = useCallback((draft: BulkImportDraft) => {
-    setDraftId(draft.id);
-    setDraftStatus(draft.status);
-    setRawInput(draft.rawInput ?? "");
-    const prods = extractProducts(draft.parsedData);
-    setProducts(prods);
-    setImageMatches(draft.imageMatches ?? null);
-    setConfirmedAssignments(draft.confirmedAssignments ?? {});
-    setValidationErrors(extractErrors(draft.parsedData));
-    setJob(null);
-    setJobId(null);
-    setIsDirty(false);
-    setShowDraftSelector(false);
-    localStorage.setItem("active_bulk_draft_id", draft.id);
-    const url = new URL(window.location.href);
-    url.searchParams.set("draftId", draft.id);
-    window.history.replaceState({}, "", url.toString());
-    toast.success(`Draft #${draft.id.slice(-8)} loaded.`);
-  }, []);
+  const syncDraftUrl = useCallback(
+    (id: string | null) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const current = next.get("draftId");
+          if (id) {
+            if (current !== id) {
+              next.set("draftId", id);
+              return next;
+            }
+          } else {
+            if (current) {
+              next.delete("draftId");
+              return next;
+            }
+          }
+          return prev;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const loadDraft = useCallback(
+    (draft: BulkImportDraft, options?: { showToast?: boolean }) => {
+      loadedDraftIdRef.current = draft.id;
+      setDraftId(draft.id);
+      setDraftStatus(draft.status);
+      const rawProds = extractProducts(draft.parsedData);
+      const normalized = normalizeProducts(
+        rawProds,
+        flatCategoriesRef.current,
+        warehousesRef.current,
+      );
+      setProducts(normalized);
+      setRawInput(
+        draft.rawInput ??
+          (normalized.length > 0 ? JSON.stringify(normalized, null, 2) : ""),
+      );
+      setImageMatches(draft.imageMatches ?? null);
+      setConfirmedAssignments(draft.confirmedAssignments ?? {});
+      setValidationErrors(normalized.flatMap((p) => p.errors || []));
+      setJob(null);
+      setJobId(null);
+      setIsDirty(false);
+      setShowDraftSelector(false);
+      localStorage.setItem("active_bulk_draft_id", draft.id);
+      syncDraftUrl(draft.id);
+
+      if (options?.showToast !== false) {
+        toast.success(`Draft #${draft.id.slice(-8)} loaded.`, {
+          id: `bulk-draft-loaded-${draft.id}`,
+        });
+      }
+    },
+    [syncDraftUrl],
+  );
+
+  const handleReloadDraft = useCallback(async () => {
+    if (!draftId) return;
+    const tid = toast.loading(`Reloading draft #${draftId.slice(-8)}…`);
+    try {
+      const res = await productApi.getDraft(draftId);
+      if (res.data) {
+        loadDraft(res.data, { showToast: false });
+        toast.success(`Draft #${draftId.slice(-8)} reloaded.`, { id: tid });
+      }
+    } catch (err) {
+      toast.error(humanError(err), { id: tid });
+    }
+  }, [draftId, loadDraft]);
+
+  // ─ Auto-enrich in-memory products when categories/warehouses load ──────────
+  useEffect(() => {
+    if (flatCategories.length === 0 && warehouses.length === 0) return;
+    setProducts((prev) => {
+      if (prev.length === 0) return prev;
+      let hasChanges = false;
+      const next = prev.map((p) => {
+        let pChanged = false;
+        let catId = p.categoryId;
+        let catName = p.categoryName;
+        let catPath = p.categoryPath;
+
+        if (flatCategories.length > 0 && (!catName || !catId) && catPath) {
+          const resolved = resolveCategory(catPath, catId, flatCategories);
+          if (
+            resolved.categoryId !== catId ||
+            resolved.categoryName !== catName
+          ) {
+            catId = resolved.categoryId || catId;
+            catName = resolved.categoryName || catName;
+            catPath = resolved.categoryPath || catPath;
+            pChanged = true;
+          }
+        }
+
+        let stock = p.stock;
+        if (
+          warehouses.length > 0 &&
+          stock &&
+          !stock.warehouseCode &&
+          stock.warehouseId
+        ) {
+          const w = warehouses.find((wh) => wh.id === stock?.warehouseId);
+          if (w?.code) {
+            stock = { ...stock, warehouseCode: w.code };
+            pChanged = true;
+          }
+        }
+
+        if (pChanged) {
+          hasChanges = true;
+          const updated: BulkParsedProduct = {
+            ...p,
+            categoryId: catId,
+            categoryName: catName,
+            categoryPath: catPath,
+            stock,
+          };
+          const errs = validateBulkProduct(updated, flatCategories, warehouses);
+          return {
+            ...updated,
+            isValid: !errs.some((e) => e.severity === "error"),
+            errors: errs.length > 0 ? errs : undefined,
+          };
+        }
+        return p;
+      });
+
+      return hasChanges ? next : prev;
+    });
+  }, [flatCategories, warehouses]);
 
   // ─ Auto-restore draft on mount from URL, localStorage, or listDrafts ───────
   useEffect(() => {
-    const initDraft = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const queryDraftId = urlParams.get("draftId");
-      const targetId = queryDraftId || localStorage.getItem("active_bulk_draft_id");
+    let isCancelled = false;
 
-      if (targetId) {
+    const initDraft = async () => {
+      const queryDraftId = searchParams.get("draftId");
+      const targetId =
+        queryDraftId || localStorage.getItem("active_bulk_draft_id");
+
+      // Nothing to load
+      if (!targetId) {
+        if (loadedDraftIdRef.current) return;
         try {
-          const res = await productApi.getDraft(targetId);
-          if (res.data) {
-            loadDraft(res.data);
-            return;
+          const res = await productApi.listDrafts();
+          if (isCancelled) return;
+          const drafts = res.data ?? [];
+          if (drafts.length > 0) {
+            const activeDraft =
+              drafts.find((d) => d.status !== "COMPLETED") || drafts[0];
+            if (
+              activeDraft &&
+              !isCancelled &&
+              loadedDraftIdRef.current !== activeDraft.id
+            ) {
+              loadDraft(activeDraft);
+            }
           }
         } catch {
-          localStorage.removeItem("active_bulk_draft_id");
+          // silent fallback
         }
+        return;
       }
 
-      // Check if user has an existing draft to resume
+      // If already loaded in state, don't re-fetch
+      if (loadedDraftIdRef.current === targetId) {
+        return;
+      }
+
+      // If already being fetched, don't duplicate request
+      if (inFlightDraftIdRef.current === targetId) {
+        return;
+      }
+
+      inFlightDraftIdRef.current = targetId;
+
       try {
-        const res = await productApi.listDrafts();
-        const drafts = res.data ?? [];
-        if (drafts.length > 0) {
-          const activeDraft = drafts.find((d) => d.status !== "COMPLETED") || drafts[0];
-          loadDraft(activeDraft);
+        const res = await productApi.getDraft(targetId);
+        if (isCancelled) return;
+        if (res.data) {
+          loadDraft(res.data);
+          return;
         }
-      } catch {
-        // silent
+      } catch (err) {
+        if (isCancelled) return;
+
+        // If explicitly requested via URL draftId, report error without false success
+        if (queryDraftId) {
+          toast.error(
+            `Draft #${queryDraftId.slice(-8)} could not be loaded: ${humanError(err)}`,
+            { id: `bulk-draft-error-${queryDraftId}` },
+          );
+          localStorage.removeItem("active_bulk_draft_id");
+          syncDraftUrl(null);
+          return;
+        }
+
+        // Stale localStorage draft ID
+        localStorage.removeItem("active_bulk_draft_id");
+
+        // Try falling back to available drafts
+        try {
+          const listRes = await productApi.listDrafts();
+          if (isCancelled) return;
+          const drafts = listRes.data ?? [];
+          if (drafts.length > 0) {
+            const activeDraft =
+              drafts.find((d) => d.status !== "COMPLETED") || drafts[0];
+            if (
+              activeDraft &&
+              !isCancelled &&
+              loadedDraftIdRef.current !== activeDraft.id
+            ) {
+              loadDraft(activeDraft);
+            }
+          }
+        } catch {
+          // silent fallback
+        }
+      } finally {
+        if (inFlightDraftIdRef.current === targetId) {
+          inFlightDraftIdRef.current = null;
+        }
       }
     };
 
     initDraft();
-  }, [loadDraft]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [searchParams, loadDraft, syncDraftUrl]);
 
   const handleSaveDraft = async () => {
-    const effectiveInput = rawInput.trim() || (products.length > 0 ? JSON.stringify(products, null, 2) : "");
-    if (!effectiveInput) {
+    const serializedProducts =
+      products.length > 0 ? JSON.stringify(products, null, 2) : "";
+    const effectiveInput = serializedProducts || rawInput.trim();
+    if (!effectiveInput && products.length === 0) {
       toast.error("Nothing to save — enter product data first.");
       return;
     }
@@ -1100,27 +1446,34 @@ const BulkProductUploadPage: React.FC = () => {
         const res = await productApi.updateDraft(draftId, {
           rawInput: effectiveInput,
           parsedData: products.length > 0 ? products : undefined,
+          confirmedAssignments,
         });
         if (res.data) {
           setDraftStatus(res.data.status);
+          setRawInput(effectiveInput);
           localStorage.setItem("active_bulk_draft_id", res.data.id);
-          toast.success("Draft saved.");
+          toast.success("Draft saved.", {
+            id: `bulk-draft-save-${res.data.id}`,
+          });
         }
       } else {
         const res = await productApi.createDraft(effectiveInput);
         if (res.data) {
+          loadedDraftIdRef.current = res.data.id;
           setDraftId(res.data.id);
           setDraftStatus(res.data.status);
-          const prods = extractProducts(res.data.parsedData);
-          if (prods.length > 0) {
-            setProducts(prods);
+          setRawInput(effectiveInput);
+          if (products.length > 0) {
+            await productApi.updateDraft(res.data.id, {
+              parsedData: products,
+              confirmedAssignments,
+            });
           }
-          setValidationErrors(extractErrors(res.data.parsedData));
           localStorage.setItem("active_bulk_draft_id", res.data.id);
-          const url = new URL(window.location.href);
-          url.searchParams.set("draftId", res.data.id);
-          window.history.replaceState({}, "", url.toString());
-          toast.success("Draft created.");
+          syncDraftUrl(res.data.id);
+          toast.success("Draft created.", {
+            id: `bulk-draft-create-${res.data.id}`,
+          });
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         }
       }
@@ -1140,29 +1493,81 @@ const BulkProductUploadPage: React.FC = () => {
     setIsParsing(true);
     const tid = toast.loading("Parsing products…");
     try {
-      let draft: BulkImportDraft | undefined;
-      if (draftId) {
-        const res = await productApi.parseDraftText(draftId, rawInput);
-        draft = res.data;
-      } else {
-        const res = await productApi.createDraft(rawInput);
-        draft = res.data;
-        if (draft) {
-          setDraftId(draft.id);
-          queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
-        }
+      let isDirectJson = false;
+      let parsedJson: any = null;
+      try {
+        parsedJson = JSON.parse(rawInput);
+        isDirectJson = true;
+      } catch {
+        isDirectJson = false;
       }
-      if (draft) {
-        setDraftStatus(draft.status);
-        const prods = extractProducts(draft.parsedData);
-        setProducts(prods);
-        setValidationErrors(extractErrors(draft.parsedData));
-        localStorage.setItem("active_bulk_draft_id", draft.id);
-        const url = new URL(window.location.href);
-        url.searchParams.set("draftId", draft.id);
-        window.history.replaceState({}, "", url.toString());
+
+      if (isDirectJson) {
+        const rawList = Array.isArray(parsedJson) ? parsedJson : [parsedJson];
+        const normalized = normalizeProducts(
+          rawList,
+          flatCategories,
+          warehouses,
+        );
+        setProducts(normalized);
+        const errs = normalized.flatMap((p) => p.errors || []);
+        setValidationErrors(errs);
+
+        let currentDraftId = draftId;
+        if (!currentDraftId) {
+          const createRes = await productApi.createDraft(rawInput);
+          if (createRes.data) {
+            currentDraftId = createRes.data.id;
+            setDraftId(currentDraftId);
+            setDraftStatus(createRes.data.status);
+            localStorage.setItem("active_bulk_draft_id", currentDraftId);
+            const url = new URL(window.location.href);
+            url.searchParams.set("draftId", currentDraftId);
+            window.history.replaceState({}, "", url.toString());
+            queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
+          }
+        }
+        if (currentDraftId) {
+          await productApi.updateDraft(currentDraftId, {
+            rawInput,
+            parsedData: normalized,
+          });
+        }
         setIsDirty(false);
-        toast.success(`Parsed ${prods.length} product(s).`, { id: tid });
+        toast.success(`Parsed ${normalized.length} product(s).`, { id: tid });
+      } else {
+        let draft: BulkImportDraft | undefined;
+        if (draftId) {
+          const res = await productApi.parseDraftText(draftId, rawInput);
+          draft = res.data;
+        } else {
+          const createRes = await productApi.createDraft(rawInput);
+          if (createRes.data) {
+            setDraftId(createRes.data.id);
+            const parseRes = await productApi.parseDraftText(
+              createRes.data.id,
+              rawInput,
+            );
+            draft = parseRes.data;
+            queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
+          }
+        }
+        if (draft) {
+          loadedDraftIdRef.current = draft.id;
+          setDraftStatus(draft.status);
+          const rawProds = extractProducts(draft.parsedData);
+          const normalized = normalizeProducts(
+            rawProds,
+            flatCategoriesRef.current,
+            warehousesRef.current,
+          );
+          setProducts(normalized);
+          setValidationErrors(normalized.flatMap((p) => p.errors || []));
+          localStorage.setItem("active_bulk_draft_id", draft.id);
+          syncDraftUrl(draft.id);
+          setIsDirty(false);
+          toast.success(`Parsed ${normalized.length} product(s).`, { id: tid });
+        }
       }
     } catch (err) {
       toast.error(humanError(err), { id: tid });
@@ -1180,27 +1585,38 @@ const BulkProductUploadPage: React.FC = () => {
         const res = await productApi.parseDraftFile(draftId, file);
         draft = res.data;
       } else {
-        // Create draft first, then parse file
         const createRes = await productApi.createDraft("");
         if (createRes.data) {
           setDraftId(createRes.data.id);
-          const parseRes = await productApi.parseDraftFile(createRes.data.id, file);
+          const parseRes = await productApi.parseDraftFile(
+            createRes.data.id,
+            file,
+          );
           draft = parseRes.data;
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         }
       }
       if (draft) {
+        loadedDraftIdRef.current = draft.id;
         setDraftStatus(draft.status);
-        setRawInput(draft.rawInput ?? "");
-        const prods = extractProducts(draft.parsedData);
-        setProducts(prods);
-        setValidationErrors(extractErrors(draft.parsedData));
+        const rawProds = extractProducts(draft.parsedData);
+        const normalized = normalizeProducts(
+          rawProds,
+          flatCategoriesRef.current,
+          warehousesRef.current,
+        );
+        setProducts(normalized);
+        setRawInput(
+          draft.rawInput ||
+            (normalized.length > 0 ? JSON.stringify(normalized, null, 2) : ""),
+        );
+        setValidationErrors(normalized.flatMap((p) => p.errors || []));
         localStorage.setItem("active_bulk_draft_id", draft.id);
-        const url = new URL(window.location.href);
-        url.searchParams.set("draftId", draft.id);
-        window.history.replaceState({}, "", url.toString());
+        syncDraftUrl(draft.id);
         setIsDirty(false);
-        toast.success(`Parsed ${prods.length} product(s) from file.`, { id: tid });
+        toast.success(`Parsed ${normalized.length} product(s) from file.`, {
+          id: tid,
+        });
       }
     } catch (err) {
       toast.error(humanError(err), { id: tid });
@@ -1213,6 +1629,7 @@ const BulkProductUploadPage: React.FC = () => {
     if (!draftId) return;
     try {
       await productApi.deleteDraft(draftId);
+      loadedDraftIdRef.current = null;
       setDraftId(null);
       setDraftStatus("DRAFT");
       setRawInput("");
@@ -1225,9 +1642,7 @@ const BulkProductUploadPage: React.FC = () => {
       setIsDirty(false);
       setShowDeleteConfirm(false);
       localStorage.removeItem("active_bulk_draft_id");
-      const url = new URL(window.location.href);
-      url.searchParams.delete("draftId");
-      window.history.replaceState({}, "", url.toString());
+      syncDraftUrl(null);
       queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
       toast.success("Draft deleted.");
     } catch (err) {
@@ -1268,33 +1683,102 @@ const BulkProductUploadPage: React.FC = () => {
   };
 
   const handleMatchComplete = useCallback(
-    (matches: ImageMatchResult, assignments: Record<string, string>) => {
+    async (matches: ImageMatchResult, assignments: Record<string, string>) => {
       setImageMatches(matches);
       setConfirmedAssignments(assignments);
+      if (products.length > 0) {
+        const updatedWithImages = applyDriveMatchesToProducts(
+          products,
+          matches,
+          productApi.getDriveProxyUrl,
+        );
+        setProducts(updatedWithImages);
+        const serialized = JSON.stringify(updatedWithImages, null, 2);
+        setRawInput(serialized);
+        setIsDirty(true);
+        if (draftId) {
+          try {
+            await productApi.updateDraft(draftId, {
+              rawInput: serialized,
+              parsedData: updatedWithImages,
+              confirmedAssignments: assignments,
+            });
+          } catch {
+            // background
+          }
+        }
+      }
     },
-    []
+    [products, draftId],
   );
 
   const handleUpdateProduct = useCallback((updated: BulkParsedProduct) => {
-    setProducts((prev) => prev.map((p) => (p.productGroupId === updated.productGroupId ? updated : p)));
+    setProducts((prev) => {
+      const next = prev.map((p) =>
+        p.productGroupId === updated.productGroupId ? updated : p,
+      );
+      setRawInput(JSON.stringify(next, null, 2));
+      return next;
+    });
+    setValidationErrors((prev) => {
+      const remaining = prev.filter(
+        (e) => e.productGroupId !== updated.productGroupId,
+      );
+      return [...remaining, ...(updated.errors || [])];
+    });
     setIsDirty(true);
   }, []);
 
   const handleDeleteProduct = useCallback((productGroupId: string) => {
-    setProducts((prev) => prev.filter((p) => p.productGroupId !== productGroupId));
+    setProducts((prev) => {
+      const next = prev.filter((p) => p.productGroupId !== productGroupId);
+      setRawInput(JSON.stringify(next, null, 2));
+      return next;
+    });
+    setValidationErrors((prev) =>
+      prev.filter((e) => e.productGroupId !== productGroupId),
+    );
     setIsDirty(true);
   }, []);
 
-  const handleBulkUpdateProducts = useCallback((updatedProducts: BulkParsedProduct[]) => {
-    setProducts(updatedProducts);
-    setIsDirty(true);
-  }, []);
+  const handleBulkUpdateProducts = useCallback(
+    (updatedProducts: BulkParsedProduct[]) => {
+      setProducts(updatedProducts);
+      setRawInput(JSON.stringify(updatedProducts, null, 2));
+      setValidationErrors(updatedProducts.flatMap((p) => p.errors || []));
+      setIsDirty(true);
+    },
+    [],
+  );
 
-  const handleAddProduct = useCallback((newProduct: BulkParsedProduct) => {
-    setProducts((prev) => [...prev, newProduct]);
-    setIsDirty(true);
-    toast.success(`Product "${newProduct.name}" added to batch.`);
-  }, []);
+  const handleAddProduct = useCallback(
+    (newProduct: BulkParsedProduct) => {
+      const normalized = normalizeProduct(
+        newProduct,
+        flatCategories,
+        warehouses,
+      );
+      const valErrors = validateBulkProduct(
+        normalized,
+        flatCategories,
+        warehouses,
+      );
+      const withErrors: BulkParsedProduct = {
+        ...normalized,
+        isValid: !valErrors.some((e) => e.severity === "error"),
+        errors: valErrors.length > 0 ? valErrors : undefined,
+      };
+      setProducts((prev) => {
+        const next = [...prev, withErrors];
+        setRawInput(JSON.stringify(next, null, 2));
+        return next;
+      });
+      setValidationErrors((prev) => [...prev, ...valErrors]);
+      setIsDirty(true);
+      toast.success(`Product "${newProduct.name}" added to batch.`);
+    },
+    [flatCategories, warehouses],
+  );
 
   // ─ Render ────────────────────────────────────────────────────────────────
 
@@ -1335,12 +1819,12 @@ const BulkProductUploadPage: React.FC = () => {
                       draftStatus === "COMPLETED"
                         ? "bg-green-100 text-green-700"
                         : draftStatus === "FAILED"
-                        ? "bg-red-100 text-red-700"
-                        : draftStatus === "READY_FOR_IMPORT"
-                        ? "bg-blue-100 text-blue-700"
-                        : draftStatus === "IMPORTING"
-                        ? "bg-indigo-100 text-indigo-700"
-                        : "bg-gray-100 text-gray-600"
+                          ? "bg-red-100 text-red-700"
+                          : draftStatus === "READY_FOR_IMPORT"
+                            ? "bg-blue-100 text-blue-700"
+                            : draftStatus === "IMPORTING"
+                              ? "bg-indigo-100 text-indigo-700"
+                              : "bg-gray-100 text-gray-600",
                     )}
                   >
                     {draftStatus}
@@ -1355,9 +1839,22 @@ const BulkProductUploadPage: React.FC = () => {
                   Open Draft
                 </button>
 
+                {draftId && (
+                  <button
+                    onClick={handleReloadDraft}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                    title="Reload current draft from server"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Reload
+                  </button>
+                )}
+
                 <button
                   onClick={handleSaveDraft}
-                  disabled={isSaving || !rawInput.trim()}
+                  disabled={
+                    isSaving || (!rawInput.trim() && products.length === 0)
+                  }
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
                 >
                   {isSaving ? (
@@ -1387,7 +1884,7 @@ const BulkProductUploadPage: React.FC = () => {
                       "flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg transition-colors",
                       canImport
                         ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed",
                     )}
                   >
                     {isImporting ? (
@@ -1422,11 +1919,11 @@ const BulkProductUploadPage: React.FC = () => {
                   </h2>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setShowFormatExample((s) => !s)}
-                      className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
+                      onClick={() => setShowFormatExample(true)}
+                      className="text-xs text-indigo-600 hover:underline flex items-center gap-1 font-semibold"
                     >
-                      <Info className="w-3 h-3" />
-                      {showFormatExample ? "Hide" : "View"} format
+                      <Info className="w-3.5 h-3.5" />
+                      View JSON Format
                     </button>
                     {/* File upload */}
                     <input
@@ -1450,17 +1947,6 @@ const BulkProductUploadPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-
-                {showFormatExample && (
-                  <div className="border-b border-gray-200 bg-gray-50 p-4">
-                    <p className="text-xs font-medium text-gray-700 mb-2">
-                      Supported formats: JSON, CSV, TSV, Excel (.xlsx)
-                    </p>
-                    <pre className="text-xs bg-white rounded border border-gray-200 p-3 overflow-x-auto text-gray-700 leading-relaxed">
-                      {FORMAT_EXAMPLE}
-                    </pre>
-                  </div>
-                )}
 
                 <div className="p-4">
                   <textarea
@@ -1511,10 +1997,11 @@ const BulkProductUploadPage: React.FC = () => {
                     flatCategories={flatCategories}
                     categoriesTree={categoriesTree}
                     onBulkUpdateProducts={handleBulkUpdateProducts}
+                    getDriveProxyUrl={productApi.getDriveProxyUrl}
                     onDownloadErrorReport={() => {
                       const blob = new Blob(
                         [JSON.stringify(validationErrors, null, 2)],
-                        { type: "application/json" }
+                        { type: "application/json" },
                       );
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
@@ -1557,6 +2044,15 @@ const BulkProductUploadPage: React.FC = () => {
                 confirmedAssignments={confirmedAssignments}
                 onMatchComplete={handleMatchComplete}
                 getDriveProxyUrl={productApi.getDriveProxyUrl}
+                onPrepareDraft={async () => {
+                  if (draftId && products.length > 0) {
+                    await productApi.updateDraft(draftId, {
+                      rawInput: JSON.stringify(products, null, 2),
+                      parsedData: products,
+                      confirmedAssignments,
+                    });
+                  }
+                }}
               />
 
               {/* E. Validation Summary */}
@@ -1569,7 +2065,9 @@ const BulkProductUploadPage: React.FC = () => {
 
               {/* Download template helper */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-700 mb-2">Excel Template</p>
+                <p className="text-xs font-medium text-gray-700 mb-2">
+                  Excel Template
+                </p>
                 <button
                   onClick={async () => {
                     const tid = toast.loading("Generating template…");
@@ -1619,7 +2117,9 @@ const BulkProductUploadPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard.writeText(JSON.stringify(products, null, 2));
+                          navigator.clipboard.writeText(
+                            JSON.stringify(products, null, 2),
+                          );
                           toast.success("JSON copied to clipboard!");
                         }}
                         className="flex items-center gap-1 text-[11px] px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded transition font-medium cursor-pointer"
@@ -1688,6 +2188,17 @@ const BulkProductUploadPage: React.FC = () => {
           onConfirm={handleDeleteDraft}
           onClose={() => setShowDeleteConfirm(false)}
           isDeleting={false}
+        />
+      )}
+      {showFormatExample && (
+        <BulkFormatExampleModal
+          isOpen={showFormatExample}
+          onClose={() => setShowFormatExample(false)}
+          onUseFormat={(json) => {
+            setRawInput(json);
+            setIsDirty(true);
+          }}
+          hasExistingInput={rawInput.trim().length > 0}
         />
       )}
     </MainLayout>

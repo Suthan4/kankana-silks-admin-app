@@ -91,6 +91,8 @@ export const BulkAddProductModal: React.FC<BulkAddProductModalProps> = ({
   }]);
 
   const [mediaUrls, setMediaUrls] = useState<string[]>([""]);
+  const [existingId, setExistingId] = useState("");
+  const [specifications, setSpecifications] = useState<{ key: string; value: string }[]>([]);
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDesc, setMetaDesc] = useState("");
   const [customSlug, setCustomSlug] = useState("");
@@ -115,13 +117,41 @@ export const BulkAddProductModal: React.FC<BulkAddProductModalProps> = ({
 
     const mediaItems: BulkParsedMedia[] = mediaUrls
       .filter((u) => u.trim())
-      .map((url, idx) => ({ type: "IMAGE", url: url.trim(), order: idx, altText: name, isActive: true }));
+      .map((url, idx) => ({
+        type: "IMAGE",
+        url: url.trim(),
+        order: idx,
+        altText: name,
+        isActive: true,
+        source: "product" as const,
+      }));
+
+    const validSpecs = specifications.filter((s) => s.key.trim() && s.value.trim());
+
+    const allImages = [
+      ...mediaItems,
+      ...(productType === "variable"
+        ? (variants || []).flatMap((v) =>
+            (v.media || []).map((m, idx) => ({
+              ...m,
+              source: "variant" as const,
+              variantSku: m.variantSku || v.sku,
+              order: m.order ?? (100 + idx),
+            }))
+          )
+        : []),
+    ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    const selectedCat = flatCategories.find((c) => c.id === categoryId);
+    const selectedWarehouse = warehouses.find((w) => w.id === warehouseId);
 
     const newProduct: BulkParsedProduct = {
+      id: existingId.trim() || undefined,
       productGroupId: productGroupId.trim(),
       name: name.trim(),
       categoryId: categoryId || undefined,
       categoryPath: categoryPath.trim(),
+      categoryName: selectedCat?.name,
       productType,
       description: description.trim() || name.trim(),
       sku: sku.trim() || undefined,
@@ -133,11 +163,20 @@ export const BulkAddProductModal: React.FC<BulkAddProductModalProps> = ({
       height,
       hsnCode: hsnCode.trim() || undefined,
       isActive: true,
+      specifications: validSpecs.length > 0 ? validSpecs : undefined,
       stock: productType === "simple"
-        ? { warehouseId, quantity: stockQuantity, lowStockThreshold }
+        ? {
+            warehouseId,
+            warehouseCode: selectedWarehouse?.code || "WH-01",
+            quantity: stockQuantity,
+            lowStockThreshold,
+          }
         : undefined,
       variants: productType === "variable" ? variants : undefined,
       media: mediaItems.length > 0 ? mediaItems : undefined,
+      allImages: allImages.length > 0 ? allImages : undefined,
+      metaTitle: metaTitle.trim() || undefined,
+      metaDesc: metaDesc.trim() || undefined,
       seo: metaTitle || metaDesc || customSlug
         ? { metaTitle: metaTitle.trim() || undefined, metaDesc: metaDesc.trim() || undefined, slug: customSlug.trim() || undefined }
         : undefined,
@@ -169,7 +208,7 @@ export const BulkAddProductModal: React.FC<BulkAddProductModalProps> = ({
           {/* Form Body */}
           <div className="p-6 space-y-6 text-xs">
             {/* Identity & Basic Info */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className={labelCls}>Product Group ID *</label>
                 <input
@@ -178,6 +217,17 @@ export const BulkAddProductModal: React.FC<BulkAddProductModalProps> = ({
                   value={productGroupId}
                   onChange={(e) => setProductGroupId(e.target.value)}
                   className={`${inputCls} font-mono`}
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Existing Product ID (Optional)</label>
+                <input
+                  type="text"
+                  value={existingId}
+                  onChange={(e) => setExistingId(e.target.value)}
+                  placeholder="If updating existing product"
+                  className={`${inputCls} font-mono text-[11px]`}
                 />
               </div>
 
@@ -397,15 +447,99 @@ export const BulkAddProductModal: React.FC<BulkAddProductModalProps> = ({
             </div>
 
             {/* Media URLs */}
-            <div>
-              <label className={labelCls}>Image Media URL (HTTPS)</label>
-              <input
-                type="url"
-                value={mediaUrls[0] || ""}
-                onChange={(e) => setMediaUrls([e.target.value])}
-                placeholder="https://pub-2fbc147a469a4993ad805cbbfb7f8373.r2.dev/products/image.jpg"
-                className={inputCls}
-              />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className={labelCls}>Image Media URLs (HTTPS S3 / Cloudflare R2)</label>
+                <button
+                  type="button"
+                  onClick={() => setMediaUrls((prev) => [...prev, ""])}
+                  className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-medium"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Image URL
+                </button>
+              </div>
+              <div className="space-y-2">
+                {mediaUrls.map((url, uIdx) => (
+                  <div key={uIdx} className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-slate-400 w-5">#{uIdx + 1}</span>
+                    <input
+                      type="url"
+                      value={url}
+                      onChange={(e) => {
+                        const updated = [...mediaUrls];
+                        updated[uIdx] = e.target.value;
+                        setMediaUrls(updated);
+                      }}
+                      placeholder="https://pub-2fbc147a469a4993ad805cbbfb7f8373.r2.dev/products/image.jpg"
+                      className={`${inputCls} flex-1`}
+                    />
+                    {mediaUrls.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setMediaUrls((prev) => prev.filter((_, i) => i !== uIdx))}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                        title="Remove image URL"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Specifications */}
+            <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between">
+                <label className={labelCls}>Product Specifications</label>
+                <button
+                  type="button"
+                  onClick={() => setSpecifications((prev) => [...prev, { key: "", value: "" }])}
+                  className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-medium"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Spec
+                </button>
+              </div>
+              {specifications.length === 0 ? (
+                <p className="text-slate-400 text-[11px] italic">No specifications added (optional).</p>
+              ) : (
+                <div className="space-y-2">
+                  {specifications.map((spec, sIdx) => (
+                    <div key={sIdx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={spec.key}
+                        onChange={(e) => {
+                          const next = [...specifications];
+                          next[sIdx] = { ...next[sIdx], key: e.target.value };
+                          setSpecifications(next);
+                        }}
+                        placeholder="Key (e.g. Zari, Weave)"
+                        className="w-1/3 px-2 py-1.5 border border-slate-300 rounded text-xs bg-white"
+                      />
+                      <input
+                        type="text"
+                        value={spec.value}
+                        onChange={(e) => {
+                          const next = [...specifications];
+                          next[sIdx] = { ...next[sIdx], value: e.target.value };
+                          setSpecifications(next);
+                        }}
+                        placeholder="Value (e.g. Pure Zari)"
+                        className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-xs bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSpecifications((prev) => prev.filter((_, i) => i !== sIdx))}
+                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                        title="Remove specification"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* SEO */}

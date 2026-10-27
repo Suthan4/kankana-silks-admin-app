@@ -28,11 +28,17 @@ export interface BulkCategoryLookup {
 
 export interface BulkParsedVariant {
   rowNumber?: number;
+  /** Present when editing an existing variant (update flow) */
+  id?: string;
   sku?: string;
+  /** Display title for the variant (e.g. "Red — Free Size") */
+  title?: string;
+  /** Variant-level price override */
+  price?: number;
   size?: string;
   color?: string;
   fabric?: string;
-  attributes?: Record<string, string>;
+  attributes?: Record<string, string> | Array<{ name: string; value: string }>;
   basePrice?: number;
   sellingPrice?: number;
   stock?: {
@@ -60,6 +66,16 @@ export interface BulkParsedMedia {
   order?: number;
   isActive?: boolean;
   variantSku?: string;
+  /** "product" for product-level images, "variant" for variant-level images */
+  source?: "product" | "variant";
+  /** S3 key (preserved as-is, no re-upload needed) */
+  key?: string;
+  mimeType?: string;
+  fileSize?: number;
+  duration?: number;
+  width?: number;
+  height?: number;
+  productGroupId?: string;
 }
 
 export interface BulkValidationError {
@@ -74,6 +90,8 @@ export interface BulkValidationError {
 
 export interface BulkParsedProduct {
   rowNumber?: number;
+  /** Present when editing an existing product (update flow) */
+  id?: string;
   productGroupId: string;
   name: string;
   categoryPath: string;
@@ -103,6 +121,9 @@ export interface BulkParsedProduct {
   videoPurchasingEnabled?: boolean;
   videoConsultationNote?: string;
   isActive?: boolean;
+  specifications?: { key: string; value: string }[];
+  metaTitle?: string;
+  metaDesc?: string;
   seo?: {
     metaTitle?: string;
     metaDesc?: string;
@@ -110,7 +131,11 @@ export interface BulkParsedProduct {
     schemaMarkup?: string;
   };
   media?: BulkParsedMedia[];
+  /** Unified list of ALL images (product + variant levels) sorted by order. Used for preview. */
+  allImages?: BulkParsedMedia[];
   variants?: BulkParsedVariant[];
+  importNote?: string;
+  groupSuggestion?: string;
   isValid?: boolean;
   errors?: BulkValidationError[];
 }
@@ -168,6 +193,8 @@ export interface DriveFile {
   mimeType: string;
   size?: number;
   thumbnailLink?: string;
+  /** Backend authenticated proxy URL for previewing the file. */
+  previewUrl?: string;
   webContentLink?: string;
   webViewLink?: string;
 }
