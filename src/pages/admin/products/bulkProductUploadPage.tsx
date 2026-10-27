@@ -422,6 +422,16 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     return previous.filter((_item, itemIndex) => itemIndex !== index);
   });
 
+  const moveLocalFile = (index: number, direction: -1 | 1) => {
+    setLocalFiles((previous) => {
+      const destination = index + direction;
+      if (destination < 0 || destination >= previous.length) return previous;
+      const next = [...previous];
+      [next[index], next[destination]] = [next[destination], next[index]];
+      return next;
+    });
+  };
+
   const handleUploadLocalFiles = async () => {
     if (!targetProduct) { toast.error("Select a product before uploading images."); return; }
     if (!localFiles.length) { toast.error("Select one or more images first."); return; }
@@ -503,6 +513,17 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     if (next[file.id]) delete next[file.id]; else next[file.id] = file;
     return next;
   });
+
+  const moveSelectedDriveFile = (fileId: string, direction: -1 | 1) => {
+    setSelectedDriveFiles((previous) => {
+      const entries = Object.entries(previous);
+      const index = entries.findIndex(([id]) => id === fileId);
+      const destination = index + direction;
+      if (index < 0 || destination < 0 || destination >= entries.length) return previous;
+      [entries[index], entries[destination]] = [entries[destination], entries[index]];
+      return Object.fromEntries(entries);
+    });
+  };
 
   const navigateToFolder = (folder: DriveFolder, index?: number) => {
     const nextTrail = index === undefined ? [...folderTrail, folder] : folderTrail.slice(0, index + 1);
@@ -623,10 +644,10 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       {sourceMode === "local" && (
         <div className="p-4 space-y-4">
           <div><label className="block text-xs font-medium text-gray-700 mb-1">Assign images to product</label><select value={targetProductGroupId} onChange={(event) => setTargetProductGroupId(event.target.value)} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white" disabled={!products.length}>{products.length === 0 ? <option value="">Parse or add a product first</option> : products.map((product) => <option key={product.productGroupId} value={product.productGroupId}>{product.productGroupId} — {product.name}</option>)}</select></div>
-          <label className="block cursor-pointer rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 text-center hover:border-indigo-400 transition-colors"><MonitorUp className="w-7 h-7 text-indigo-600 mx-auto mb-2" /><span className="block text-sm font-semibold text-gray-800">Choose images from your computer</span><span className="block text-xs text-gray-500 mt-1">Select multiple supported image files.</span><input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { addLocalFiles(event.target.files); event.currentTarget.value = ""; }} /></label>
+          <label onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); addLocalFiles(event.dataTransfer.files); }} className="block cursor-pointer rounded-xl border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-5 text-center hover:border-indigo-400 transition-colors"><MonitorUp className="w-7 h-7 text-indigo-600 mx-auto mb-2" /><span className="block text-sm font-semibold text-gray-800">Choose or drop images from your computer</span><span className="block text-xs text-gray-500 mt-1">Select multiple supported image files.</span><input type="file" accept="image/*" multiple className="sr-only" onChange={(event) => { addLocalFiles(event.target.files); event.currentTarget.value = ""; }} /></label>
           {localFiles.length > 0 && <>
             <div className="flex items-center justify-between text-xs text-gray-600"><span>{localFiles.length} image(s) selected</span><button type="button" onClick={() => { localFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl)); setLocalFiles([]); }} className="text-red-600 hover:underline">Clear all</button></div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-64 overflow-y-auto">{localFiles.map((item, index) => <div key={item.id} className="relative min-w-0 rounded-lg border overflow-hidden"><img src={item.previewUrl} alt={item.file.name} className="w-full aspect-square object-cover bg-gray-50" /><button type="button" onClick={() => removeLocalFile(index)} aria-label={"Remove " + item.file.name} className="absolute top-1 right-1 rounded-full bg-white text-red-600 p-1 shadow"><X className="w-3 h-3" /></button><div className="p-1.5"><p className="truncate text-[10px] text-gray-700" title={item.file.name}>{item.file.name}</p><p className="text-[10px] text-gray-400">{(item.file.size / (1024 * 1024)).toFixed(1)} MB</p></div></div>)}</div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-64 overflow-y-auto">{localFiles.map((item, index) => <div key={item.id} className="relative min-w-0 rounded-lg border overflow-hidden"><img src={item.previewUrl} alt={item.file.name} className="w-full aspect-square object-cover bg-gray-50" />{index === 0 && <span className="absolute left-1 top-1 rounded bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold text-white">PRIMARY</span>}<button type="button" onClick={() => removeLocalFile(index)} aria-label={"Remove " + item.file.name} className="absolute top-1 right-1 rounded-full bg-white text-red-600 p-1 shadow"><X className="w-3 h-3" /></button><div className="p-1.5"><p className="truncate text-[10px] text-gray-700" title={item.file.name}>{item.file.name}</p><p className="text-[10px] text-gray-400">{(item.file.size / (1024 * 1024)).toFixed(1)} MB</p><div className="mt-1 flex gap-1"><button type="button" disabled={index === 0} onClick={() => moveLocalFile(index, -1)} className="flex-1 rounded border px-1 py-0.5 text-[10px] disabled:opacity-30" title="Move earlier">↑</button><button type="button" disabled={index === localFiles.length - 1} onClick={() => moveLocalFile(index, 1)} className="flex-1 rounded border px-1 py-0.5 text-[10px] disabled:opacity-30" title="Move later">↓</button></div></div></div>)}</div>
             {uploadingLocal && <div><div className="flex justify-between text-xs text-gray-500"><span>Uploading to storage…</span><span>{localProgress.completed}/{localProgress.total}</span></div><div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-indigo-600 transition-all" style={{ width: (localProgress.total ? (localProgress.completed / localProgress.total) * 100 : 0) + "%" }} /></div></div>}
             <button type="button" onClick={() => void handleUploadLocalFiles()} disabled={uploadingLocal || !targetProduct} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">{uploadingLocal ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}{uploadingLocal ? "Uploading images…" : "Upload " + localFiles.length + " image(s) to product"}</button>
           </>}
@@ -662,6 +683,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
               {drivePageToken && <div className="mt-5 text-center"><button type="button" onClick={() => void loadDriveItems(folderTrail[folderTrail.length - 1]?.id ?? selectedFolderId, { append: true, pageToken: drivePageToken, query: driveSearch })} disabled={driveLoading} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">{driveLoading ? "Loading…" : "Load more images"}</button></div>}
             </>}
           </div>
+          {Object.keys(selectedDriveFiles).length > 0 && <div className="max-h-28 overflow-y-auto border-t border-gray-100 px-4 py-2 sm:px-6"><p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Selected order · First image is primary</p><div className="flex gap-2 overflow-x-auto">{Object.values(selectedDriveFiles).map((file, index, items) => <div key={file.id} className="flex min-w-0 items-center gap-1 rounded-lg border border-gray-200 bg-white p-1.5"><span className="text-[10px] text-gray-500">{index + 1}.</span><span title={file.name} className="max-w-28 truncate text-[10px] text-gray-700">{file.name}</span><button type="button" disabled={index === 0} onClick={() => moveSelectedDriveFile(file.id, -1)} className="rounded border px-1 text-[10px] disabled:opacity-30" title="Move earlier">↑</button><button type="button" disabled={index === items.length - 1} onClick={() => moveSelectedDriveFile(file.id, 1)} className="rounded border px-1 text-[10px] disabled:opacity-30" title="Move later">↓</button><button type="button" onClick={() => toggleDriveSelection(file)} className="rounded p-1 text-red-600 hover:bg-red-50" title="Remove"><X className="h-3 w-3" /></button></div>)}</div></div>}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-gray-50 p-3 sm:px-6"><p className="text-xs text-gray-500">{Object.keys(selectedDriveFiles).length} selected · Only selected files will be transferred.</p><div className="flex gap-2"><button type="button" onClick={() => setPickerOpen(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button><button type="button" onClick={() => void handleImportDriveSelection()} disabled={!Object.keys(selectedDriveFiles).length || uploadingDrive} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"><UploadCloud className="w-4 h-4" />Upload {Object.keys(selectedDriveFiles).length} selected</button></div></div>
         </div>
       </div>}
