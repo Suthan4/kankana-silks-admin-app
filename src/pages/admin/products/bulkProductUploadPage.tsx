@@ -293,10 +293,11 @@ interface DriveMatchingPanelProps {
   onAssignMedia: (productGroupId: string, media: BulkParsedMedia[], mode: "replace" | "append") => void;
   getDriveProxyUrl: (fileId: string) => string;
   onPrepareDraft?: () => Promise<void>;
+  onMatchingChange?: (matching: boolean) => void;
 }
 
 const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
-  draftId, products, imageMatches, confirmedAssignments, onMatchComplete, onAssignMedia, getDriveProxyUrl, onPrepareDraft,
+  draftId, products, imageMatches, confirmedAssignments, onMatchComplete, onAssignMedia, getDriveProxyUrl, onPrepareDraft, onMatchingChange,
 }) => {
   const [sourceMode, setSourceMode] = useState<ImageSourceMode>("references");
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
@@ -374,6 +375,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   const handleMatch = async () => {
     if (!draftId || !selectedFolderId) return;
     setMatching(true);
+    onMatchingChange?.(true);
     try {
       await onPrepareDraft?.();
       const res = await productApi.matchDriveImages(draftId, selectedFolderId);
@@ -388,7 +390,10 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
         toast.success("Matched and stored " + finalResult.matched.length + " image(s)." + (finalResult.missing.length ? " " + finalResult.missing.length + " unresolved." : ""));
       }
     } catch (err) { toast.error(humanError(err)); }
-    finally { setMatching(false); }
+    finally {
+      setMatching(false);
+      onMatchingChange?.(false);
+    }
   };
 
   const assignCandidate = async (entry: AmbiguousEntry, fileId: string) => {
