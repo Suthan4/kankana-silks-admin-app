@@ -2822,6 +2822,47 @@ const BulkProductUploadPage: React.FC = () => {
           </div>
         </div>
 
+        {job && (job.status === "pending" || job.status === "processing") && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="sticky top-0 z-30 border-b border-indigo-100 bg-white/95 px-4 py-3 shadow-sm backdrop-blur sm:px-6 lg:px-8"
+          >
+            <div className="mx-auto flex max-w-screen-2xl flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-2 font-semibold text-slate-800">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                  {job.stage === "preparing_images"
+                    ? "Preparing matched Drive images"
+                    : job.stage === "uploading_images"
+                      ? "Uploading and optimizing images in the background"
+                      : "Importing products in the background"}
+                </span>
+                <span className="font-semibold tabular-nums text-indigo-700">{job.progress ?? 0}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-indigo-600 transition-all duration-500"
+                  style={{ width: `${Math.max(0, Math.min(100, job.progress ?? 0))}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+                {(job.stage === "preparing_images" || job.stage === "uploading_images") && (
+                  <span>
+                    Images: {job.imagesProcessed ?? 0}/{job.imagesTotal ?? imageMatches?.matched?.length ?? 0}
+                    {" · "}{job.imagesUploaded ?? 0} uploaded
+                    {" · "}{job.imagesFailed ?? 0} failed
+                  </span>
+                )}
+                {job.stage === "importing_products" && (
+                  <span>Products: {job.processed}/{job.total} processed</span>
+                )}
+                {job.currentFile && <span className="max-w-full truncate">Current: {job.currentFile}</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Body ───────────────────────────────────────────────────────────── */}
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col xl:flex-row gap-6">
