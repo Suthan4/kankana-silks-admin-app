@@ -209,7 +209,7 @@ export function applyDriveMatchesToProducts(
       return {
         ...media,
         url: proxyUrl,
-        thumbnailUrl: getDriveThumbnailUrl?.(refMatch.file.id) || refMatch.file.thumbnailLink || proxyUrl,
+        thumbnailUrl: refMatch.file.thumbnailLink || getDriveThumbnailUrl?.(refMatch.file.id) || proxyUrl,
         key: refMatch.file.id,
         source: "product" as const,
         productGroupId: product.productGroupId,
@@ -240,7 +240,7 @@ export function applyDriveMatchesToProducts(
         return {
           ...media,
           url: proxyUrl,
-          thumbnailUrl: getDriveThumbnailUrl?.(refMatch.file.id) || refMatch.file.thumbnailLink || proxyUrl,
+          thumbnailUrl: refMatch.file.thumbnailLink || getDriveThumbnailUrl?.(refMatch.file.id) || proxyUrl,
           key: refMatch.file.id,
           source: "variant" as const,
           variantSku: variant.sku,
