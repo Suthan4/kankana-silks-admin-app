@@ -1923,24 +1923,50 @@ const BulkProductUploadPage: React.FC = () => {
   useEffect(() => {
     if (!jobId || job?.status === "completed" || job?.status === "failed")
       return;
-    const timer = setInterval(async () => {
+
+    let disposed = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const refreshJob = async () => {
       try {
         const res = await productApi.getJobStatus(jobId);
-        if (res.data) {
-          setJob(res.data);
-          if (res.data.status === "completed") {
-            toast.success("Import complete!");
-            queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
-          } else if (res.data.status === "failed") {
-            toast.error("Import failed. See details below.");
-          }
+        if (disposed || !res.data) return;
+
+        const payload = res.data as BulkImportJob & { id?: string };
+        const resolvedId = payload.jobId || payload.id || jobId;
+        const normalized: BulkImportJob = {
+          ...payload,
+          id: payload.id || resolvedId,
+          jobId: resolvedId,
+          draftId: payload.draftId || draftId || "",
+          results: payload.results || [],
+          imageResults: payload.imageResults || [],
+          imagesTotal: payload.imagesTotal ?? 0,
+          imagesProcessed: payload.imagesProcessed ?? 0,
+          imagesUploaded: payload.imagesUploaded ?? 0,
+          imagesFailed: payload.imagesFailed ?? 0,
+        };
+        setJob(normalized);
+
+        if (normalized.status === "completed") {
+          toast.success("Import job completed. " + normalized.successful + " product(s) created.");
+          queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
+        } else if (normalized.status === "failed") {
+          toast.error(normalized.error || "Import failed. See image/product error details below.");
+          queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         }
       } catch {
-        // ignore transient polling errors
+        // Polling is the realtime fallback if a transient network request fails.
       }
-    }, POLLING_INTERVAL);
-    return () => clearInterval(timer);
-  }, [jobId, job?.status, queryClient]);
+    };
+
+    void refreshJob();
+    timer = setInterval(() => { void refreshJob(); }, POLLING_INTERVAL);
+    return () => {
+      disposed = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [jobId, job?.status, draftId, queryClient]);
 
   // ─ Prompt on unsaved changes ─────────────────────────────────────────────
 
