@@ -1902,7 +1902,8 @@ const BulkProductUploadPage: React.FC = () => {
   // ─ Computed ─────────────────────────────────────────────────────────────
 
   const isJobRunning = job?.status === "pending" || job?.status === "processing";
-  const isWorkspaceLocked = isJobRunning || draftStatus === "COMPLETED";
+  const isWorkspaceLocked =
+    isJobRunning || job?.status === "completed" || draftStatus === "COMPLETED";
 
   const summary =
     products.length > 0 ? summaryFromProducts(products) : undefined;
@@ -2018,7 +2019,8 @@ const BulkProductUploadPage: React.FC = () => {
           );
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         } else if (normalized.status === "failed") {
-          toast.error(normalized.error || "Import failed. See image/product error details below.");
+          setDraftStatus("DRAFT");
+          toast.error(normalized.error || "Import failed. Review the image/product errors below, fix the listed issues, and retry.");
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         }
       } catch {
