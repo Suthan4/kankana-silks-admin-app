@@ -1659,7 +1659,7 @@ const BulkProductUploadPage: React.FC = () => {
             throw new Error("Storage did not return a valid HTTPS URL for " + entry.file.name);
           }
           uploadedByDriveId.set(entry.file.id, { url: storage.url, key: storage.key });
-        } catch (error) {
+        } catch {
           // Failed transfers are turned back into missing references below.
         }
       }
