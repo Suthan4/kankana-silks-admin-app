@@ -196,6 +196,12 @@ export function applyDriveMatchesToProducts(
     const groupMatches = byGroup.get(product.productGroupId) || [];
 
     const updatedProductMedia: BulkParsedMedia[] = productMedia.map((media, index) => {
+      const currentUrl = media.url?.trim() || "";
+      const alreadyStoredUrl =
+        /^https?:\/\//i.test(currentUrl) &&
+        !/drive\.google\.com|docs\.google\.com|\/products\/bulk\/drive-proxy\//i.test(currentUrl);
+      // Keep permanent HTTPS product-image URLs when a draft is rematched or retried.
+      if (alreadyStoredUrl) return media;
       const normalizedRef = normalizeMediaReference(media.url);
       const refMatch =
         (normalizedRef ? byReference.get(normalizedRef) : undefined) ||
@@ -225,7 +231,13 @@ export function applyDriveMatchesToProducts(
       const variantMatches = skuKey ? (byVariantSku.get(skuKey) || []) : [];
 
       const updatedVariantMedia = variantMedia.map((media, index) => {
-        const normalizedRef = normalizeMediaReference(media.url);
+        const currentUrl = media.url?.trim() || "";
+      const alreadyStoredUrl =
+        /^https?:\/\//i.test(currentUrl) &&
+        !/drive\.google\.com|docs\.google\.com|\/products\/bulk\/drive-proxy\//i.test(currentUrl);
+      // Keep permanent HTTPS product-image URLs when a draft is rematched or retried.
+      if (alreadyStoredUrl) return media;
+      const normalizedRef = normalizeMediaReference(media.url);
         const refMatch =
           (normalizedRef ? byReference.get(normalizedRef) : undefined) ||
           variantMatches.find((entry) => entry.mediaIndex === variantMediaStart + index) ||
