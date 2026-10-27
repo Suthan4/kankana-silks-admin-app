@@ -5,6 +5,7 @@ import {
   XCircle,
   Search,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Layers,
   Box,
@@ -28,6 +29,7 @@ import {
 import type {
   BulkParsedProduct,
   BulkParsedVariant,
+  BulkParsedMedia,
   BulkValidationError,
   BulkValidationSummary,
   BulkCategoryLookup,
@@ -55,6 +57,7 @@ interface BulkProductPreviewTableProps {
   categoriesTree?: BulkCategoryNode[];
   onBulkUpdateProducts?: (updatedProducts: BulkParsedProduct[]) => void;
   getDriveProxyUrl?: (fileId: string) => string;
+  getDriveThumbnailUrl?: (fileId: string) => string;
 }
 
 export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = ({
@@ -72,6 +75,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   categoriesTree,
   onBulkUpdateProducts,
   getDriveProxyUrl,
+  getDriveThumbnailUrl,
 }) => {
   const [internalFilterStatus, setInternalFilterStatus] = useState<"all" | "valid" | "error" | "warning">("all");
   const filterStatus = externalFilterStatus ?? internalFilterStatus;
@@ -84,6 +88,11 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
 
   // Editing state for inline edits
   const [viewingJsonProduct, setViewingJsonProduct] = useState<BulkParsedProduct | null>(null);
+  const [imageGallery, setImageGallery] = useState<{
+    productName: string;
+    images: BulkParsedMedia[];
+    index: number;
+  } | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(null);
 
@@ -1200,28 +1209,21 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         <span className="text-[9px] uppercase mt-1">Video</span>
                                       </div>
                                     ) : (() => {
-                                      const resolvedSrc = resolveImageUrl(m.url, m.thumbnailUrl, getDriveProxyUrl);
+                                      const resolvedSrc = resolveImageUrl(m.url, m.thumbnailUrl, getDriveProxyUrl, getDriveThumbnailUrl);
                                       return resolvedSrc ? (
                                         <img
                                           src={resolvedSrc}
                                           alt={m.altText || product.name}
-                                          className="w-full h-full object-cover"
+                                          loading="lazy"
+                                          decoding="async"
+                                          title="Click to view full-size"
+                                          onClick={() => setImageGallery({ productName: product.name, images: displayMedia, index: mIdx })}
+                                          className="w-full h-full object-cover cursor-zoom-in"
                                           onError={(e) => {
+                                            // A failed thumbnail stays a placeholder. Do not fall back
+                                            // to loading the full-size Drive original into the grid.
                                             const target = e.currentTarget;
-                                            const proxyFallback = m.url?.includes("/products/bulk/drive-proxy/")
-                                              ? m.url
-                                              : undefined;
-                                            if (
-                                              proxyFallback &&
-                                              target.dataset.driveProxyFallback !== "true" &&
-                                              target.src !== proxyFallback
-                                            ) {
-                                              // Drive thumbnail URLs may expire or be inaccessible
-                                              // to an <img> request. Fall back to the authenticated proxy.
-                                              target.dataset.driveProxyFallback = "true";
-                                              target.src = proxyFallback;
-                                              return;
-                                            }
+                                            target.dataset.thumbnailFailed = "true";
                                             target.src =
                                               "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
                                           }}
@@ -1235,7 +1237,19 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                         </div>
                                       );
                                     })()}
-                                    <div className="absolute top-1 left-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setImageGallery({ productName: product.name, images: displayMedia, index: mIdx });
+                                      }}
+                                      className="absolute inset-0 z-[5] flex items-center justify-center bg-black/0 text-white opacity-0 transition hover:bg-black/20 hover:opacity-100 focus:opacity-100"
+                                      aria-label={`View full-size image ${m.title || m.altText || mIdx + 1}`}
+                                      title="View full-size image"
+                                    >
+                                      <span className="rounded-full bg-slate-900/75 px-2.5 py-1 text-[10px] font-semibold shadow">View</span>
+                                    </button>
+                                    <div className="absolute top-1 left-1 z-10">
                                       {(m.order === 0 || mIdx === 0) ? (
                                         <span className="bg-amber-500 text-white font-bold text-[9px] px-1 py-0.5 rounded shadow">
                                           ★ Primary
@@ -1393,6 +1407,92 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                 type="button"
                 onClick={() => setViewingJsonProduct(null)}
                 className="px-4 py-1.5 text-xs font-medium border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageGallery && imageGallery.images[imageGallery.index] && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Image gallery for ${imageGallery.productName}`}
+          onClick={() => setImageGallery(null)}
+        >
+          <div
+            className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold text-slate-900">{imageGallery.productName}</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Image {imageGallery.index + 1} of {imageGallery.images.length} · Full-size image loads only in this viewer
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImageGallery(null)}
+                className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                aria-label="Close image viewer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="relative flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3 sm:p-6">
+              {imageGallery.index > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setImageGallery((current) => current ? { ...current, index: Math.max(0, current.index - 1) } : current)}
+                  className="absolute left-3 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow transition hover:bg-white"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              )}
+              {(() => {
+                const active = imageGallery.images[imageGallery.index];
+                const detailSrc = /^(https?:\/\/|\/)/i.test(active.url || "") ? active.url : undefined;
+                return detailSrc && active.type !== "VIDEO" ? (
+                  <img
+                    src={detailSrc}
+                    alt={active.altText || active.title || imageGallery.productName}
+                    loading="eager"
+                    decoding="async"
+                    className="max-h-[72vh] max-w-full object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="flex max-w-md flex-col items-center gap-2 px-6 py-12 text-center text-white">
+                    <ImageIcon className="h-10 w-10 text-slate-400" />
+                    <p className="text-sm font-medium">A full-size image URL is not available for this item.</p>
+                    <p className="text-xs text-slate-400">Re-run image matching or select an image manually to preview it.</p>
+                  </div>
+                );
+              })()}
+              {imageGallery.index < imageGallery.images.length - 1 && (
+                <button
+                  type="button"
+                  onClick={() => setImageGallery((current) => current ? { ...current, index: Math.min(current.images.length - 1, current.index + 1) } : current)}
+                  className="absolute right-3 z-10 rounded-full bg-white/90 p-2 text-slate-900 shadow transition hover:bg-white"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+              <span className="truncate">{imageGallery.images[imageGallery.index].title || imageGallery.images[imageGallery.index].altText || "Product image"}</span>
+              <button
+                type="button"
+                onClick={() => setImageGallery(null)}
+                className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 transition hover:bg-slate-50"
               >
                 Close
               </button>
