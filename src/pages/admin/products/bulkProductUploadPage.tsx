@@ -2527,10 +2527,22 @@ const BulkProductUploadPage: React.FC = () => {
 
   const handleRetryJob = async () => {
     if (job?.stage === "images_failed" && draftId) {
-      // Successful image URLs are saved after each backend batch, so starting
-      // another draft job retries only the images that remain as Drive refs.
+      // Save the latest gallery edits before retrying; deleted images must not
+      // reappear from a stale draft snapshot.
       setIsImporting(true);
       try {
+        const retainedMatches = filterImageMatchesToProductMedia(imageMatches, products);
+        const serialized = JSON.stringify(products, null, 2);
+        await productApi.updateDraft(draftId, {
+          rawInput: serialized,
+          parsedData: products,
+          confirmedAssignments,
+          imageMatches: retainedMatches,
+        });
+        setRawInput(serialized);
+        setImageMatches(retainedMatches);
+        setIsDirty(false);
+
         const res = await productApi.startDraftImport(draftId);
         const returned = res.data as (BulkImportJob & { id?: string }) | undefined;
         const nextJobId = returned?.jobId || returned?.id;
