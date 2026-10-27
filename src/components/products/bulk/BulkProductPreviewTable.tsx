@@ -43,26 +43,34 @@ import {
   validateBulkProduct,
 } from "@/lib/utils/bulkProductNormalization";
 
-function getStorefrontPreviewMedia(product: BulkParsedProduct): BulkParsedMedia[] {
-  if (product.allImages?.length) {
-    return [...product.allImages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+function getStorefrontPreviewMedia(
+  product: BulkParsedProduct,
+  selectedVariantSku?: string | null,
+): BulkParsedMedia[] {
+  const selectedVariant = product.variants?.find(
+    (variant) => variant.sku === selectedVariantSku,
+  );
+  const selectedVariantImages = (selectedVariant?.media ?? []).filter(
+    (media) => media.type === "IMAGE",
+  );
+  if (selectedVariantImages.length) {
+    return [...selectedVariantImages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }
 
-  return [
-    ...(product.media ?? []).map((media, index) => ({
-      ...media,
-      source: "product" as const,
-      order: media.order ?? index,
-    })),
-    ...(product.variants ?? []).flatMap((variant) =>
-      (variant.media ?? []).map((media, index) => ({
-        ...media,
-        source: "variant" as const,
-        variantSku: media.variantSku || variant.sku,
-        order: media.order ?? 100 + index,
-      })),
-    ),
-  ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const productImages = (product.media ?? []).filter(
+    (media) => media.type === "IMAGE",
+  );
+  if (productImages.length) {
+    return [...productImages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
+  // Fallback for imports where media is only present in the unified image list.
+  if (product.allImages?.length) {
+    const images = product.allImages.filter((media) => media.type === "IMAGE");
+    return [...images].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
+  return [];
 }
 
 interface BulkProductPreviewTableProps {
@@ -118,6 +126,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   } | null>(null);
   const [failedDetailImageUrl, setFailedDetailImageUrl] = useState<string | null>(null);
   const [storefrontPreviewProduct, setStorefrontPreviewProduct] = useState<BulkParsedProduct | null>(null);
+  const [storefrontSelectedVariantSku, setStorefrontSelectedVariantSku] = useState<string | null>(null);
   const [storefrontPreviewImageIndex, setStorefrontPreviewImageIndex] = useState(0);
   const [failedStorefrontImageUrl, setFailedStorefrontImageUrl] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -645,6 +654,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         type="button"
                         onClick={() => {
                           setStorefrontPreviewProduct(product);
+                          setStorefrontSelectedVariantSku(product.variants?.[0]?.sku || null);
                           setStorefrontPreviewImageIndex(0);
                           setFailedStorefrontImageUrl(null);
                         }}
@@ -1462,13 +1472,25 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
 
       {storefrontPreviewProduct && (() => {
         const previewProduct = storefrontPreviewProduct;
-        const previewImages = getStorefrontPreviewMedia(previewProduct);
+        const selectedPreviewVariant = previewProduct.variants?.find(
+          (variant) => variant.sku === storefrontSelectedVariantSku,
+        );
+        const previewImages = getStorefrontPreviewMedia(previewProduct, storefrontSelectedVariantSku);
         const activeIndex = Math.min(storefrontPreviewImageIndex, Math.max(0, previewImages.length - 1));
         const activeImage = previewImages[activeIndex];
         const currentImageUrl = activeImage?.url || "";
         const detailImageUrl = /^(https?:\/\/|\/)/i.test(currentImageUrl) ? currentImageUrl : "";
-        const discountPercent = previewProduct.basePrice > 0 && previewProduct.basePrice > previewProduct.sellingPrice
-          ? Math.round(((previewProduct.basePrice - previewProduct.sellingPrice) / previewProduct.basePrice) * 100)
+        const previewSellingPrice = Number(
+          selectedPreviewVariant?.sellingPrice ??
+          selectedPreviewVariant?.price ??
+          previewProduct.sellingPrice ??
+          0,
+        );
+        const previewBasePrice = Number(
+          selectedPreviewVariant?.basePrice ?? previewProduct.basePrice ?? 0,
+        );
+        const discountPercent = previewBasePrice > previewSellingPrice && previewBasePrice > 0
+          ? Math.round(((previewBasePrice - previewSellingPrice) / previewBasePrice) * 100)
           : 0;
         return (
           <div
@@ -1592,9 +1614,9 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                   <h2 className="mt-2 text-2xl font-semibold leading-tight text-slate-900 sm:text-3xl">{previewProduct.name}</h2>
                   {previewProduct.artisanName && <p className="mt-2 text-sm text-slate-500">Woven by {previewProduct.artisanName}</p>}
                   <div className="mt-5 flex flex-wrap items-baseline gap-2">
-                    <span className="text-2xl font-semibold text-slate-900">₹{Number(previewProduct.sellingPrice || 0).toLocaleString("en-IN")}</span>
-                    {previewProduct.basePrice > previewProduct.sellingPrice && (
-                      <span className="text-sm text-slate-400 line-through">₹{Number(previewProduct.basePrice || 0).toLocaleString("en-IN")}</span>
+                    <span className="text-2xl font-semibold text-slate-900">₹{previewSellingPrice.toLocaleString("en-IN")}</span>
+                    {previewBasePrice > previewSellingPrice && (
+                      <span className="text-sm text-slate-400 line-through">₹{previewBasePrice.toLocaleString("en-IN")}</span>
                     )}
                     {discountPercent > 0 && <span className="rounded bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700">{discountPercent}% OFF</span>}
                   </div>
@@ -1610,14 +1632,24 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                       <p className="text-xs font-semibold text-slate-800">Available options</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {previewProduct.variants!.map((variant, index) => {
-                          const optionName = variant.title || [variant.color, variant.size].filter(Boolean).join(" / ") || variant.sku || `Option ${index + 1}`;
+                          const optionName = variant.title || [variant.color, variant.size, variant.fabric].filter(Boolean).join(" / ") || variant.sku || `Option ${index + 1}`;
+                          const isSelectedOption = (variant.sku || null) === storefrontSelectedVariantSku;
+                          const optionPrice = Number(variant.sellingPrice ?? variant.price ?? previewProduct.sellingPrice);
                           return (
-                            <span key={variant.sku || index} className="rounded-md border border-slate-300 px-3 py-2 text-xs text-slate-700">
-                              {optionName}
-                              {variant.sellingPrice !== undefined && variant.sellingPrice !== previewProduct.sellingPrice ? (
-                                <span className="ml-2 font-semibold">₹{Number(variant.sellingPrice).toLocaleString("en-IN")}</span>
-                              ) : null}
-                            </span>
+                            <button
+                              key={variant.sku || index}
+                              type="button"
+                              onClick={() => {
+                                setStorefrontSelectedVariantSku(variant.sku || null);
+                                setStorefrontPreviewImageIndex(0);
+                                setFailedStorefrontImageUrl(null);
+                              }}
+                              aria-pressed={isSelectedOption}
+                              className={`rounded-md border px-3 py-2 text-left text-xs transition ${isSelectedOption ? "border-amber-800 bg-amber-50 text-amber-950 ring-1 ring-amber-700" : "border-slate-300 text-slate-700 hover:border-slate-500"}`}
+                            >
+                              <span className="block font-medium">{optionName}</span>
+                              <span className="mt-1 block font-semibold">₹{optionPrice.toLocaleString("en-IN")}</span>
+                            </button>
                           );
                         })}
                       </div>
