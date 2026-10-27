@@ -38,8 +38,22 @@ export function extractDriveFileId(input?: string): string | null {
 export function resolveImageUrl(
   url?: string,
   thumbnailUrl?: string,
-  getDriveProxyUrl?: (fileId: string) => string
+  getDriveProxyUrl?: (fileId: string) => string,
+  getDriveThumbnailUrl?: (fileId: string) => string
 ): string | undefined {
+  // A matched Drive proxy URL points to the original. Use the separate
+  // thumbnail endpoint for the grid to avoid loading 40+ MB originals.
+  if (url && getDriveThumbnailUrl) {
+    const proxyMatch = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/);
+    if (proxyMatch?.[1]) {
+      try {
+        return getDriveThumbnailUrl(decodeURIComponent(proxyMatch[1]));
+      } catch {
+        return getDriveThumbnailUrl(proxyMatch[1]);
+      }
+    }
+  }
+
   // 1. If a valid external or blob/data thumbnailUrl is provided, prioritize it
   if (thumbnailUrl && typeof thumbnailUrl === "string") {
     const trimmedThumb = thumbnailUrl.trim();
