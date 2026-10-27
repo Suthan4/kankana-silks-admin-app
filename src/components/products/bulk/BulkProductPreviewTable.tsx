@@ -2194,14 +2194,16 @@ export const BulkProductPreviewTable: React.FC<
                           <div className="flex max-w-sm flex-col items-center gap-2 p-8 text-center text-slate-500">
                             <ImageIcon className="h-12 w-12 text-slate-300" />
                             <p className="text-sm font-semibold text-slate-700">
-                              {failedStorefrontImageUrl === detailImageUrl &&
-                              detailImageUrl
-                                ? "This image could not be loaded"
-                                : "No full-size product image available"}
+                              {previewImages.length === 0
+                                ? "No product images selected"
+                                : failedStorefrontImageUrl === detailImageUrl && detailImageUrl
+                                  ? "This image could not be loaded"
+                                  : "No full-size product image available"}
                             </p>
                             <p className="text-xs leading-relaxed">
-                              Confirm the selected image is uploaded to storage,
-                              then reopen this preview.
+                              {previewImages.length === 0
+                                ? "Add images from Google Drive or local upload before importing this product."
+                                : "Use the image controls below to reorder, set a primary image, or remove photos from this import."}
                             </p>
                           </div>
                         )}
