@@ -3253,7 +3253,7 @@ const BulkProductUploadPage: React.FC = () => {
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(
-                            JSON.stringify(products, null, 2),
+                            JSON.stringify(sanitizeProductsForStorage(products), null, 2),
                           );
                           toast.success("JSON copied to clipboard!");
                         }}
@@ -3264,7 +3264,7 @@ const BulkProductUploadPage: React.FC = () => {
                       </button>
                     </div>
                     <pre className="text-[10px] font-mono leading-relaxed max-h-72 overflow-auto text-emerald-400">
-                      {JSON.stringify(products, null, 2)}
+                      {JSON.stringify(sanitizeProductsForStorage(products), null, 2)}
                     </pre>
                   </div>
                 )}
