@@ -21,6 +21,9 @@ import {
   Info,
   Square,
   Check,
+  Code,
+  Copy,
+  X,
 } from "lucide-react";
 import type {
   BulkParsedProduct,
@@ -31,6 +34,11 @@ import type {
   BulkCategoryNode,
 } from "@/lib/types/product/bulkProduct";
 import { BulkCategoryAssignModal } from "./BulkCategoryAssignModal";
+import { resolveImageUrl } from "@/lib/utils/bulkImageUtils";
+import {
+  resolveCategory,
+  validateBulkProduct,
+} from "@/lib/utils/bulkProductNormalization";
 
 interface BulkProductPreviewTableProps {
   products: BulkParsedProduct[];
@@ -46,6 +54,7 @@ interface BulkProductPreviewTableProps {
   flatCategories?: BulkCategoryLookup[];
   categoriesTree?: BulkCategoryNode[];
   onBulkUpdateProducts?: (updatedProducts: BulkParsedProduct[]) => void;
+  getDriveProxyUrl?: (fileId: string) => string;
 }
 
 export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = ({
@@ -62,6 +71,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   flatCategories,
   categoriesTree,
   onBulkUpdateProducts,
+  getDriveProxyUrl,
 }) => {
   const [internalFilterStatus, setInternalFilterStatus] = useState<"all" | "valid" | "error" | "warning">("all");
   const filterStatus = externalFilterStatus ?? internalFilterStatus;
@@ -73,6 +83,7 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   // Editing state for inline edits
+  const [viewingJsonProduct, setViewingJsonProduct] = useState<BulkParsedProduct | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<BulkParsedProduct | null>(null);
 
@@ -133,7 +144,24 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
 
   const handleSaveEdit = () => {
     if (editFormData) {
-      onUpdateProduct(editFormData);
+      const resolvedCat = resolveCategory(
+        editFormData.categoryPath,
+        editFormData.categoryId,
+        flatCategories
+      );
+      const updatedProduct: BulkParsedProduct = {
+        ...editFormData,
+        categoryId: resolvedCat.categoryId,
+        categoryPath: resolvedCat.categoryPath,
+        categoryName: resolvedCat.categoryName || editFormData.categoryName,
+      };
+      const valErrors = validateBulkProduct(updatedProduct, flatCategories);
+      const isValid = !valErrors.some((e) => e.severity === "error");
+      onUpdateProduct({
+        ...updatedProduct,
+        isValid,
+        errors: valErrors.length > 0 ? valErrors : undefined,
+      });
       setEditingGroupId(null);
       setEditFormData(null);
     }
@@ -177,15 +205,25 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
     categoryPath: string,
     onlyUnassigned: boolean
   ) => {
+    const selectedCat = flatCategories?.find((c) => c.id === categoryId);
     const updated = products.map((p) => {
       if (!selectedIds.has(p.productGroupId)) return p;
       if (onlyUnassigned && (p.categoryId || p.categoryPath?.trim())) {
         return p;
       }
-      return {
+      const updatedProduct: BulkParsedProduct = {
         ...p,
         categoryId,
         categoryPath,
+        categoryName: selectedCat?.name || p.categoryName,
+      };
+      // Recalculate validation so category errors are immediately resolved
+      const valErrors = validateBulkProduct(updatedProduct, flatCategories);
+      const isValid = !valErrors.some((e) => e.severity === "error");
+      return {
+        ...updatedProduct,
+        isValid,
+        errors: valErrors.length > 0 ? valErrors : undefined,
       };
     });
     if (onBulkUpdateProducts) {
@@ -470,6 +508,11 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
                           {product.productGroupId}
                         </span>
+                        {product.id && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            UPDATE
+                          </span>
+                        )}
                         <h4 className="font-semibold text-slate-900 truncate text-sm">
                           {product.name}
                         </h4>
@@ -516,6 +559,17 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                         {product.artisanName && (
                           <span className="text-slate-400 text-[11px]">· Artisan: {product.artisanName}</span>
                         )}
+                        {product.specifications && product.specifications.length > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-cyan-700 bg-cyan-50 border border-cyan-200 px-2 py-0.5 rounded font-medium">
+                            {product.specifications.length} Specs
+                          </span>
+                        )}
+                        {((product.allImages?.length || 0) > 0 || (product.media?.length || 0) > 0) && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded font-medium">
+                            <ImageIcon className="h-3 w-3 text-slate-500 shrink-0" />
+                            {product.allImages?.length ?? product.media?.length} Photos
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -551,6 +605,14 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
 
                     {/* Actions */}
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => setViewingJsonProduct(product)}
+                        title="View Full Product JSON"
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition"
+                      >
+                        <Code className="h-4 w-4" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -943,6 +1005,23 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                           </div>
                         </div>
                       </div>
+
+                      {/* Specifications */}
+                      {product.specifications && product.specifications.length > 0 && (
+                        <div className="bg-white rounded-lg p-3 border border-slate-200 col-span-full">
+                          <span className="font-semibold text-slate-500 uppercase tracking-wide block mb-2">
+                            Product Specifications ({product.specifications.length})
+                          </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            {product.specifications.map((spec, sIdx) => (
+                              <div key={sIdx} className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+                                <span className="text-[10px] text-slate-400 font-semibold uppercase block truncate">{spec.key}</span>
+                                <span className="text-xs font-medium text-slate-800 block truncate">{spec.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Variants Breakdown (Variable Products) */}
@@ -979,14 +1058,34 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       (other) => other.color?.trim().toLowerCase() === v.color?.trim().toLowerCase()
                                     ).length > 1
                                   );
-                                  const variantMedia = product.media?.filter(
-                                    (m) => m.variantSku === v.sku || (!v.sku && m.variantSku === String(idx + 1))
-                                  ) || [];
+                                  const variantMedia = (v.media && v.media.length > 0)
+                                    ? v.media
+                                    : (product.media?.filter(
+                                        (m) => m.variantSku === v.sku || (!v.sku && m.variantSku === String(idx + 1))
+                                      ) || []);
+
+                                  const attrDisplay = (() => {
+                                    if (!v.attributes) return "—";
+                                    if (Array.isArray(v.attributes)) {
+                                      return v.attributes
+                                        .filter((a) => !["Size", "Color", "Fabric"].includes(a.name))
+                                        .map((a) => `${a.name}: ${a.value}`)
+                                        .join(", ") || "—";
+                                    }
+                                    return Object.entries(v.attributes)
+                                      .filter(([k]) => !["Size", "Color", "Fabric"].includes(k))
+                                      .map(([k, val]) => `${k}: ${val}`)
+                                      .join(", ") || "—";
+                                  })();
+
+                                  const effectivePrice = v.price ?? v.sellingPrice;
 
                                   return (
                                     <tr key={idx} className="hover:bg-slate-50/50">
                                       <td className="py-2 px-3 font-mono font-medium text-slate-800">
-                                        {v.sku || <span className="text-slate-400 italic">auto-generated</span>}
+                                        <div>{v.sku || <span className="text-slate-400 italic">auto-generated</span>}</div>
+                                        {v.title && <div className="text-[10px] font-sans text-slate-500 font-normal">{v.title}</div>}
+                                        {v.id && <span className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded font-mono">ID: {v.id.slice(0, 8)}…</span>}
                                       </td>
                                       <td className="py-2 px-3 text-slate-700">{v.size || "—"}</td>
                                       <td className="py-2 px-3 text-slate-700">
@@ -1000,24 +1099,39 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                                       <td className="py-2 px-3 text-slate-700">{v.fabric || "—"}</td>
                                       <td className="py-2 px-3">
                                         {variantMedia.length > 0 ? (
-                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold text-[10px]">
-                                            <ImageIcon className="h-3 w-3" /> {variantMedia.length} photo{variantMedia.length !== 1 ? "s" : ""}
-                                          </span>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            {variantMedia.slice(0, 2).map((vm, vi) => {
+                                              const vmSrc = resolveImageUrl(vm.url, vm.thumbnailUrl, getDriveProxyUrl);
+                                              return vmSrc ? (
+                                                <img
+                                                  key={vi}
+                                                  src={vmSrc}
+                                                  alt=""
+                                                  className="w-7 h-7 object-cover rounded border border-slate-200"
+                                                />
+                                              ) : (
+                                                <span
+                                                  key={vi}
+                                                  className="w-7 h-7 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-[9px] text-slate-400"
+                                                >
+                                                  <ImageIcon className="w-3.5 h-3.5" />
+                                                </span>
+                                              );
+                                            })}
+                                            <span className="text-[10px] text-slate-500 font-medium">
+                                              {variantMedia.length} photo{variantMedia.length !== 1 ? "s" : ""}
+                                            </span>
+                                          </div>
                                         ) : (
                                           <span className="text-slate-400 italic text-[11px]">None</span>
                                         )}
                                       </td>
                                       <td className="py-2 px-3 text-slate-600">
-                                        {v.attributes
-                                          ? Object.entries(v.attributes)
-                                              .filter(([k]) => !["Size", "Color", "Fabric"].includes(k))
-                                              .map(([k, val]) => `${k}: ${val}`)
-                                              .join(", ") || "—"
-                                          : "—"}
+                                        {attrDisplay}
                                       </td>
                                       <td className="py-2 px-3 text-right font-medium text-slate-900">
-                                        {v.sellingPrice ? (
-                                          <span>₹{v.sellingPrice.toLocaleString()}</span>
+                                        {effectivePrice ? (
+                                          <span>₹{effectivePrice.toLocaleString()}</span>
                                         ) : (
                                           <span className="text-slate-400 italic">Inherits parent</span>
                                         )}
@@ -1043,109 +1157,160 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
                     )}
 
                     {/* Media & SEO Galleries */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                      {/* Media items */}
-                      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
-                        <span className="font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                          <ImageIcon className="h-4 w-4 text-blue-600" />
-                          Media Attachments ({product.media?.length || 0})
-                        </span>
-                        {product.media && product.media.length > 0 ? (
-                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
-                            {product.media.map((m, mIdx) => (
-                              <div
-                                key={mIdx}
-                                className="group relative rounded-lg border border-slate-200 overflow-hidden bg-slate-100 aspect-square"
-                              >
-                                {m.type === "VIDEO" ? (
-                                  <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-white">
-                                    <Video className="h-6 w-6 text-slate-300" />
-                                    <span className="text-[9px] uppercase mt-1">Video</span>
-                                  </div>
-                                ) : (
-                                  <img
-                                    src={m.url}
-                                    alt={m.altText || product.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      (e.currentTarget as any).src =
-                                        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
-                                    }}
-                                  />
-                                )}
-                                  <div className="absolute top-1 left-1">
-                                    {(m.order === 0 || mIdx === 0) ? (
-                                      <span className="bg-amber-500 text-white font-bold text-[9px] px-1 py-0.5 rounded shadow">
-                                        ★ Primary
-                                      </span>
-                                    ) : (
+                    {(() => {
+                      const displayMedia = (product.allImages && product.allImages.length > 0)
+                        ? product.allImages
+                        : [
+                            ...(product.media || []).map((m, idx) => ({ ...m, source: m.source || ("product" as const), order: m.order ?? idx })),
+                            ...(product.variants || []).flatMap((v) =>
+                              (v.media || []).map((m, idx) => ({
+                                ...m,
+                                source: "variant" as const,
+                                variantSku: m.variantSku || v.sku,
+                                order: m.order ?? (100 + idx),
+                              }))
+                            ),
+                          ].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                          {/* Media items */}
+                          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <ImageIcon className="h-4 w-4 text-blue-600" />
+                                All Product Images ({displayMedia.length})
+                              </span>
+                              {displayMedia.length > 0 && (
+                                <span className="text-[10px] text-slate-500 font-medium">
+                                  {product.media?.length || 0} product · {displayMedia.length - (product.media?.length || 0)} variant
+                                </span>
+                              )}
+                            </div>
+                            {displayMedia.length > 0 ? (
+                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
+                                {displayMedia.map((m, mIdx) => (
+                                  <div
+                                    key={mIdx}
+                                    className="group relative rounded-lg border border-slate-200 overflow-hidden bg-slate-100 aspect-square"
+                                  >
+                                    {m.type === "VIDEO" ? (
+                                      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-white">
+                                        <Video className="h-6 w-6 text-slate-300" />
+                                        <span className="text-[9px] uppercase mt-1">Video</span>
+                                      </div>
+                                    ) : (() => {
+                                      const resolvedSrc = resolveImageUrl(m.url, m.thumbnailUrl, getDriveProxyUrl);
+                                      return resolvedSrc ? (
+                                        <img
+                                          src={resolvedSrc}
+                                          alt={m.altText || product.name}
+                                          className="w-full h-full object-cover"
+                                          onError={(e) => {
+                                            (e.currentTarget as any).src =
+                                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 p-2 text-center text-slate-400">
+                                          <ImageIcon className="h-6 w-6 text-slate-300 mb-1" />
+                                          <span className="text-[8px] font-mono truncate max-w-full text-slate-500">
+                                            {m.url || "Pending match"}
+                                          </span>
+                                        </div>
+                                      );
+                                    })()}
+                                    <div className="absolute top-1 left-1">
+                                      {(m.order === 0 || mIdx === 0) ? (
+                                        <span className="bg-amber-500 text-white font-bold text-[9px] px-1 py-0.5 rounded shadow">
+                                          ★ Primary
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const nextMedia = [...(product.media || [])];
+                                            const matchIdx = nextMedia.findIndex((x) => x.url === m.url);
+                                            if (matchIdx >= 0) {
+                                              const [chosen] = nextMedia.splice(matchIdx, 1);
+                                              nextMedia.unshift({ ...chosen, order: 0 });
+                                              const reindexed = nextMedia.map((item, idx) => ({ ...item, order: idx }));
+                                              onUpdateProduct({ ...product, media: reindexed });
+                                            }
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 bg-slate-900/80 hover:bg-blue-600 text-white text-[9px] px-1 py-0.5 rounded transition shadow"
+                                          title="Set as primary image"
+                                        >
+                                          Set Primary
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
                                       <button
                                         type="button"
                                         onClick={() => {
-                                          const nextMedia = [...(product.media || [])];
-                                          const [chosen] = nextMedia.splice(mIdx, 1);
-                                          nextMedia.unshift({ ...chosen, order: 0 });
-                                          // re-index order
-                                          const reindexed = nextMedia.map((item, idx) => ({ ...item, order: idx }));
-                                          onUpdateProduct({ ...product, media: reindexed });
+                                          const nextMedia = (product.media || []).filter((x) => x.url !== m.url);
+                                          const nextVariants = (product.variants || []).map((v) => ({
+                                            ...v,
+                                            media: (v.media || []).filter((x) => x.url !== m.url),
+                                          }));
+                                          const nextAll = (product.allImages || []).filter((x) => x.url !== m.url);
+                                          onUpdateProduct({
+                                            ...product,
+                                            media: nextMedia,
+                                            variants: nextVariants,
+                                            allImages: nextAll,
+                                          });
                                         }}
-                                        className="opacity-0 group-hover:opacity-100 bg-slate-900/80 hover:bg-blue-600 text-white text-[9px] px-1 py-0.5 rounded transition shadow"
-                                        title="Set as primary image"
+                                        className="p-1 rounded bg-slate-900/80 hover:bg-rose-600 text-white shadow"
+                                        title="Remove photo"
                                       >
-                                        Set Primary
+                                        <Trash2 className="h-2.5 w-2.5" />
                                       </button>
-                                    )}
+                                    </div>
+                                    <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[9px] px-1 py-0.5 truncate text-center">
+                                      {m.source === "variant" || m.variantSku ? (
+                                        <span className="text-purple-300 font-medium">Var: {m.variantSku || "Variant"}</span>
+                                      ) : (
+                                        `Product #${m.order ?? mIdx}`
+                                      )}
+                                    </div>
                                   </div>
-                                  <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const nextMedia = (product.media || []).filter((_, i) => i !== mIdx);
-                                        onUpdateProduct({ ...product, media: nextMedia });
-                                      }}
-                                      className="p-1 rounded bg-slate-900/80 hover:bg-rose-600 text-white shadow"
-                                      title="Remove photo"
-                                    >
-                                      <Trash2 className="h-2.5 w-2.5" />
-                                    </button>
-                                  </div>
-                                  <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[9px] px-1 py-0.5 truncate text-center">
-                                    {m.variantSku ? `SKU: ${m.variantSku}` : `Order #${m.order ?? mIdx}`}
-                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            ) : (
+                              <p className="text-slate-400 italic pt-1">No media specified.</p>
+                            )}
                           </div>
-                        ) : (
-                          <p className="text-slate-400 italic pt-1">No media specified.</p>
-                        )}
-                      </div>
 
-                      {/* SEO details */}
-                      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
-                        <span className="font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                          <Globe className="h-4 w-4 text-emerald-600" />
-                          SEO Metadata
-                        </span>
-                        {product.seo ? (
-                          <div className="space-y-1.5 pt-1 text-slate-700">
-                            <div>
-                              <span className="text-slate-400">Meta Title:</span>{" "}
-                              <span className="font-medium">{product.seo.metaTitle || "—"}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-400">Meta Description:</span>{" "}
-                              <p className="text-slate-600 mt-0.5 italic">{product.seo.metaDesc || "—"}</p>
-                            </div>
-                            <div>
-                              <span className="text-slate-400">Custom URL Slug:</span>{" "}
-                              <span className="font-mono text-blue-700">{product.seo.slug || "Auto-generated"}</span>
-                            </div>
+                          {/* SEO details */}
+                          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+                            <span className="font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                              <Globe className="h-4 w-4 text-emerald-600" />
+                              SEO Metadata
+                            </span>
+                            {product.seo ? (
+                              <div className="space-y-1.5 pt-1 text-slate-700">
+                                <div>
+                                  <span className="text-slate-400">Meta Title:</span>{" "}
+                                  <span className="font-medium">{product.seo.metaTitle || "—"}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400">Meta Description:</span>{" "}
+                                  <p className="text-slate-600 mt-0.5 italic">{product.seo.metaDesc || "—"}</p>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400">Custom URL Slug:</span>{" "}
+                                  <span className="font-mono text-blue-700">{product.seo.slug || "Auto-generated"}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-slate-400 italic pt-1">No custom SEO data specified (will use defaults).</p>
+                            )}
                           </div>
-                        ) : (
-                          <p className="text-slate-400 italic pt-1">No custom SEO data specified (will use defaults).</p>
-                        )}
-                      </div>
-                    </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1164,6 +1329,61 @@ export const BulkProductPreviewTable: React.FC<BulkProductPreviewTableProps> = (
           categoriesTree={categoriesTree || []}
           onApplyCategory={handleBulkApplyCategory}
         />
+      )}
+
+      {/* Product JSON Modal */}
+      {viewingJsonProduct && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-2">
+                <Code className="h-5 w-5 text-indigo-600" />
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">
+                    Product JSON: {viewingJsonProduct.name}
+                  </h4>
+                  <p className="text-[11px] font-mono text-slate-500">
+                    {viewingJsonProduct.productGroupId}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(viewingJsonProduct, null, 2));
+                    alert("Product JSON copied to clipboard!");
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingJsonProduct(null)}
+                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 flex-1 overflow-auto bg-slate-900">
+              <pre className="text-xs font-mono text-emerald-300 leading-relaxed">
+                {JSON.stringify(viewingJsonProduct, null, 2)}
+              </pre>
+            </div>
+            <div className="p-3 border-t border-slate-200 flex justify-end bg-white shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewingJsonProduct(null)}
+                className="px-4 py-1.5 text-xs font-medium border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

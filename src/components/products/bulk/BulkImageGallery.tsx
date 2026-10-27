@@ -16,6 +16,7 @@ import {
   Eye,
 } from "lucide-react";
 import type { BulkParsedMedia } from "@/lib/types/product/bulkProduct";
+import { resolveImageUrl } from "@/lib/utils/bulkImageUtils";
 
 interface BulkImageGalleryProps {
   media: BulkParsedMedia[];
@@ -72,9 +73,7 @@ export const BulkImageGallery: React.FC<BulkImageGalleryProps> = ({
   const [newUrl, setNewUrl] = useState("");
 
   const thumbFor = (m: BulkParsedMedia): string | undefined => {
-    if (m.thumbnailUrl) return m.thumbnailUrl;
-    if (getThumbnailUrl) return getThumbnailUrl(m.url);
-    return undefined;
+    return resolveImageUrl(m.url, m.thumbnailUrl, getThumbnailUrl);
   };
 
   return (
@@ -135,6 +134,13 @@ export const BulkImageGallery: React.FC<BulkImageGalleryProps> = ({
                 <span className="absolute top-1 left-1 text-[10px] bg-slate-800/70 text-white rounded px-1 font-mono">
                   #{idx + 1}
                 </span>
+
+                {/* Variant badge if applicable */}
+                {(m.source === "variant" || m.variantSku) && (
+                  <span className="absolute bottom-1 left-1 max-w-[85%] truncate text-[9px] bg-purple-700/80 text-white rounded px-1 font-sans">
+                    {m.variantSku ? `Var: ${m.variantSku}` : "Variant"}
+                  </span>
+                )}
 
                 {/* Drag handle */}
                 {!readOnly && (
