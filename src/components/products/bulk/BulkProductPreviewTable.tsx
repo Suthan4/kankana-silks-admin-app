@@ -1980,9 +1980,9 @@ export const BulkProductPreviewTable: React.FC<
             );
           const previewImages = hasExplicitlyClearedGallery
             ? []
-            : matchedPreviewImages.length > 0
-              ? matchedPreviewImages
-              : retainedProductImages;
+            : retainedProductImages.length > 0
+              ? retainedProductImages
+              : matchedPreviewImages;
           const activeIndex = Math.min(
             storefrontPreviewImageIndex,
             Math.max(0, previewImages.length - 1),
