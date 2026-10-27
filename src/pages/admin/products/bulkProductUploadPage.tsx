@@ -794,17 +794,10 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
             <p className="mt-1 text-[11px] text-gray-500">The first selected image becomes the primary image. Variant-specific media is preserved.</p>
           </div>
 
-          {!driveConnected ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3">
-              <p className="text-xs text-amber-800">Connect Google Drive to choose images from your account.</p>
-              <button type="button" onClick={handleConnectDrive} className="w-full rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700"><Cloud className="w-4 h-4 inline mr-2" />Connect Google Drive</button>
-            </div>
-          ) : (
-            <button type="button" onClick={() => void openGoogleDrivePicker()} disabled={!targetProduct || drivePickerLaunching || uploadingDrive} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-3 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
-              {drivePickerLaunching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
-              {drivePickerLaunching ? "Opening Google Drive…" : "Choose images from Google Drive"}
-            </button>
-          )}
+          <button type="button" onClick={() => void openGoogleDrivePicker()} disabled={!targetProduct || drivePickerLaunching || uploadingDrive} className="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-3 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+            {drivePickerLaunching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+            {drivePickerLaunching ? "Opening Google Drive…" : "Choose images from Google Drive"}
+          </button>
 
           {drivePickerError && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">{drivePickerError}</div>}
           {uploadingDrive && (
