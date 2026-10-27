@@ -2377,11 +2377,7 @@ const BulkProductUploadPage: React.FC = () => {
 
         // Matched Drive media carries the Drive file ID as key until the
         // corresponding image has been uploaded to storage.
-        if (
-          media.key &&
-          matchesById.has(media.key) &&
-          url.includes("/products/bulk/drive-proxy/")
-        ) {
+        if (media.key && matchesById.has(media.key)) {
           return media.key;
         }
         return null;
