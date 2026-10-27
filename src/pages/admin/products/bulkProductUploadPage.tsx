@@ -485,8 +485,15 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
         try {
           // The native picker only returns selected files. Retrieve those files
           // through the existing authenticated proxy, then upload to S3.
-          const downloadResponse = await fetch(getDriveProxyUrl(driveFile.id));
-          if (!downloadResponse.ok) throw new Error("Drive download failed");
+          const accessToken = driveAccessTokenRef.current;
+          if (!accessToken) throw new Error("Google Drive authorization expired. Open the picker again.");
+          const downloadResponse = await fetch(
+            "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(driveFile.id) + "?alt=media",
+            { headers: { Authorization: "Bearer " + accessToken } },
+          );
+          if (!downloadResponse.ok) {
+            throw new Error("Could not download " + driveFile.name + " from Google Drive.");
+          }
           const blob = await downloadResponse.blob();
           const contentType = downloadResponse.headers.get("content-type") || blob.type;
           if (!contentType.toLowerCase().startsWith("image/")) {
