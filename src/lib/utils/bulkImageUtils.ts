@@ -259,6 +259,56 @@ export function filterImageMatchesToProductMedia(
 }
 
 /**
+ * Create a safe draft/import payload. Drive preview URLs intentionally carry
+ * a short-lived access token so <img> can load them; they must never be stored
+ * in rawInput, draft JSON, or ProductMedia.
+ *
+ * The Drive file ID is retained in key/sourceDriveFileId and the filename in
+ * title/altText, so the backend job can still resolve and upload the original.
+ */
+export function sanitizeProductsForStorage(
+  products: BulkParsedProduct[],
+): BulkParsedProduct[] {
+  const safeMedia = (media: BulkParsedMedia): BulkParsedMedia => {
+    const url = (media.url || "").trim();
+    const isTemporaryUrl =
+      /drive\.google\.com|docs\.google\.com|googleusercontent\.com|\/products\/bulk\/drive-proxy\/|[?&]token=/i.test(url);
+    if (!isTemporaryUrl) return media;
+
+    const proxyId = url.match(/\/products\/bulk\/drive-proxy\/([^/?#]+)/)?.[1];
+    let driveId = media.sourceDriveFileId || media.key || "";
+    if (!driveId && proxyId) {
+      try { driveId = decodeURIComponent(proxyId); } catch { driveId = proxyId; }
+    }
+
+    return {
+      ...media,
+      // This is a matching reference only, never a publishable image URL.
+      // The backend must replace it with a permanent storage URL before import.
+      url: media.title || media.altText || driveId,
+      thumbnailUrl: undefined,
+      key: media.key || driveId || undefined,
+      sourceDriveFileId: media.sourceDriveFileId || driveId || undefined,
+    };
+  };
+
+  return products.map((product) => {
+    const media = (product.media || []).map(safeMedia);
+    const variants = (product.variants || []).map((variant) => ({
+      ...variant,
+      media: (variant.media || []).map(safeMedia),
+    }));
+    const allImages = (product.allImages || []).map(safeMedia);
+    return {
+      ...product,
+      media,
+      variants,
+      allImages,
+    };
+  });
+}
+
+/**
  * Applies matched Google Drive images to the product collection.
  * Updates both product-level and variant-level media with authenticated proxy URLs,
  * preserving metadata, ordering, and existing valid media.
