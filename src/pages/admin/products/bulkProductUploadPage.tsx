@@ -553,9 +553,9 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       import.meta.env.VITE_GOOGLE_PICKER_CLIENT_ID ||
       import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-    if (!apiKey || !appId || !clientId) {
+    if (!apiKey || !clientId) {
       setDrivePickerError(
-        "Google Picker setup is missing. Configure VITE_GOOGLE_PICKER_API_KEY, VITE_GOOGLE_PICKER_APP_ID, and VITE_GOOGLE_PICKER_CLIENT_ID in the admin app environment.",
+        "Google Picker setup is missing. Configure VITE_GOOGLE_PICKER_API_KEY and VITE_GOOGLE_PICKER_CLIENT_ID in the admin app environment. VITE_GOOGLE_PICKER_APP_ID is optional for read-only Drive access.",
       );
       toast.error("Google Drive Picker is not configured.");
       return;
