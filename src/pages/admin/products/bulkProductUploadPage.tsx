@@ -2025,14 +2025,29 @@ const BulkProductUploadPage: React.FC = () => {
         flatCategoriesRef.current,
         warehousesRef.current,
       );
-      setProducts(normalized);
+      const savedImageMatches = draft.imageMatches ?? null;
+      // Re-attach Drive proxy URLs and stable source IDs when reopening a draft.
+      // The saved image list (including admin reorder/delete edits) stays the
+      // source of truth; only matches still present in that list are decorated.
+      const productsWithDriveMedia =
+        savedImageMatches?.matched?.length
+          ? applyDriveMatchesToProducts(
+              normalized,
+              savedImageMatches,
+              productApi.getDriveProxyUrl,
+              productApi.getDriveThumbnailUrl,
+            )
+          : normalized;
+      setProducts(productsWithDriveMedia);
       setRawInput(
         draft.rawInput ??
-          (normalized.length > 0 ? JSON.stringify(normalized, null, 2) : ""),
+          (productsWithDriveMedia.length > 0
+            ? JSON.stringify(productsWithDriveMedia, null, 2)
+            : ""),
       );
-      setImageMatches(draft.imageMatches ?? null);
+      setImageMatches(savedImageMatches);
       setConfirmedAssignments(draft.confirmedAssignments ?? {});
-      setValidationErrors(normalized.flatMap((p) => p.errors || []));
+      setValidationErrors(productsWithDriveMedia.flatMap((p) => p.errors || []));
       setJob(null);
       setJobId(null);
       setIsDirty(false);
