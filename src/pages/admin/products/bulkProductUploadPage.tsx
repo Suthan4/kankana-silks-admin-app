@@ -340,6 +340,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     Array<{ id: string; file: File; previewUrl: string }>
   >([]);
   const [uploadingLocal, setUploadingLocal] = useState(false);
+  const [localFilePercent, setLocalFilePercent] = useState(0);
   const [localProgress, setLocalProgress] = useState({
     completed: 0,
     total: 0,
@@ -496,12 +497,12 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     const imageFiles = list.filter((file) => file.type.startsWith("image/"));
     if (imageFiles.length !== list.length)
       toast.error(list.length - imageFiles.length + " non-image file(s) were skipped.");
-    const maxBytes = 60 * 1024 * 1024;
+    const maxBytes = 100 * 1024 * 1024;
     const accepted = imageFiles.filter((file) => file.size <= maxBytes);
     const tooLarge = imageFiles.filter((file) => file.size > maxBytes);
     if (tooLarge.length) {
       toast.error(
-        tooLarge.length + " image(s) exceed the server's 60 MB upload limit: " +
+        tooLarge.length + " image(s) exceed the 100 MB direct-upload limit: " +
         tooLarge.map((file) => file.name).slice(0, 3).join(", ") +
         (tooLarge.length > 3 ? "…" : "") + ". Resize or export a smaller source file before uploading.",
         { duration: 7000 },
@@ -551,6 +552,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     const failedNames: string[] = [];
     setUploadingLocal(true);
     setLocalProgress({ completed: 0, total: localFiles.length });
+    setLocalFilePercent(0);
     try {
       for (let index = 0; index < localFiles.length; index += 1) {
         const item = localFiles[index];
@@ -560,6 +562,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
             "products",
             "bulk",
             (percent) => {
+              setLocalFilePercent(percent);
               setLocalProgress({ completed: index + percent / 100, total: localFiles.length });
             },
           );
@@ -586,6 +589,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
           const message = error?.response?.data?.error || error?.response?.data?.message || error?.message || "Unknown upload error";
           failedNames.push(item.file.name + ": " + message);
         } finally {
+          setLocalFilePercent(100);
           setLocalProgress({ completed: index + 1, total: localFiles.length });
         }
       }
@@ -1338,7 +1342,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>Uploading to storage…</span>
                     <span>
-                      {localProgress.completed}/{localProgress.total}
+                      {Math.floor(localProgress.completed)}/{localProgress.total} · {localFilePercent}%
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
