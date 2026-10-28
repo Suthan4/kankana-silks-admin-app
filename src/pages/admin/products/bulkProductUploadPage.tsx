@@ -1644,6 +1644,7 @@ interface ImportProgressPanelProps {
   isRetrying: boolean;
   onCancel: () => void;
   isCancelling: boolean;
+  onResolveItem: (productGroupId: string, action: "skip" | "delete") => Promise<void>;
 }
 
 const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
@@ -1652,11 +1653,29 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
   isRetrying,
   onCancel,
   isCancelling,
+  onResolveItem,
 }) => {
   if (!job) return null;
 
-  const pct = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
+  const [selectedFailedIds, setSelectedFailedIds] = useState<Set<string>>(new Set());
+  const failedResults = job.results.filter((result) => result.status === "failed");
   const isRunning = job.status === "pending" || job.status === "processing";
+  const pct = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
+  const toggleFailedSelection = (productGroupId: string) => {
+    setSelectedFailedIds((current) => {
+      const next = new Set(current);
+      if (next.has(productGroupId)) next.delete(productGroupId);
+      else next.add(productGroupId);
+      return next;
+    });
+  };
+  const resolveSelectedFailed = async (action: "skip" | "delete") => {
+    const selected = failedResults.filter((result) => selectedFailedIds.has(result.productGroupId));
+    if (!selected.length) return;
+    if (action === "delete" && !window.confirm(`Remove ${selected.length} failed product(s) from this draft? No catalog products or images will be deleted.`)) return;
+    for (const result of selected) await onResolveItem(result.productGroupId, action);
+    setSelectedFailedIds(new Set());
+  };
   const stageLabel =
     job.stage === "preparing_images"
       ? "Preparing image batch…"
@@ -1860,6 +1879,34 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
           </div>
         )}
 
+        {/* Failed-item bulk actions */}
+        {job.draftId && failedResults.length > 0 && (
+          <div className="space-y-2 rounded-lg border border-red-100 bg-red-50/50 p-2">
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={failedResults.length > 0 && failedResults.every((result) => selectedFailedIds.has(result.productGroupId))}
+                onChange={(event) => setSelectedFailedIds(event.target.checked
+                  ? new Set(failedResults.map((result) => result.productGroupId))
+                  : new Set())}
+              />
+              Select all {failedResults.length} failed product(s)
+            </label>
+            {selectedFailedIds.size > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void resolveSelectedFailed("skip")}
+                  className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50">
+                  Skip {selectedFailedIds.size} selected
+                </button>
+                <button type="button" onClick={() => void resolveSelectedFailed("delete")}
+                  className="rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50">
+                  Delete {selectedFailedIds.size} selected
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Per-item results */}
         {job.results && job.results.length > 0 && (
           <div className="max-h-48 overflow-y-auto space-y-1">
@@ -1875,20 +1922,42 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
                       : "bg-gray-50 text-gray-600",
                 )}
               >
-                <span className="truncate font-medium">
-                  {r.name || r.productGroupId}
+                <span className="flex min-w-0 items-center gap-2 truncate font-medium">
+                  {r.status === "failed" && job.draftId && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${r.name || r.productGroupId}`}
+                      checked={selectedFailedIds.has(r.productGroupId)}
+                      onChange={() => toggleFailedSelection(r.productGroupId)}
+                    />
+                  )}
+                  <span className="truncate">{r.name || r.productGroupId}</span>
                 </span>
                 <div className="flex items-center gap-1 shrink-0 ml-2">
                   {r.status === "success" && (
                     <CheckCircle2 className="w-3 h-3" />
                   )}
                   {r.status === "failed" && (
-                    <span
-                      className="text-red-600 max-w-[120px] truncate"
-                      title={r.error}
-                    >
-                      {r.error}
-                    </span>
+                    <>
+                      <span className="text-red-600 max-w-[120px] truncate" title={r.error}>
+                        {r.error}
+                      </span>
+                      {job.draftId && (
+                        <>
+                          <button type="button" onClick={() => onResolveItem(r.productGroupId, "skip")}
+                            className="rounded border border-amber-300 bg-white px-2 py-1 text-amber-800 hover:bg-amber-50"
+                            title="Keep this item in the draft but exclude it from import">Skip</button>
+                          <button type="button"
+                            onClick={() => {
+                              if (window.confirm(`Remove "${r.name}" from this draft? This will not delete a catalog product or any images.`)) {
+                                onResolveItem(r.productGroupId, "delete");
+                              }
+                            }}
+                            className="rounded border border-red-200 bg-white px-2 py-1 text-red-700 hover:bg-red-50"
+                            title="Remove this failed item from the draft">Delete</button>
+                        </>
+                      )}
+                    </>
                   )}
                   {r.status === "skipped" && <span>skipped</span>}
                 </div>
@@ -1923,7 +1992,7 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
         )}
 
         {/* Retry on failure */}
-        {job.status === "failed" && (
+        {job.status === "failed" && job.results.some((result) => result.status === "failed") && (
           <button
             onClick={onRetry}
             disabled={isRetrying}
@@ -1942,7 +2011,12 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
 
         {job.status === "completed" && (
           <div className="bg-green-50 rounded-lg p-3 text-sm text-green-700 text-center font-medium">
-            ✓ Import complete — {job.successful} product(s) created
+            ✓ Draft resolved — {job.successful} product(s) imported, {job.skipped ?? 0} product(s) intentionally skipped or removed, no failed items remaining.
+          </div>
+        )}
+        {job.status === "failed" && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+            You are in control: use <strong>Skip</strong> to keep a record but exclude an item from this draft, or <strong>Delete</strong> to remove it from the draft. Neither action deletes a live catalog product. Existing images are retained unless the system can safely prove they are unused.
           </div>
         )}
       </div>
@@ -2875,6 +2949,58 @@ const BulkProductUploadPage: React.FC = () => {
     }
   };
 
+  const handleResolveFailedDraftItem = async (
+    productGroupId: string,
+    action: "skip" | "delete",
+  ) => {
+    if (!draftId) {
+      toast.error("Open or save this draft before changing failed items.");
+      return;
+    }
+    try {
+      const response = await productApi.updateDraftItems(draftId, [productGroupId], action);
+      const draft = response.data;
+      if (!draft) throw new Error("The server did not return the updated draft.");
+      const nextProducts = normalizeProducts(extractProducts(draft.parsedData));
+      setProducts(nextProducts);
+      const serialized = JSON.stringify(draft.parsedData, null, 2);
+      setRawInput(draft.rawInput || serialized);
+      setDraftStatus(draft.status || "DRAFT");
+      setIsDirty(false);
+      if (job) {
+        setJob((current) => {
+          if (!current) return current;
+          const nextResults = action === "delete"
+            ? current.results.filter((result) => result.productGroupId !== productGroupId)
+            : current.results.map((result) => result.productGroupId === productGroupId
+              ? { ...result, status: "skipped" as const, error: "Skipped by administrator" }
+              : result);
+          const remainingFailures = nextResults.some((result) => result.status === "failed");
+          const resolved = current.status === "failed" && !remainingFailures;
+          return {
+            ...current,
+            results: nextResults,
+            failed: Math.max(0, current.failed - 1),
+            skipped: (current.skipped ?? 0) + 1,
+            ...(resolved ? {
+              status: "completed" as const,
+              stage: "completed" as const,
+              error: undefined,
+              completedAt: new Date().toISOString(),
+              progress: 100,
+            } : {}),
+          };
+        });
+      }
+      setImageMatches((current) => current ? filterImageMatchesToProductMedia(current, nextProducts) : current);
+      toast.success(action === "skip"
+        ? "Product skipped. It will not be imported or retried."
+        : "Failed product removed from the draft. Catalog data and images were not deleted.");
+    } catch (error) {
+      toast.error(humanError(error));
+    }
+  };
+
   const handleRetryJob = async () => {
     if (job?.stage === "images_failed" && draftId) {
       // Save the latest gallery edits before retrying; deleted images must not
@@ -3518,6 +3644,7 @@ const BulkProductUploadPage: React.FC = () => {
                     isRetrying={false}
                     onCancel={() => void handleCancelJob()}
                     isCancelling={isCancellingJob}
+                  onResolveItem={handleResolveFailedDraftItem}
                   />
                 </div>
               )}
@@ -3648,6 +3775,7 @@ const BulkProductUploadPage: React.FC = () => {
                   isRetrying={false}
                   onCancel={() => void handleCancelJob()}
                   isCancelling={isCancellingJob}
+                onResolveItem={handleResolveFailedDraftItem}
                 />
               )}
             </div>

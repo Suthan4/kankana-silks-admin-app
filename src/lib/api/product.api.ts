@@ -435,6 +435,17 @@ export const productApi = {
     return apiCall("DELETE", `/products/bulk/draft/${id}`);
   },
 
+  updateDraftItems: async (
+    id: string,
+    productGroupIds: string[],
+    action: "skip" | "delete",
+  ): Promise<ApiResponse<BulkImportDraft>> => {
+    return apiCall("PATCH", `/products/bulk/draft/${id}/items`, {
+      productGroupIds,
+      action,
+    });
+  },
+
   parseDraftFile: async (id: string, file: File): Promise<ApiResponse<BulkImportDraft>> => {
     const formData = new FormData();
     formData.append("file", file);
