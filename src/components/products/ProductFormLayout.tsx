@@ -435,17 +435,33 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
               return {
                 type: m.type || "IMAGE",
                 url: publicUrl,
+                key: m.key,
+                thumbnailUrl: m.thumbnailUrl,
+                title: m.title,
+                description: m.description,
+                mimeType: m.mimeType || m.file?.type,
+                fileSize: m.file?.size ?? m.fileSize,
+                width: m.width,
+                height: m.height,
                 order: m.order ?? idx,
                 altText: m.altText || data.name,
-                isActive: true,
+                isActive: m.isActive ?? true,
               };
             }
             return {
               type: m.type || "IMAGE",
               url: m.url,
+              key: m.key,
+              thumbnailUrl: m.thumbnailUrl,
+              title: m.title,
+              description: m.description,
+              mimeType: m.mimeType,
+              fileSize: m.fileSize,
+              width: m.width,
+              height: m.height,
               order: m.order ?? idx,
               altText: m.altText,
-              isActive: true,
+              isActive: m.isActive ?? true,
             };
           }),
         );
@@ -480,9 +496,17 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                   return {
                     type: m.type || "IMAGE",
                     url: publicUrl,
+                    key: m.key,
+                    thumbnailUrl: m.thumbnailUrl,
+                    title: m.title,
+                    description: m.description,
+                    mimeType: m.mimeType || m.file?.type,
+                    fileSize: m.file?.size ?? m.fileSize,
+                    width: m.width,
+                    height: m.height,
                     order: m.order ?? mOrder,
                     altText: m.altText || `${v.sku || data.name} photo`,
-                    isActive: true,
+                    isActive: m.isActive ?? true,
                   };
                 }
                 return {
