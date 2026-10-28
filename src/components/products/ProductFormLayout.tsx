@@ -47,6 +47,7 @@ export interface ProductFormLayoutProps {
   /** Save a review form into a bulk draft without creating/updating a live product. */
   draftMode?: boolean;
   onDraftSave?: (payload: CreateProductData) => void | Promise<void>;
+  uploadType?: "product" | "bulk";
 }
 
 /**
@@ -130,6 +131,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
   onSuccess,
   draftMode = false,
   onDraftSave,
+  uploadType = "product",
 }) => {
   const isEditMode = Boolean(productId || initialProduct?.id);
   const activeProductId = productId || initialProduct?.id;
@@ -429,7 +431,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
         finalGlobalMedia = await Promise.all(
           data.media.map(async (m: any, idx: number) => {
             if (m.file) {
-              const publicUrl = await uploadFileToS3(m.file, "products");
+              const publicUrl = await uploadFileToS3(m.file, "products", uploadType);
               return {
                 type: m.type || "IMAGE",
                 url: publicUrl,
@@ -473,6 +475,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                   const publicUrl = await uploadFileToS3(
                     m.file,
                     "products/variants",
+                    uploadType,
                   );
                   return {
                     type: m.type || "IMAGE",
