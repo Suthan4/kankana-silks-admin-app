@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layouts/mainLayout';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -383,17 +383,47 @@ const ProductsPage: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
   const [filterHasVariants, setFilterHasVariants] = useState<boolean | undefined>(undefined);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
 
   const canCreate = hasPermission('products', 'canCreate');
   const canUpdate = hasPermission('products', 'canUpdate');
   const canDelete = hasPermission('products', 'canDelete');
 
-  const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products', searchQuery, filterCategory, filterActive, filterHasVariants],
+  const { data: productsData, isLoading, isFetching } = useQuery({
+    queryKey: ['products', searchQuery, filterCategory, filterActive, filterHasVariants, page, pageSize],
     queryFn: async () => {
-      const response = await productApi.getProducts({ limit: 100, search: searchQuery || undefined, categoryId: filterCategory || undefined, isActive: filterActive, hasVariants: filterHasVariants });
-      return response.data;
+      // Explicitly preserve false values: inactive/simple filters are valid filters,
+      // not the same as an omitted query parameter.
+      const response = await productApi.getProducts({
+        page,
+        limit: pageSize,
+        search: searchQuery.trim() || undefined,
+        categoryId: filterCategory || undefined,
+        ...(filterActive !== undefined ? { isActive: filterActive } : {}),
+        ...(filterHasVariants !== undefined ? { hasVariants: filterHasVariants } : {}),
+      });
+      const data = response.data as typeof response.data & {
+        page?: number;
+        limit?: number;
+        total?: number;
+        totalPages?: number;
+      };
+      // The admin endpoint returns pagination fields at the top level,
+      // while the shared API type models them under pagination. Normalize both.
+      return {
+        ...data,
+        pagination: data.pagination ?? {
+          page: data.page ?? page,
+          limit: data.limit ?? pageSize,
+          total: data.total ?? data.products?.length ?? 0,
+          totalPages: data.totalPages ?? Math.max(1, Math.ceil((data.total ?? data.products?.length ?? 0) / pageSize)),
+        },
+      };
     },
+    placeholderData: (previousData) => previousData,
   });
 
   const { data: categoriesData } = useQuery({
@@ -421,10 +451,37 @@ const ProductsPage: React.FC = () => {
 
   const handleEdit = useCallback((product: Product) => { navigate(`/admin/products/${product.id}/edit`); }, [navigate]);
 
-  const totalProducts = productsData?.products?.length || 0;
-  const activeProducts = productsData?.products?.filter((p) => p.isActive).length || 0;
-  const productsWithVariants = productsData?.products?.filter((p) => p.hasVariants).length || 0;
   const filteredProducts = productsData?.products || [];
+  const pagination = productsData?.pagination;
+  const totalProducts = pagination?.total ?? filteredProducts.length;
+  // The other cards describe the currently loaded page; total catalog size comes
+  // from server pagination rather than the number of items on this page.
+  const activeProducts = filteredProducts.filter((p) => p.isActive).length;
+  const productsWithVariants = filteredProducts.filter((p) => p.hasVariants).length;
+
+  const categoryPaths = useMemo(() => {
+    const all = categoriesData?.categories || [];
+    const byId = new Map(all.map((category: Category) => [String(category.id), category]));
+    const buildPath = (category: Category, visited = new Set<string>()): string => {
+      const id = String(category.id);
+      if (visited.has(id)) return category.name;
+      const nextVisited = new Set(visited);
+      nextVisited.add(id);
+      const parent = category.parents?.[0]
+        || category.parent
+        || (category.parentId ? byId.get(String(category.parentId)) : undefined);
+      return parent ? `${buildPath(parent, nextVisited)} › ${category.name}` : category.name;
+    };
+    return all.map((category: Category) => ({ id: String(category.id), name: category.name, path: buildPath(category) }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+  }, [categoriesData]);
+
+  const visibleCategoryOptions = useMemo(() => {
+    const term = categorySearch.trim().toLocaleLowerCase();
+    return categoryPaths.filter((category) => !term || category.path.toLocaleLowerCase().includes(term) || category.name.toLocaleLowerCase().includes(term));
+  }, [categoryPaths, categorySearch]);
+
+  const selectedCategoryPath = categoryPaths.find((category) => category.id === filterCategory)?.path || '';
 
   return (
     <MainLayout>
@@ -495,31 +552,56 @@ const ProductsPage: React.FC = () => {
           <StatsCard icon={<ShoppingCart className="h-6 w-6" />} label="Orders" value="1,234" color="orange" subtitle="This month" trend="+8%" />
         </div>
 
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search products by name, SKU, or description..." className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        {/* Search and filters */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(220px,1fr)_repeat(2,minmax(145px,.65fr))_auto]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+              <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} placeholder="Search name, SKU, description..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />
             </div>
-            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-              <option value="">All Categories</option>
-              {categoriesData?.categories?.map((cat: Category) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-            </select>
-            <select value={filterActive === undefined ? 'all' : filterActive ? 'active' : 'inactive'} onChange={(e) => setFilterActive(e.target.value === 'all' ? undefined : e.target.value === 'active')} className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-              <option value="all">All Status</option>
-              <option value="active">Active Only</option>
-              <option value="inactive">Inactive Only</option>
-            </select>
-            <select value={filterHasVariants === undefined ? 'all' : filterHasVariants ? 'variable' : 'simple'} onChange={(e) => setFilterHasVariants(e.target.value === 'all' ? undefined : e.target.value === 'variable')} className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-              <option value="all">All Types</option>
-              <option value="simple">Simple</option>
-              <option value="variable">Variable</option>
-            </select>
-            <div className="flex items-center bg-gray-100 rounded-lg p-1">
-              <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Grid3x3 className="h-4 w-4" /></button>
-              <button onClick={() => setViewMode('table')} className={`p-2 rounded-md transition-colors ${viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><List className="h-4 w-4" /></button>
+
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={categoryPickerOpen ? categorySearch : (selectedCategoryPath || '')}
+                onFocus={() => { setCategoryPickerOpen(true); setCategorySearch(''); }}
+                onChange={(e) => { setCategorySearch(e.target.value); setCategoryPickerOpen(true); }}
+                onKeyDown={(e) => { if (e.key === 'Escape') setCategoryPickerOpen(false); if (e.key === 'Enter' && visibleCategoryOptions[0]) { setFilterCategory(visibleCategoryOptions[0].id); setCategorySearch(''); setCategoryPickerOpen(false); setPage(1); } }}
+                placeholder="All categories · Search hierarchy"
+                aria-label="Filter by category hierarchy"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-9 pr-9 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              />
+              {filterCategory && <button type="button" onClick={() => { setFilterCategory(''); setCategorySearch(''); setPage(1); }} className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700" aria-label="Clear category"><X className="h-4 w-4" /></button>}
+              {categoryPickerOpen && (
+                <>
+                  <button type="button" aria-label="Close category suggestions" className="fixed inset-0 z-20 cursor-default" onClick={() => setCategoryPickerOpen(false)} />
+                  <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                    <button type="button" onClick={() => { setFilterCategory(''); setCategorySearch(''); setCategoryPickerOpen(false); setPage(1); }} className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition hover:bg-blue-50 ${!filterCategory ? 'bg-blue-50 text-blue-700' : 'text-slate-700'}`}>All categories</button>
+                    {visibleCategoryOptions.length ? visibleCategoryOptions.map((category) => (
+                      <button type="button" key={category.id} onClick={() => { setFilterCategory(category.id); setCategorySearch(''); setCategoryPickerOpen(false); setPage(1); }} className={`w-full rounded-lg px-3 py-2 text-left transition hover:bg-blue-50 ${filterCategory === category.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700'}`}>
+                        <span className="block text-xs text-slate-500">{category.path.includes(' › ') ? category.path.split(' › ').slice(0, -1).join(' › ') : 'Top-level category'}</span>
+                        <span className="block truncate text-sm font-medium">{category.name}</span>
+                      </button>
+                    )) : <p className="px-3 py-5 text-center text-sm text-slate-500">No matching categories</p>}
+                  </div>
+                </>
+              )}
             </div>
+
+            <select value={filterActive === undefined ? 'all' : filterActive ? 'active' : 'inactive'} onChange={(e) => { const value = e.target.value; setFilterActive(value === 'all' ? undefined : value === 'active'); setPage(1); }} aria-label="Filter by status" className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100">
+              <option value="all">All statuses</option><option value="active">Active only</option><option value="inactive">Inactive only</option>
+            </select>
+            <select value={filterHasVariants === undefined ? 'all' : filterHasVariants ? 'variable' : 'simple'} onChange={(e) => { const value = e.target.value; setFilterHasVariants(value === 'all' ? undefined : value === 'variable'); setPage(1); }} aria-label="Filter by product type" className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100">
+              <option value="all">All types</option><option value="simple">Simple</option><option value="variable">Variable</option>
+            </select>
+            <div className="flex items-center justify-start gap-1 rounded-xl bg-slate-100 p-1 xl:justify-self-end">
+              <button type="button" onClick={() => setViewMode('grid')} aria-label="Grid view" className={`rounded-lg p-2.5 transition ${viewMode === 'grid' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}><Grid3x3 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setViewMode('table')} aria-label="Table view" className={`rounded-lg p-2.5 transition ${viewMode === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}><List className="h-4 w-4" /></button>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+            <span>{pagination ? `Showing ${filteredProducts.length ? (page - 1) * pageSize + 1 : 0}–${Math.min((page - 1) * pageSize + filteredProducts.length, pagination.total)} of ${pagination.total} products` : 'Filtering products'}{isFetching ? ' · Updating…' : ''}</span>
+            {(searchQuery || filterCategory || filterActive !== undefined || filterHasVariants !== undefined) && <button type="button" onClick={() => { setSearchQuery(''); setFilterCategory(''); setFilterActive(undefined); setFilterHasVariants(undefined); setCategorySearch(''); setPage(1); }} className="font-semibold text-blue-700 hover:text-blue-900">Clear all filters</button>}
           </div>
         </div>
 
@@ -542,11 +624,58 @@ const ProductsPage: React.FC = () => {
               </button>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredProducts.map((product) => (
               <ProductCard key={product.id} product={product} onEdit={handleEdit} onDelete={handleDelete} onView={handleView} canUpdate={canUpdate} canDelete={canDelete} />
             ))}
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-[850px] w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr><th className="px-4 py-3 font-semibold">Product</th><th className="px-4 py-3 font-semibold">Category</th><th className="px-4 py-3 font-semibold">Price</th><th className="px-4 py-3 font-semibold">Type</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 text-right font-semibold">Actions</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredProducts.map((product) => {
+                    const media = product.media?.find((item) => item.order === 0) || product.media?.[0];
+                    return <tr key={product.id} className="transition hover:bg-slate-50/80">
+                      <td className="px-4 py-3"><div className="flex min-w-[250px] items-center gap-3">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">{media?.type === 'IMAGE' ? <img src={media.url} alt={media.altText || product.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-5 w-5 text-slate-400" /></div>}</div>
+                        <div className="min-w-0"><p className="truncate font-semibold text-slate-900">{product.name}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{product.sku}</p></div>
+                      </div></td>
+                      <td className="px-4 py-3 text-slate-600">{product.category?.name || '—'}</td>
+                      <td className="px-4 py-3"><p className="font-semibold text-slate-900">₹{Number(product.sellingPrice).toLocaleString('en-IN')}</p>{product.basePrice !== product.sellingPrice && <p className="text-xs text-slate-400 line-through">₹{Number(product.basePrice).toLocaleString('en-IN')}</p>}</td>
+                      <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${product.hasVariants ? 'bg-violet-50 text-violet-700' : 'bg-slate-100 text-slate-700'}`}>{product.hasVariants ? 'Variable' : 'Simple'}</span></td>
+                      <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${product.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{product.isActive ? 'Active' : 'Inactive'}</span></td>
+                      <td className="px-4 py-3"><div className="flex justify-end gap-1.5">
+                        <button type="button" onClick={() => handleView(product)} aria-label={`View ${product.name}`} className="rounded-lg bg-blue-50 p-2 text-blue-700 hover:bg-blue-100"><Eye className="h-4 w-4" /></button>
+                        {canUpdate && <button type="button" onClick={() => handleEdit(product)} aria-label={`Edit ${product.name}`} className="rounded-lg bg-slate-100 p-2 text-slate-700 hover:bg-slate-200"><Edit className="h-4 w-4" /></button>}
+                        {canDelete && <button type="button" onClick={() => handleDelete(product.id)} aria-label={`Delete ${product.name}`} className="rounded-lg bg-rose-50 p-2 text-rose-700 hover:bg-rose-100"><Trash2 className="h-4 w-4" /></button>}
+                      </div></td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {pagination && pagination.totalPages > 0 && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+              <span>Rows per page</span>
+              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 outline-none focus:border-blue-500">
+                <option value={12}>12</option><option value={24}>24</option><option value={48}>48</option>
+              </select>
+              <span className="text-slate-400">Page {pagination.page} of {pagination.totalPages}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+              <span className="min-w-20 text-center text-sm font-semibold text-slate-700">{pagination.page} / {pagination.totalPages}</span>
+              <button type="button" disabled={page >= pagination.totalPages || isFetching} onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+            </div>
           </div>
         )}
 
