@@ -1644,6 +1644,7 @@ interface ImportProgressPanelProps {
   isRetrying: boolean;
   onCancel: () => void;
   isCancelling: boolean;
+  onResolveItem: (productGroupId: string, action: "skip" | "delete") => void;
 }
 
 const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
@@ -1652,6 +1653,7 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
   isRetrying,
   onCancel,
   isCancelling,
+  onResolveItem,
 }) => {
   if (!job) return null;
 
@@ -1883,12 +1885,26 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
                     <CheckCircle2 className="w-3 h-3" />
                   )}
                   {r.status === "failed" && (
-                    <span
-                      className="text-red-600 max-w-[120px] truncate"
-                      title={r.error}
-                    >
-                      {r.error}
-                    </span>
+                    <>
+                      <span className="text-red-600 max-w-[120px] truncate" title={r.error}>
+                        {r.error}
+                      </span>
+                      {job.draftId && (
+                        <>
+                          <button type="button" onClick={() => onResolveItem(r.productGroupId, "skip")}
+                            className="rounded border border-amber-300 bg-white px-2 py-1 text-amber-800 hover:bg-amber-50"
+                            title="Keep this item in the draft but exclude it from import">Skip</button>
+                          <button type="button"
+                            onClick={() => {
+                              if (window.confirm(`Remove "${r.name}" from this draft? This will not delete a catalog product or any images.`)) {
+                                onResolveItem(r.productGroupId, "delete");
+                              }
+                            }}
+                            className="rounded border border-red-200 bg-white px-2 py-1 text-red-700 hover:bg-red-50"
+                            title="Remove this failed item from the draft">Delete</button>
+                        </>
+                      )}
+                    </>
                   )}
                   {r.status === "skipped" && <span>skipped</span>}
                 </div>
@@ -2875,6 +2891,45 @@ const BulkProductUploadPage: React.FC = () => {
     }
   };
 
+  const handleResolveFailedDraftItem = async (
+    productGroupId: string,
+    action: "skip" | "delete",
+  ) => {
+    if (!draftId) {
+      toast.error("Open or save this draft before changing failed items.");
+      return;
+    }
+    try {
+      const response = await productApi.updateDraftItems(draftId, [productGroupId], action);
+      const draft = response.data;
+      if (!draft) throw new Error("The server did not return the updated draft.");
+      const nextProducts = normalizeProducts(extractProducts(draft.parsedData));
+      setProducts(nextProducts);
+      const serialized = JSON.stringify(draft.parsedData, null, 2);
+      setRawInput(draft.rawInput || serialized);
+      setDraftStatus(draft.status || "DRAFT");
+      setIsDirty(false);
+      if (job) {
+        setJob((current) => current ? ({
+          ...current,
+          results: action === "delete"
+            ? current.results.filter((result) => result.productGroupId !== productGroupId)
+            : current.results.map((result) => result.productGroupId === productGroupId
+              ? { ...result, status: "skipped" as const, error: "Skipped by administrator" }
+              : result),
+          failed: Math.max(0, current.failed - 1),
+          skipped: current.skipped + (action === "skip" ? 1 : 0),
+        }) : current);
+      }
+      setImageMatches((current) => current ? filterImageMatchesToProductMedia(current, nextProducts) : current);
+      toast.success(action === "skip"
+        ? "Product skipped. It will not be imported or retried."
+        : "Failed product removed from the draft. Catalog data and images were not deleted.");
+    } catch (error) {
+      toast.error(humanError(error));
+    }
+  };
+
   const handleRetryJob = async () => {
     if (job?.stage === "images_failed" && draftId) {
       // Save the latest gallery edits before retrying; deleted images must not
@@ -3518,6 +3573,7 @@ const BulkProductUploadPage: React.FC = () => {
                     isRetrying={false}
                     onCancel={() => void handleCancelJob()}
                     isCancelling={isCancellingJob}
+                  onResolveItem={handleResolveFailedDraftItem}
                   />
                 </div>
               )}
@@ -3648,6 +3704,7 @@ const BulkProductUploadPage: React.FC = () => {
                   isRetrying={false}
                   onCancel={() => void handleCancelJob()}
                   isCancelling={isCancellingJob}
+                onResolveItem={handleResolveFailedDraftItem}
                 />
               )}
             </div>
