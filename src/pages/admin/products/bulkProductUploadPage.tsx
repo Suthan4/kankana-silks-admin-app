@@ -2755,6 +2755,21 @@ const BulkProductUploadPage: React.FC = () => {
     }
   };
 
+  const handleCancelImport = async () => {
+    if (!jobId || !window.confirm("Stop this import? Images already uploaded to S3 will remain, and products not yet created will be skipped.")) return;
+    try {
+      const res = await productApi.cancelJob(jobId);
+      if (res.data) {
+        setJob({ ...(res.data as BulkImportJob), status: "cancelled" } as BulkImportJob);
+        setDraftStatus("DRAFT");
+        localStorage.removeItem("active_bulk_job_id");
+        toast.success("Stop requested. The current image operation may finish before the job stops.");
+      }
+    } catch (err) {
+      toast.error(humanError(err));
+    }
+  };
+
   const handleMatchComplete = useCallback(
     async (
       matches: ImageMatchResult,
@@ -3098,7 +3113,16 @@ const BulkProductUploadPage: React.FC = () => {
                       ? "Uploading and optimizing images in the background"
                       : "Importing products in the background"}
                 </span>
-                <span className="font-semibold tabular-nums text-indigo-700">{job.progress ?? 0}%</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold tabular-nums text-indigo-700">{job.progress ?? 0}%</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleCancelImport()}
+                    className="rounded-md border border-red-200 px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50"
+                  >
+                    Stop import
+                  </button>
+                </div>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
