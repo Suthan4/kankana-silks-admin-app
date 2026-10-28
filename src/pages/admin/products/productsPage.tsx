@@ -513,6 +513,7 @@ const ProductsPage: React.FC = () => {
   }));
   const extractParentProduct = filteredProducts.find((product) => product.id === extractParentId);
   const extractableVariants = extractParentProduct?.variants || [];
+  const selectedExtractVariant = extractableVariants.find((variant) => String(variant.id) === extractVariantId);
   const archivedOriginalExtractProduct = extractParentProduct && selectedExtractVariant
     ? filteredProducts.find((product) =>
         !product.isActive &&
@@ -522,7 +523,6 @@ const ProductsPage: React.FC = () => {
       )
     : undefined;
 
-  const selectedExtractVariant = extractableVariants.find((variant) => String(variant.id) === extractVariantId);
   const getExtractAttributeValue = (variant: NonNullable<typeof selectedExtractVariant>) => {
     const attrs = variant.attributes && typeof variant.attributes === 'object' ? variant.attributes : {};
     const dynamicValue = Object.entries(attrs).find(([key, value]) =>
