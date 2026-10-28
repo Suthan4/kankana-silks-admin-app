@@ -496,15 +496,22 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     const list = Array.from(fileList);
     const imageFiles = list.filter((file) => file.type.startsWith("image/"));
     if (imageFiles.length !== list.length)
-      toast.error(list.length - imageFiles.length + " non-image file(s) were skipped.");
+      toast.error(
+        list.length - imageFiles.length + " non-image file(s) were skipped.",
+      );
     const maxBytes = 100 * 1024 * 1024;
     const accepted = imageFiles.filter((file) => file.size <= maxBytes);
     const tooLarge = imageFiles.filter((file) => file.size > maxBytes);
     if (tooLarge.length) {
       toast.error(
-        tooLarge.length + " image(s) exceed the 100 MB direct-upload limit: " +
-        tooLarge.map((file) => file.name).slice(0, 3).join(", ") +
-        (tooLarge.length > 3 ? "…" : "") + ". Resize or export a smaller source file before uploading.",
+        tooLarge.length +
+          " image(s) exceed the 100 MB direct-upload limit: " +
+          tooLarge
+            .map((file) => file.name)
+            .slice(0, 3)
+            .join(", ") +
+          (tooLarge.length > 3 ? "…" : "") +
+          ". Resize or export a smaller source file before uploading.",
         { duration: 7000 },
       );
     }
@@ -564,7 +571,10 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
             "bulk",
             (percent) => {
               setLocalFilePercent(percent);
-              setLocalProgress({ completed: index + percent / 100, total: localFiles.length });
+              setLocalProgress({
+                completed: index + percent / 100,
+                total: localFiles.length,
+              });
             },
           );
           if (!result?.url || !/^https:\/\//i.test(result.url))
@@ -587,7 +597,11 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
           });
           uploadedIds.push(item.id);
         } catch (error: any) {
-          const message = error?.response?.data?.error || error?.response?.data?.message || error?.message || "Unknown upload error";
+          const message =
+            error?.response?.data?.error ||
+            error?.response?.data?.message ||
+            error?.message ||
+            "Unknown upload error";
           failedNames.push(item.file.name + ": " + message);
         } finally {
           setLocalFilePercent(100);
@@ -1343,7 +1357,8 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>Uploading to storage…</span>
                     <span>
-                      {Math.floor(localProgress.completed)}/{localProgress.total} · {localFilePercent}%
+                      {Math.floor(localProgress.completed)}/
+                      {localProgress.total} · {localFilePercent}%
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
@@ -1643,13 +1658,21 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
   const pct = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
   const isRunning = job.status === "pending" || job.status === "processing";
   const stageLabel =
-    job.stage === "preparing_images" ? "Preparing image batch…" :
-    job.stage === "uploading_images" ? "Downloading from Drive and uploading to S3…" :
-    job.stage === "images_failed" ? "Image uploads need attention" :
-    job.stage === "importing_products" ? "Importing products…" :
-    job.stage === "completed" ? "Completed" :
-    job.stage === "failed" ? "Failed" :
-    isRunning ? "Queued…" : job.status;
+    job.stage === "preparing_images"
+      ? "Preparing image batch…"
+      : job.stage === "uploading_images"
+        ? "Downloading from Drive and uploading to S3…"
+        : job.stage === "images_failed"
+          ? "Image uploads need attention"
+          : job.stage === "importing_products"
+            ? "Importing products…"
+            : job.stage === "completed"
+              ? "Completed"
+              : job.stage === "failed"
+                ? "Failed"
+                : isRunning
+                  ? "Queued…"
+                  : job.status;
 
   const progressNote =
     job.status === "completed"
@@ -1660,7 +1683,8 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
           ? "Some products need attention. Your draft is kept, and the failed items below can be corrected and retried."
           : job.stage === "importing_products"
             ? "Image preparation passed. Products are being created now; any failed product will be listed below."
-            : job.stage === "uploading_images" || job.stage === "preparing_images"
+            : job.stage === "uploading_images" ||
+                job.stage === "preparing_images"
               ? "The server is downloading selected Drive images and saving them to permanent storage. Product creation starts only after all required images succeed."
               : "Your import is queued on the server. Progress refreshes automatically, so do not click Import again.";
 
@@ -1736,7 +1760,9 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
         {(job.imagesTotal ?? 0) > 0 && (
           <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="font-semibold text-indigo-900">Drive images → S3</span>
+              <span className="font-semibold text-indigo-900">
+                Drive images → S3
+              </span>
               <span className="font-semibold text-indigo-800">
                 {job.imagesProcessed ?? 0}/{job.imagesTotal} processed
               </span>
@@ -1751,21 +1777,28 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
               <div className="rounded bg-white p-2">
-                <span className="block font-bold text-slate-900">{job.imagesTotal}</span>
+                <span className="block font-bold text-slate-900">
+                  {job.imagesTotal}
+                </span>
                 <span className="text-slate-500">Total</span>
               </div>
               <div className="rounded bg-white p-2">
-                <span className="block font-bold text-emerald-700">{job.imagesUploaded ?? 0}</span>
+                <span className="block font-bold text-emerald-700">
+                  {job.imagesUploaded ?? 0}
+                </span>
                 <span className="text-slate-500">Uploaded</span>
               </div>
               <div className="rounded bg-white p-2">
-                <span className="block font-bold text-red-700">{job.imagesFailed ?? 0}</span>
+                <span className="block font-bold text-red-700">
+                  {job.imagesFailed ?? 0}
+                </span>
                 <span className="text-slate-500">Failed</span>
               </div>
             </div>
             {isRunning && job.currentFile && (
               <p className="break-words text-[11px] text-indigo-800">
-                Processing: <span className="font-semibold">{job.currentFile}</span>
+                Processing:{" "}
+                <span className="font-semibold">{job.currentFile}</span>
               </p>
             )}
           </div>
@@ -1800,18 +1833,29 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
           </div>
         )}
 
-        {(job.imageResults || []).some((result) => result.status === "failed") && (
+        {(job.imageResults || []).some(
+          (result) => result.status === "failed",
+        ) && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3">
             <div className="mb-2 text-xs font-semibold text-red-800">
               Failed image uploads — exact server errors
             </div>
             <div className="max-h-56 space-y-2 overflow-y-auto">
-              {job.imageResults!.filter((result) => result.status === "failed").map((result) => (
-                <div key={result.fileId} className="rounded border border-red-100 bg-white p-2 text-xs">
-                  <div className="font-semibold text-red-800">{result.name}</div>
-                  <div className="mt-1 break-words text-red-700">{result.error || "Unknown image upload error"}</div>
-                </div>
-              ))}
+              {job
+                .imageResults!.filter((result) => result.status === "failed")
+                .map((result) => (
+                  <div
+                    key={result.fileId}
+                    className="rounded border border-red-100 bg-white p-2 text-xs"
+                  >
+                    <div className="font-semibold text-red-800">
+                      {result.name}
+                    </div>
+                    <div className="mt-1 break-words text-red-700">
+                      {result.error || "Unknown image upload error"}
+                    </div>
+                  </div>
+                ))}
             </div>
           </div>
         )}
@@ -1854,15 +1898,27 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
         )}
 
         {isRunning && (
-          <button type="button" onClick={onCancel} disabled={isCancelling}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50">
-            {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-            {isCancelling ? "Requesting safe cancellation…" : "Cancel import safely"}
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isCancelling}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {isCancelling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <XCircle className="h-4 w-4" />
+            )}
+            {isCancelling
+              ? "Requesting safe cancellation…"
+              : "Cancel import safely"}
           </button>
         )}
         {job.status === "cancelled" && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Import cancelled. Successfully imported products and uploaded images were kept. Review the draft and retry the remaining items when ready.
+            Import cancelled. Successfully imported products and uploaded images
+            were kept. Review the draft and retry the remaining items when
+            ready.
           </div>
         )}
 
@@ -1878,7 +1934,9 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
             ) : (
               <RefreshCw className="w-4 h-4" />
             )}
-            {job.stage === "images_failed" ? "Retry Failed Images" : "Retry Failed Items"}
+            {job.stage === "images_failed"
+              ? "Retry Failed Images"
+              : "Retry Failed Items"}
           </button>
         )}
 
@@ -1946,7 +2004,11 @@ const BulkProductUploadPage: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: warehouseData, isLoading: warehousesLoading, error: warehousesError } = useQuery({
+  const {
+    data: warehouseData,
+    isLoading: warehousesLoading,
+    error: warehousesError,
+  } = useQuery({
     queryKey: ["bulk-warehouses"],
     queryFn: async () => {
       const res = await productApi.getWarehouses();
@@ -1969,7 +2031,13 @@ const BulkProductUploadPage: React.FC = () => {
 
   const categoriesTree: BulkCategoryNode[] = categoryData?.tree ?? [];
   const flatCategories: BulkCategoryLookup[] = categoryData?.flatList ?? [];
-  const warehouses: BulkWarehouse[] = (warehouseData?.warehouses ?? []).map((warehouse: any) => ({\n    ...warehouse,\n    id: String(warehouse.id),\n    isActive: warehouse.isActive !== false,\n  }));
+  const warehouses: BulkWarehouse[] = (warehouseData?.warehouses ?? []).map(
+    (warehouse: any) => ({
+      ...warehouse,
+      id: String(warehouse.id),
+      isActive: warehouse.isActive !== false,
+    }),
+  );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1983,7 +2051,8 @@ const BulkProductUploadPage: React.FC = () => {
 
   // ─ Computed ─────────────────────────────────────────────────────────────
 
-  const isJobRunning = job?.status === "pending" || job?.status === "processing";
+  const isJobRunning =
+    job?.status === "pending" || job?.status === "processing";
   const isWorkspaceLocked =
     isJobRunning || job?.status === "completed" || draftStatus === "COMPLETED";
 
@@ -2000,21 +2069,22 @@ const BulkProductUploadPage: React.FC = () => {
     job?.status !== "processing" &&
     job?.status !== "pending";
 
-  const importDisabledReason = draftStatus === "COMPLETED"
-    ? "This draft has already been imported. Start a new import to create another batch."
-    : isDriveMatching
-      ? "Wait for Google Drive reference matching to finish."
-      : job?.stage === "images_failed"
-        ? "Use Retry Failed Images in Import Progress; successful image uploads are already saved."
-        : !draftId
-      ? "Create or open a draft first."
-      : products.length === 0
-        ? "Parse products first."
-        : hasBlockers
-          ? `Fix ${summary!.errorCount} error(s) before importing.`
-          : job?.status === "processing" || job?.status === "pending"
-            ? "Import is already running."
-            : null;
+  const importDisabledReason =
+    draftStatus === "COMPLETED"
+      ? "This draft has already been imported. Start a new import to create another batch."
+      : isDriveMatching
+        ? "Wait for Google Drive reference matching to finish."
+        : job?.stage === "images_failed"
+          ? "Use Retry Failed Images in Import Progress; successful image uploads are already saved."
+          : !draftId
+            ? "Create or open a draft first."
+            : products.length === 0
+              ? "Parse products first."
+              : hasBlockers
+                ? `Fix ${summary!.errorCount} error(s) before importing.`
+                : job?.status === "processing" || job?.status === "pending"
+                  ? "Import is already running."
+                  : null;
 
   // Restore the background job after navigating away and returning to this page.
   useEffect(() => {
@@ -2026,7 +2096,12 @@ const BulkProductUploadPage: React.FC = () => {
   // ─ Poll job status ───────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!jobId || job?.status === "completed" || job?.status === "failed" || job?.status === "cancelled")
+    if (
+      !jobId ||
+      job?.status === "completed" ||
+      job?.status === "failed" ||
+      job?.status === "cancelled"
+    )
       return;
 
     let disposed = false;
@@ -2068,7 +2143,8 @@ const BulkProductUploadPage: React.FC = () => {
           // replaced all matched Drive references with permanent storage URLs.
           if (completedDraftId) {
             try {
-              const completedDraftRes = await productApi.getDraft(completedDraftId);
+              const completedDraftRes =
+                await productApi.getDraft(completedDraftId);
               if (completedDraftRes.data) {
                 const completedProducts = normalizeProducts(
                   extractProducts(completedDraftRes.data.parsedData),
@@ -2077,13 +2153,22 @@ const BulkProductUploadPage: React.FC = () => {
                 );
                 setProducts(completedProducts);
                 setRawInput(
-                  JSON.stringify(sanitizeProductsForStorage(completedProducts), null, 2),
+                  JSON.stringify(
+                    sanitizeProductsForStorage(completedProducts),
+                    null,
+                    2,
+                  ),
                 );
-                setValidationErrors(completedProducts.flatMap((product) => product.errors || []));
+                setValidationErrors(
+                  completedProducts.flatMap((product) => product.errors || []),
+                );
               }
             } catch (draftRefreshError) {
               // Keep the completed job results visible even if the product snapshot cannot reload.
-              console.warn("Could not refresh completed bulk draft:", draftRefreshError);
+              console.warn(
+                "Could not refresh completed bulk draft:",
+                draftRefreshError,
+              );
               setRawInput(sanitizeBulkRawInput(rawInput));
             }
           }
@@ -2116,11 +2201,16 @@ const BulkProductUploadPage: React.FC = () => {
           setDraftStatus("DRAFT");
           setJobId(null);
           localStorage.removeItem("active_bulk_job_id");
-          toast.success("Import cancelled safely. Completed work has been preserved.");
+          toast.success(
+            "Import cancelled safely. Completed work has been preserved.",
+          );
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         } else if (normalized.status === "failed") {
           setDraftStatus("DRAFT");
-          toast.error(normalized.error || "Import failed. Review the image/product errors below, fix the listed issues, and retry.");
+          toast.error(
+            normalized.error ||
+              "Import failed. Review the image/product errors below, fix the listed issues, and retry.",
+          );
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         }
       } catch {
@@ -2128,7 +2218,9 @@ const BulkProductUploadPage: React.FC = () => {
       } finally {
         requestInFlight = false;
         if (!disposed) {
-          timer = setTimeout(() => { void refreshJob(); }, POLLING_INTERVAL);
+          timer = setTimeout(() => {
+            void refreshJob();
+          }, POLLING_INTERVAL);
         }
       }
     };
@@ -2195,15 +2287,14 @@ const BulkProductUploadPage: React.FC = () => {
       // Re-attach Drive proxy URLs and stable source IDs when reopening a draft.
       // The saved image list (including admin reorder/delete edits) stays the
       // source of truth; only matches still present in that list are decorated.
-      const productsWithDriveMedia =
-        savedImageMatches?.matched?.length
-          ? applyDriveMatchesToProducts(
-              normalized,
-              savedImageMatches,
-              productApi.getDriveProxyUrl,
-              productApi.getDriveThumbnailUrl,
-            )
-          : normalized;
+      const productsWithDriveMedia = savedImageMatches?.matched?.length
+        ? applyDriveMatchesToProducts(
+            normalized,
+            savedImageMatches,
+            productApi.getDriveProxyUrl,
+            productApi.getDriveThumbnailUrl,
+          )
+        : normalized;
       setProducts(productsWithDriveMedia);
       setRawInput(
         sanitizeBulkRawInput(
@@ -2215,7 +2306,9 @@ const BulkProductUploadPage: React.FC = () => {
       );
       setImageMatches(savedImageMatches);
       setConfirmedAssignments(draft.confirmedAssignments ?? {});
-      setValidationErrors(productsWithDriveMedia.flatMap((p) => p.errors || []));
+      setValidationErrors(
+        productsWithDriveMedia.flatMap((p) => p.errors || []),
+      );
       setJob(null);
       setJobId(null);
       setIsDirty(false);
@@ -2434,7 +2527,8 @@ const BulkProductUploadPage: React.FC = () => {
     const safeProducts = sanitizeProductsForStorage(products);
     const serializedProducts =
       products.length > 0 ? JSON.stringify(safeProducts, null, 2) : "";
-    const effectiveInput = serializedProducts || sanitizeBulkRawInput(rawInput).trim();
+    const effectiveInput =
+      serializedProducts || sanitizeBulkRawInput(rawInput).trim();
     if (!effectiveInput && products.length === 0) {
       toast.error("Nothing to save — enter product data first.");
       return;
@@ -2472,7 +2566,10 @@ const BulkProductUploadPage: React.FC = () => {
             await productApi.updateDraft(res.data.id, {
               parsedData: safeProducts,
               confirmedAssignments,
-              imageMatches: filterImageMatchesToProductMedia(imageMatches, safeProducts),
+              imageMatches: filterImageMatchesToProductMedia(
+                imageMatches,
+                safeProducts,
+              ),
             });
           }
           localStorage.setItem("active_bulk_draft_id", res.data.id);
@@ -2678,7 +2775,8 @@ const BulkProductUploadPage: React.FC = () => {
             productApi.getDriveThumbnailUrl,
           )
         : products;
-      const safeProductsForImport = sanitizeProductsForStorage(productsForImport);
+      const safeProductsForImport =
+        sanitizeProductsForStorage(productsForImport);
       const importImageMatches = filterImageMatchesToProductMedia(
         retainedMatches,
         safeProductsForImport,
@@ -2705,7 +2803,9 @@ const BulkProductUploadPage: React.FC = () => {
       const returned = res.data as BulkImportJob & { id?: string };
       const resolvedJobId = returned.jobId || returned.id;
       if (!resolvedJobId) {
-        throw new Error("The import job was created but the API did not return its job ID. Refresh and check the Job Status endpoint.");
+        throw new Error(
+          "The import job was created but the API did not return its job ID. Refresh and check the Job Status endpoint.",
+        );
       }
 
       const normalizedJob: BulkImportJob = {
@@ -2714,7 +2814,8 @@ const BulkProductUploadPage: React.FC = () => {
         jobId: resolvedJobId,
         draftId: returned.draftId || draftId,
         stage: returned.stage || "preparing_images",
-        imagesTotal: returned.imagesTotal ?? (importImageMatches?.matched?.length || 0),
+        imagesTotal:
+          returned.imagesTotal ?? (importImageMatches?.matched?.length || 0),
         imagesProcessed: returned.imagesProcessed ?? 0,
         imagesUploaded: returned.imagesUploaded ?? 0,
         imagesFailed: returned.imagesFailed ?? 0,
@@ -2725,7 +2826,10 @@ const BulkProductUploadPage: React.FC = () => {
       setJobId(resolvedJobId);
       localStorage.setItem("active_bulk_job_id", resolvedJobId);
       setDraftStatus("IMPORTING");
-      toast.success("Background job queued. Images will upload to S3 in batches; you can keep using the admin app.", { id: tid });
+      toast.success(
+        "Background job queued. Images will upload to S3 in batches; you can keep using the admin app.",
+        { id: tid },
+      );
     } catch (err) {
       toast.error(humanError(err), { id: tid });
     } finally {
@@ -2735,15 +2839,22 @@ const BulkProductUploadPage: React.FC = () => {
 
   const handleCancelJob = async () => {
     if (!jobId || isCancellingJob) return;
-    const confirmed = window.confirm("Cancel this import? The current image upload or product operation will finish safely first. Products already created will not be rolled back.");
+    const confirmed = window.confirm(
+      "Cancel this import? The current image upload or product operation will finish safely first. Products already created will not be rolled back.",
+    );
     if (!confirmed) return;
     setIsCancellingJob(true);
     try {
       const response = await productApi.cancelJob(jobId);
       if (response.data) setJob(response.data);
-      toast.success("Cancellation requested. The current operation will finish before the job stops.");
+      toast.success(
+        "Cancellation requested. The current operation will finish before the job stops.",
+      );
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Could not cancel this import. Refresh the job status and try again.");
+      toast.error(
+        error?.response?.data?.message ||
+          "Could not cancel this import. Refresh the job status and try again.",
+      );
     } finally {
       setIsCancellingJob(false);
     }
@@ -2756,7 +2867,10 @@ const BulkProductUploadPage: React.FC = () => {
       setIsImporting(true);
       try {
         const safeProducts = sanitizeProductsForStorage(products);
-        const retainedMatches = filterImageMatchesToProductMedia(imageMatches, safeProducts);
+        const retainedMatches = filterImageMatchesToProductMedia(
+          imageMatches,
+          safeProducts,
+        );
         const serialized = JSON.stringify(safeProducts, null, 2);
         await productApi.updateDraft(draftId, {
           rawInput: serialized,
@@ -2769,7 +2883,9 @@ const BulkProductUploadPage: React.FC = () => {
         setIsDirty(false);
 
         const res = await productApi.startDraftImport(draftId);
-        const returned = res.data as (BulkImportJob & { id?: string }) | undefined;
+        const returned = res.data as
+          | (BulkImportJob & { id?: string })
+          | undefined;
         const nextJobId = returned?.jobId || returned?.id;
         if (!returned || !nextJobId) {
           throw new Error("The backend did not return a retry job ID.");
@@ -2873,7 +2989,9 @@ const BulkProductUploadPage: React.FC = () => {
         return { ...product, media: nextMedia, allImages: nextAllImages };
       });
       setProducts(updatedProducts);
-      setRawInput(JSON.stringify(sanitizeProductsForStorage(updatedProducts), null, 2));
+      setRawInput(
+        JSON.stringify(sanitizeProductsForStorage(updatedProducts), null, 2),
+      );
       setImageMatches((current) =>
         filterImageMatchesToProductMedia(current, updatedProducts),
       );
@@ -2890,44 +3008,58 @@ const BulkProductUploadPage: React.FC = () => {
     [products],
   );
 
-  const handleUpdateProduct = useCallback((updated: BulkParsedProduct) => {
-    const nextProducts = products.map((p) =>
-      p.productGroupId === updated.productGroupId ? updated : p,
-    );
-    setProducts(nextProducts);
-    setRawInput(JSON.stringify(sanitizeProductsForStorage(nextProducts), null, 2));
-
-    // Remove stale match entries as soon as an admin deletes media. The saved
-    // draft and subsequent background job must use this filtered set.
-    setImageMatches((current) =>
-      filterImageMatchesToProductMedia(current, nextProducts),
-    );
-    setValidationErrors((prev) => {
-      const remaining = prev.filter(
-        (e) => e.productGroupId !== updated.productGroupId,
+  const handleUpdateProduct = useCallback(
+    (updated: BulkParsedProduct) => {
+      const nextProducts = products.map((p) =>
+        p.productGroupId === updated.productGroupId ? updated : p,
       );
-      return [...remaining, ...(updated.errors || [])];
-    });
-    setIsDirty(true);
-  }, [products]);
+      setProducts(nextProducts);
+      setRawInput(
+        JSON.stringify(sanitizeProductsForStorage(nextProducts), null, 2),
+      );
 
-  const handleDeleteProduct = useCallback((productGroupId: string) => {
-    const nextProducts = products.filter((p) => p.productGroupId !== productGroupId);
-    setProducts(nextProducts);
-    setRawInput(JSON.stringify(sanitizeProductsForStorage(nextProducts), null, 2));
-    setImageMatches((current) =>
-      filterImageMatchesToProductMedia(current, nextProducts),
-    );
-    setValidationErrors((prev) =>
-      prev.filter((e) => e.productGroupId !== productGroupId),
-    );
-    setIsDirty(true);
-  }, [products]);
+      // Remove stale match entries as soon as an admin deletes media. The saved
+      // draft and subsequent background job must use this filtered set.
+      setImageMatches((current) =>
+        filterImageMatchesToProductMedia(current, nextProducts),
+      );
+      setValidationErrors((prev) => {
+        const remaining = prev.filter(
+          (e) => e.productGroupId !== updated.productGroupId,
+        );
+        return [...remaining, ...(updated.errors || [])];
+      });
+      setIsDirty(true);
+    },
+    [products],
+  );
+
+  const handleDeleteProduct = useCallback(
+    (productGroupId: string) => {
+      const nextProducts = products.filter(
+        (p) => p.productGroupId !== productGroupId,
+      );
+      setProducts(nextProducts);
+      setRawInput(
+        JSON.stringify(sanitizeProductsForStorage(nextProducts), null, 2),
+      );
+      setImageMatches((current) =>
+        filterImageMatchesToProductMedia(current, nextProducts),
+      );
+      setValidationErrors((prev) =>
+        prev.filter((e) => e.productGroupId !== productGroupId),
+      );
+      setIsDirty(true);
+    },
+    [products],
+  );
 
   const handleBulkUpdateProducts = useCallback(
     (updatedProducts: BulkParsedProduct[]) => {
       setProducts(updatedProducts);
-      setRawInput(JSON.stringify(sanitizeProductsForStorage(updatedProducts), null, 2));
+      setRawInput(
+        JSON.stringify(sanitizeProductsForStorage(updatedProducts), null, 2),
+      );
       setImageMatches((current) =>
         filterImageMatchesToProductMedia(current, updatedProducts),
       );
@@ -2991,7 +3123,9 @@ const BulkProductUploadPage: React.FC = () => {
       },
       { replace: true },
     );
-    toast.success("Ready for a new bulk import. Upload or paste your next product batch.");
+    toast.success(
+      "Ready for a new bulk import. Upload or paste your next product batch.",
+    );
   };
 
   // ─ Render ────────────────────────────────────────────────────────────────
@@ -3070,25 +3204,27 @@ const BulkProductUploadPage: React.FC = () => {
                   </button>
                 )}
 
-                {draftStatus !== "COMPLETED" && !isJobRunning && !(job?.status === "completed" && !draftId) && (
-                <button
-                  onClick={handleSaveDraft}
-                  disabled={
-                    isJobRunning ||
-                    isSaving ||
-                    isDriveMatching ||
-                    (!rawInput.trim() && products.length === 0)
-                  }
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                >
-                  {isSaving ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4" />
+                {draftStatus !== "COMPLETED" &&
+                  !isJobRunning &&
+                  !(job?.status === "completed" && !draftId) && (
+                    <button
+                      onClick={handleSaveDraft}
+                      disabled={
+                        isJobRunning ||
+                        isSaving ||
+                        isDriveMatching ||
+                        (!rawInput.trim() && products.length === 0)
+                      }
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                    >
+                      {isSaving ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      Save Draft
+                    </button>
                   )}
-                  Save Draft
-                </button>
-                )}
 
                 {draftId && draftStatus !== "COMPLETED" && !isJobRunning && (
                   <button
@@ -3101,7 +3237,8 @@ const BulkProductUploadPage: React.FC = () => {
                 )}
 
                 {/* Primary action: a completed job starts a fresh workspace, never re-imports stale products. */}
-                {draftStatus === "COMPLETED" || (job?.status === "completed" && !draftId) ? (
+                {draftStatus === "COMPLETED" ||
+                (job?.status === "completed" && !draftId) ? (
                   <button
                     type="button"
                     onClick={handleStartNewImport}
@@ -3157,29 +3294,44 @@ const BulkProductUploadPage: React.FC = () => {
                       ? "Uploading and optimizing images in the background"
                       : "Importing products in the background"}
                 </span>
-                <span className="font-semibold tabular-nums text-indigo-700">{job.progress ?? 0}%</span>
+                <span className="font-semibold tabular-nums text-indigo-700">
+                  {job.progress ?? 0}%
+                </span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
                   className="h-full rounded-full bg-indigo-600 transition-all duration-500"
-                  style={{ width: `${Math.max(0, Math.min(100, job.progress ?? 0))}%` }}
+                  style={{
+                    width: `${Math.max(0, Math.min(100, job.progress ?? 0))}%`,
+                  }}
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
-                {(job.stage === "preparing_images" || job.stage === "uploading_images") && (
+                {(job.stage === "preparing_images" ||
+                  job.stage === "uploading_images") && (
                   <span>
-                    Images: {job.imagesProcessed ?? 0}/{job.imagesTotal ?? imageMatches?.matched?.length ?? 0}
-                    {" · "}{job.imagesUploaded ?? 0} uploaded
-                    {" · "}{job.imagesFailed ?? 0} failed
+                    Images: {job.imagesProcessed ?? 0}/
+                    {job.imagesTotal ?? imageMatches?.matched?.length ?? 0}
+                    {" · "}
+                    {job.imagesUploaded ?? 0} uploaded
+                    {" · "}
+                    {job.imagesFailed ?? 0} failed
                   </span>
                 )}
                 {job.stage === "importing_products" && (
-                  <span>Products: {job.processed}/{job.total} processed</span>
+                  <span>
+                    Products: {job.processed}/{job.total} processed
+                  </span>
                 )}
-                {job.currentFile && <span className="max-w-full truncate">Current: {job.currentFile}</span>}
+                {job.currentFile && (
+                  <span className="max-w-full truncate">
+                    Current: {job.currentFile}
+                  </span>
+                )}
               </div>
               <p className="text-[11px] font-medium text-indigo-800">
-                This import is running in the background. Editing, saving, draft switching, and draft deletion are paused until the job finishes.
+                This import is running in the background. Editing, saving, draft
+                switching, and draft deletion are paused until the job finishes.
               </p>
               <p className="text-[11px] text-slate-500">
                 {job.stage === "preparing_images"
@@ -3197,7 +3349,9 @@ const BulkProductUploadPage: React.FC = () => {
           aria-busy={isJobRunning}
           className={classNames(
             "max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 transition-opacity",
-            isWorkspaceLocked ? "pointer-events-none select-none opacity-75" : "",
+            isWorkspaceLocked
+              ? "pointer-events-none select-none opacity-75"
+              : "",
           )}
         >
           <div className="flex flex-col xl:flex-row gap-6">
@@ -3352,7 +3506,10 @@ const BulkProductUploadPage: React.FC = () => {
                       rawInput: JSON.stringify(safeProducts, null, 2),
                       parsedData: safeProducts,
                       confirmedAssignments,
-                      imageMatches: filterImageMatchesToProductMedia(imageMatches, safeProducts),
+                      imageMatches: filterImageMatchesToProductMedia(
+                        imageMatches,
+                        safeProducts,
+                      ),
                     });
                   }
                 }}
@@ -3421,7 +3578,11 @@ const BulkProductUploadPage: React.FC = () => {
                         type="button"
                         onClick={() => {
                           navigator.clipboard.writeText(
-                            JSON.stringify(sanitizeProductsForStorage(products), null, 2),
+                            JSON.stringify(
+                              sanitizeProductsForStorage(products),
+                              null,
+                              2,
+                            ),
                           );
                           toast.success("JSON copied to clipboard!");
                         }}
@@ -3432,7 +3593,11 @@ const BulkProductUploadPage: React.FC = () => {
                       </button>
                     </div>
                     <pre className="text-[10px] font-mono leading-relaxed max-h-72 overflow-auto text-emerald-400">
-                      {JSON.stringify(sanitizeProductsForStorage(products), null, 2)}
+                      {JSON.stringify(
+                        sanitizeProductsForStorage(products),
+                        null,
+                        2,
+                      )}
                     </pre>
                   </div>
                 )}
