@@ -2696,13 +2696,53 @@ const BulkProductUploadPage: React.FC = () => {
 
       if (isDirectJson) {
         const rawList = Array.isArray(parsedJson) ? parsedJson : [parsedJson];
-        const normalized = normalizeProducts(
+        const locallyNormalized = normalizeProducts(
           rawList,
           flatCategories,
           warehouses,
         );
-        setProducts(normalized);
-        const errs = normalized.flatMap((p) => p.errors || []);
+
+        if (locallyNormalized.length === 0) {
+          throw new Error("No products were found. Provide a JSON array of products or an object containing products.");
+        }
+
+        // Parsing is read-only: validate against the live catalog before saving
+        // the draft or allowing the image-upload/import workflow to begin.
+        toast.loading("Checking products against the database…", { id: tid });
+        const validationResponse = await productApi.validateBulkProducts(locallyNormalized);
+        const validation = validationResponse.data;
+        if (!validation || !Array.isArray(validation.products)) {
+          throw new Error("The server did not return product validation results. Please try parsing again.");
+        }
+
+        const normalized = normalizeProducts(
+          validation.products,
+          flatCategoriesRef.current,
+          warehousesRef.current,
+        );
+        // Attach response-level cross-row issues to products so the existing
+        // validation summary and import gate cannot overlook them.
+        const responseErrors = Array.isArray(validation.errors) ? validation.errors : [];
+        const productsWithErrors = normalized.map((product) => {
+          const related = responseErrors.filter((error: BulkValidationError) =>
+            error.productGroupId
+              ? String(error.productGroupId).trim().toLowerCase() === String(product.productGroupId).trim().toLowerCase()
+              : error.row !== undefined && product.rowNumber !== undefined && error.row === product.rowNumber
+          );
+          const mergedErrors = [...(product.errors || [])];
+          for (const error of related) {
+            if (!mergedErrors.some((existing) => existing.field === error.field && existing.message === error.message && existing.severity === error.severity)) {
+              mergedErrors.push(error);
+            }
+          }
+          return {
+            ...product,
+            errors: mergedErrors.length ? mergedErrors : undefined,
+            isValid: !mergedErrors.some((error) => error.severity === "error"),
+          };
+        });
+        setProducts(productsWithErrors);
+        const errs = productsWithErrors.flatMap((p) => p.errors || []);
         setValidationErrors(errs);
 
         let currentDraftId = draftId;
@@ -2722,11 +2762,16 @@ const BulkProductUploadPage: React.FC = () => {
         if (currentDraftId) {
           await productApi.updateDraft(currentDraftId, {
             rawInput,
-            parsedData: normalized,
+            parsedData: productsWithErrors,
           });
         }
         setIsDirty(false);
-        toast.success(`Parsed ${normalized.length} product(s).`, { id: tid });
+        const blockingErrors = productsWithErrors.flatMap((product) => product.errors || []).filter((error) => error.severity === "error");
+        if (blockingErrors.length > 0) {
+          toast.error("Validation found " + blockingErrors.length + " issue(s). Fix them before importing.", { id: tid });
+        } else {
+          toast.success("Parsed and validated " + normalized.length + " product(s) against the database.", { id: tid });
+        }
       } else {
         let draft: BulkImportDraft | undefined;
         if (draftId) {
