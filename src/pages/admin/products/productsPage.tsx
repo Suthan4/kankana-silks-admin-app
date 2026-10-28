@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layouts/mainLayout';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -391,6 +391,7 @@ const ProductsPage: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
   const [filterHasVariants, setFilterHasVariants] = useState<boolean | undefined>(undefined);
@@ -405,6 +406,14 @@ const ProductsPage: React.FC = () => {
   const [consolidationValues, setConsolidationValues] = useState<Record<string, string>>({});
   const [consolidationError, setConsolidationError] = useState('');
   const [consolidationAcknowledged, setConsolidationAcknowledged] = useState(false);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
 
   const canCreate = hasPermission('products', 'canCreate');
   const canUpdate = hasPermission('products', 'canUpdate');
@@ -696,7 +705,7 @@ const ProductsPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(220px,1fr)_repeat(2,minmax(145px,.65fr))_auto]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} placeholder="Search name, SKU, description..." aria-label="Search products by name or SKU" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-10 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />{searchQuery && <button type="button" onClick={() => { setSearchQuery(''); setPage(1); }} aria-label="Clear product search" className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"><X className="h-4 w-4" /></button>}
+              <input type="text" value={searchInput} onChange={(e) => { setSearchInput(e.target.value); setPage(1); }} placeholder="Search name, SKU, description..." aria-label="Search products by name or SKU" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-10 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />{searchQuery && <button type="button" onClick={() => { setSearchInput(''); setSearchQuery(''); setPage(1); }} aria-label="Clear product search" className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"><X className="h-4 w-4" /></button>}
             </div>
 
             <div className="relative">
@@ -740,7 +749,7 @@ const ProductsPage: React.FC = () => {
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
             <span>{pagination ? `Showing ${filteredProducts.length ? (page - 1) * pageSize + 1 : 0}–${Math.min((page - 1) * pageSize + filteredProducts.length, pagination.total)} of ${pagination.total} products` : 'Filtering products'}{isFetching ? ' · Updating…' : ''}</span>
-            {(searchQuery || filterCategory || filterActive !== undefined || filterHasVariants !== undefined) && <button type="button" onClick={() => { setSearchQuery(''); setFilterCategory(''); setFilterActive(undefined); setFilterHasVariants(undefined); setCategorySearch(''); setPage(1); }} className="font-semibold text-blue-700 hover:text-blue-900">Clear all filters</button>}
+            {(searchQuery || filterCategory || filterActive !== undefined || filterHasVariants !== undefined) && <button type="button" onClick={() => { setSearchInput(''); setSearchQuery(''); setFilterCategory(''); setFilterActive(undefined); setFilterHasVariants(undefined); setCategorySearch(''); setPage(1); }} className="font-semibold text-blue-700 hover:text-blue-900">Clear all filters</button>}
           </div>
         </div>
 
@@ -854,7 +863,24 @@ const ProductsPage: React.FC = () => {
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><strong>Before you continue:</strong> products must represent the same underlying item and use the same category. The chosen parent remains active; the other products are archived, while their SKUs, images, inventory, and order history are preserved.</div>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-800">Variant attribute</label>
-                  <select value={consolidationAttributeName} onChange={(e) => { setConsolidationAttributeName(e.target.value as 'color' | 'size' | 'fabric' | 'style'); setConsolidationError(''); }} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
+                  <select value={consolidationAttributeName} onChange={(e) => {
+                    const attribute = e.target.value as 'color' | 'size' | 'fabric' | 'style';
+                    setConsolidationAttributeName(attribute);
+                    setConsolidationError('');
+                    setConsolidationValues((current) => {
+                      const next = { ...current };
+                      selectedConsolidationProducts.forEach((product) => {
+                        const variant = product.variants?.[0];
+                        const known = attribute === 'color' ? variant?.color
+                          : attribute === 'size' ? variant?.size
+                          : attribute === 'fabric' ? variant?.fabric
+                          : variant?.attributes?.style;
+                        if (typeof known === 'string' && known.trim()) next[product.id] = known.trim();
+                        else if (attribute !== consolidationAttributeName) next[product.id] = '';
+                      });
+                      return next;
+                    });
+                  } className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
                     <option value="color">Color</option><option value="size">Size</option><option value="fabric">Fabric</option><option value="style">Style</option>
                   </select>
                   <p className="mt-1 text-xs text-slate-500">Each selected product becomes one variant using this attribute and the value you provide below.</p>
