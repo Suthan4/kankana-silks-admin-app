@@ -3,7 +3,9 @@ import { Controller, useFormContext, useWatch } from "react-hook-form";
 import {
   AlertCircle,
   Box,
-  CheckCircle2,\n  Check,\n  ChevronDown,
+  CheckCircle2,
+  Check,
+  ChevronDown,
   DollarSign,
   Globe,
   HelpCircle,
@@ -11,7 +13,8 @@ import {
   Percent,
   Ruler,
   Search,
-  Tag,\n  X,
+  Tag,
+  X,
   Video,
   Warehouse as WarehouseIcon,
 } from "lucide-react";
@@ -238,7 +241,7 @@ const CategoryAutocomplete: React.FC<CategoryAutocompleteProps> = ({
               const depth = categoryDepth(category, categories);
               const selected = String(category.id) === String(value);
               const active = index === activeIndex;
-              const parts = path.split(/\\s(?:>|›|\\/)\\s/);
+              const parts = path.split(/\s(?:>|›|\/)\s/);
               const leafName = parts[parts.length - 1] || category.name;
               const parentPath = parts.length > 1 ? parts.slice(0, -1).join(" › ") : "";
               return (
