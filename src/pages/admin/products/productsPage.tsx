@@ -19,7 +19,6 @@ import {
   AlertCircle,
   CheckCircle,
   Sparkles,
-  TrendingUp,
   ShoppingCart,
   Warehouse as WarehouseIcon,
   MapPin,
@@ -37,46 +36,6 @@ import type { Category } from '@/lib/types/category/category';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router';
 import { BackButton } from '@/components/ui/BackButton';
-
-// ---------------------------------------------------------------------------
-// StatsCard
-// ---------------------------------------------------------------------------
-const StatsCard: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  color: string;
-  subtitle?: string;
-  trend?: string;
-}> = React.memo(({ icon, label, value, color, subtitle, trend }) => {
-  const colorMap: Record<string, string> = {
-    blue: 'bg-blue-100 text-blue-600',
-    green: 'bg-green-100 text-green-600',
-    orange: 'bg-orange-100 text-orange-600',
-    purple: 'bg-purple-100 text-purple-600',
-  };
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 px-3 py-2 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600">{label}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
-          {trend && (
-            <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" />
-              {trend}
-            </p>
-          )}
-        </div>
-        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${colorMap[color] ?? ''}`}>
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-});
-StatsCard.displayName = 'StatsCard';
 
 // ---------------------------------------------------------------------------
 // ProductCard
