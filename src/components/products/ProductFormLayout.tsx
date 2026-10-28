@@ -44,6 +44,10 @@ export interface ProductFormLayoutProps {
   warehouses: Warehouse[];
   onClose?: () => void;
   onSuccess?: () => void;
+  /** Save a review form into a bulk draft without creating/updating a live product. */
+  draftMode?: boolean;
+  onDraftSave?: (payload: CreateProductData) => void | Promise<void>;
+  uploadType?: "product" | "bulk";
 }
 
 /**
@@ -125,6 +129,9 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
   warehouses,
   onClose,
   onSuccess,
+  draftMode = false,
+  onDraftSave,
+  uploadType = "product",
 }) => {
   const isEditMode = Boolean(productId || initialProduct?.id);
   const activeProductId = productId || initialProduct?.id;
@@ -424,21 +431,37 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
         finalGlobalMedia = await Promise.all(
           data.media.map(async (m: any, idx: number) => {
             if (m.file) {
-              const publicUrl = await uploadFileToS3(m.file, "products");
+              const publicUrl = await uploadFileToS3(m.file, "products", uploadType);
               return {
                 type: m.type || "IMAGE",
                 url: publicUrl,
+                key: m.key,
+                thumbnailUrl: m.thumbnailUrl,
+                title: m.title,
+                description: m.description,
+                mimeType: m.mimeType || m.file?.type,
+                fileSize: m.file?.size ?? m.fileSize,
+                width: m.width,
+                height: m.height,
                 order: m.order ?? idx,
                 altText: m.altText || data.name,
-                isActive: true,
+                isActive: m.isActive ?? true,
               };
             }
             return {
               type: m.type || "IMAGE",
               url: m.url,
+              key: m.key,
+              thumbnailUrl: m.thumbnailUrl,
+              title: m.title,
+              description: m.description,
+              mimeType: m.mimeType,
+              fileSize: m.fileSize,
+              width: m.width,
+              height: m.height,
               order: m.order ?? idx,
               altText: m.altText,
-              isActive: true,
+              isActive: m.isActive ?? true,
             };
           }),
         );
@@ -468,21 +491,38 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                   const publicUrl = await uploadFileToS3(
                     m.file,
                     "products/variants",
+                    uploadType,
                   );
                   return {
                     type: m.type || "IMAGE",
                     url: publicUrl,
+                    key: m.key,
+                    thumbnailUrl: m.thumbnailUrl,
+                    title: m.title,
+                    description: m.description,
+                    mimeType: m.mimeType || m.file?.type,
+                    fileSize: m.file?.size ?? m.fileSize,
+                    width: m.width,
+                    height: m.height,
                     order: m.order ?? mOrder,
                     altText: m.altText || `${v.sku || data.name} photo`,
-                    isActive: true,
+                    isActive: m.isActive ?? true,
                   };
                 }
                 return {
                   type: m.type || "IMAGE",
                   url: m.url,
+                  key: m.key,
+                  thumbnailUrl: m.thumbnailUrl,
+                  title: m.title,
+                  description: m.description,
+                  mimeType: m.mimeType,
+                  fileSize: m.fileSize,
+                  width: m.width,
+                  height: m.height,
                   order: m.order ?? mOrder,
                   altText: m.altText,
-                  isActive: true,
+                  isActive: m.isActive ?? true,
                 };
               }),
             );
@@ -526,8 +566,17 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
         media: finalGlobalMedia.map((m, idx) => ({
           type: m.type,
           url: m.url,
+          key: m.key,
+          thumbnailUrl: m.thumbnailUrl,
+          title: m.title,
+          description: m.description,
+          mimeType: m.mimeType,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
           order: m.order ?? idx,
           altText: m.altText,
+          isActive: m.isActive ?? true,
         })),
       };
 
@@ -571,8 +620,17 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
             media: v.media?.map((m: any, order: number) => ({
               type: m.type,
               url: m.url,
+              key: m.key,
+              thumbnailUrl: m.thumbnailUrl,
+              title: m.title,
+              description: m.description,
+              mimeType: m.mimeType,
+              fileSize: m.fileSize,
+              width: m.width,
+              height: m.height,
               order: m.order ?? order,
               altText: m.altText,
+              isActive: m.isActive ?? true,
             })),
             stock: {
               warehouseId: v.stock?.warehouseId || warehouses[0]?.id || "",
@@ -581,6 +639,15 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
             },
           };
         });
+      }
+
+      if (draftMode) {
+        if (!onDraftSave) throw new Error("Bulk draft save handler is not configured.");
+        await onDraftSave(payload);
+        reset(data);
+        toast.success("Review changes saved to the bulk draft. No live product was created.");
+        onSuccess?.();
+        return;
       }
 
       if (isEditMode && activeProductId) {
@@ -896,7 +963,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
           isSubmitting={isProcessing}
           onDiscard={handleDiscard}
           onSave={handleSubmit((data) => submitProductForm(data as ProductFormValues))}
-          saveLabel={isEditMode ? "Save Changes" : "Publish Product"}
+          saveLabel={draftMode ? "Save to Draft" : isEditMode ? "Save Changes" : "Publish Product"}
         />
 
         {/* 6. Shopify-Style Unsaved Changes Modal */}

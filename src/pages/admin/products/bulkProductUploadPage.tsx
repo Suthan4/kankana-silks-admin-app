@@ -48,7 +48,7 @@ import {
 import { MainLayout } from "@/components/layouts/mainLayout";
 import { BackButton } from "@/components/ui/BackButton";
 import { BulkProductPreviewTable } from "@/components/products/bulk/BulkProductPreviewTable";
-import { BulkProductEditorModal } from "@/components/products/bulk/BulkProductEditorModal";
+import { BulkSharedProductEditor } from "@/components/products/bulk/BulkSharedProductEditor";
 import { BulkAddProductModal } from "@/components/products/bulk/BulkAddProductModal";
 import { BulkFormatExampleModal } from "@/components/products/bulk/BulkFormatExampleModal";
 import { productApi } from "@/lib/api/product.api";
@@ -492,11 +492,20 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   const addLocalFiles = (fileList: FileList | null) => {
     if (!fileList) return;
     const list = Array.from(fileList);
-    const accepted = list.filter((file) => file.type.startsWith("image/"));
-    if (accepted.length !== list.length)
+    const imageFiles = list.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length !== list.length)
+      toast.error(list.length - imageFiles.length + " non-image file(s) were skipped.");
+    const maxBytes = 60 * 1024 * 1024;
+    const accepted = imageFiles.filter((file) => file.size <= maxBytes);
+    const tooLarge = imageFiles.filter((file) => file.size > maxBytes);
+    if (tooLarge.length) {
       toast.error(
-        list.length - accepted.length + " non-image file(s) were skipped.",
+        tooLarge.length + " image(s) exceed the server's 60 MB upload limit: " +
+        tooLarge.map((file) => file.name).slice(0, 3).join(", ") +
+        (tooLarge.length > 3 ? "…" : "") + ". Resize or export a smaller source file before uploading.",
+        { duration: 7000 },
       );
+    }
     setLocalFiles((previous) => {
       const keys = new Set(previous.map((item) => item.id));
       const additions = accepted
@@ -564,8 +573,9 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
             fileSize: item.file.size,
           });
           uploadedIds.push(item.id);
-        } catch {
-          failedNames.push(item.file.name);
+        } catch (error: any) {
+          const message = error?.response?.data?.error || error?.response?.data?.message || error?.message || "Unknown upload error";
+          failedNames.push(item.file.name + ": " + message);
         } finally {
           setLocalProgress({ completed: index + 1, total: localFiles.length });
         }
@@ -1603,12 +1613,16 @@ interface ImportProgressPanelProps {
   job: BulkImportJob | null;
   onRetry: () => void;
   isRetrying: boolean;
+  onCancel: () => void;
+  isCancelling: boolean;
 }
 
 const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
   job,
   onRetry,
   isRetrying,
+  onCancel,
+  isCancelling,
 }) => {
   if (!job) return null;
 
@@ -1825,6 +1839,19 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
           </div>
         )}
 
+        {isRunning && (
+          <button type="button" onClick={onCancel} disabled={isCancelling}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+            {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+            {isCancelling ? "Requesting safe cancellation…" : "Cancel import safely"}
+          </button>
+        )}
+        {job.status === "cancelled" && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Import cancelled. Successfully imported products and uploaded images were kept. Review the draft and retry the remaining items when ready.
+          </div>
+        )}
+
         {/* Retry on failure */}
         {job.status === "failed" && (
           <button
@@ -1878,6 +1905,7 @@ const BulkProductUploadPage: React.FC = () => {
   const [showFormatExample, setShowFormatExample] = useState(false);
 
   const [jobId, setJobId] = useState<string | null>(null);
+  const [isCancellingJob, setIsCancellingJob] = useState(false);
   const [job, setJob] = useState<BulkImportJob | null>(null);
   const completedJobIdsRef = useRef<Set<string>>(new Set());
 
@@ -1972,7 +2000,7 @@ const BulkProductUploadPage: React.FC = () => {
   // ─ Poll job status ───────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!jobId || job?.status === "completed" || job?.status === "failed")
+    if (!jobId || job?.status === "completed" || job?.status === "failed" || job?.status === "cancelled")
       return;
 
     let disposed = false;
@@ -2057,6 +2085,12 @@ const BulkProductUploadPage: React.FC = () => {
           toast.success(
             `Import finished: ${normalized.successful} product(s) created, ${normalized.failed} failed.`,
           );
+          queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
+        } else if (normalized.status === "cancelled") {
+          setDraftStatus("DRAFT");
+          setJobId(null);
+          localStorage.removeItem("active_bulk_job_id");
+          toast.success("Import cancelled safely. Completed work has been preserved.");
           queryClient.invalidateQueries({ queryKey: ["bulk-drafts"] });
         } else if (normalized.status === "failed") {
           setDraftStatus("DRAFT");
@@ -2673,6 +2707,22 @@ const BulkProductUploadPage: React.FC = () => {
     }
   };
 
+  const handleCancelJob = async () => {
+    if (!jobId || isCancellingJob) return;
+    const confirmed = window.confirm("Cancel this import? The current image upload or product operation will finish safely first. Products already created will not be rolled back.");
+    if (!confirmed) return;
+    setIsCancellingJob(true);
+    try {
+      const response = await productApi.cancelJob(jobId);
+      if (response.data) setJob(response.data);
+      toast.success("Cancellation requested. The current operation will finish before the job stops.");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Could not cancel this import. Refresh the job status and try again.");
+    } finally {
+      setIsCancellingJob(false);
+    }
+  };
+
   const handleRetryJob = async () => {
     if (job?.stage === "images_failed" && draftId) {
       // Save the latest gallery edits before retrying; deleted images must not
@@ -3249,6 +3299,8 @@ const BulkProductUploadPage: React.FC = () => {
                     job={job}
                     onRetry={handleRetryJob}
                     isRetrying={false}
+                    onCancel={() => void handleCancelJob()}
+                    isCancelling={isCancellingJob}
                   />
                 </div>
               )}
@@ -3366,6 +3418,8 @@ const BulkProductUploadPage: React.FC = () => {
                   job={job}
                   onRetry={handleRetryJob}
                   isRetrying={false}
+                  onCancel={() => void handleCancelJob()}
+                  isCancelling={isCancellingJob}
                 />
               )}
             </div>
@@ -3375,18 +3429,15 @@ const BulkProductUploadPage: React.FC = () => {
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {editingProduct && (
-        <BulkProductEditorModal
+        <BulkSharedProductEditor
           product={editingProduct}
-          categoriesTree={categoriesTree}
           flatCategories={flatCategories}
           warehouses={warehouses}
-          isOpen={Boolean(editingProduct)}
           onClose={() => setEditingProduct(null)}
           onSave={(updated) => {
             handleUpdateProduct(updated);
             setEditingProduct(null);
           }}
-          getThumbnailUrl={productApi.getDriveThumbnailUrl}
         />
       )}
 

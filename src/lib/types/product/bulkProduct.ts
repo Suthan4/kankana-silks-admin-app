@@ -278,7 +278,8 @@ export type BulkImportJobStage =
   | "images_failed"
   | "importing_products"
   | "completed"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface BulkImportImageResult {
   fileId: string;
