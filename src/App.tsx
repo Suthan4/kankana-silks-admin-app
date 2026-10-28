@@ -33,6 +33,7 @@ import UserManagementPage from "./pages/admin/userManagement";
 import SuperAdminDashboard from "./pages/superAdmin/superAdminDashboard";
 import CouponsPage from "./pages/admin/couponPage";
 import ProductRequestsPage from "./pages/admin/productRequest";
+import ImageCompressionSettingsPage from "./pages/admin/imageCompressionSettingsPage";
 
 // Create query client
 const queryClient = new QueryClient({
@@ -121,6 +122,14 @@ const router = createBrowserRouter(
             requiredPermission="canCreate"
           >
             <ProductCreatePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/image-compression-settings"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN", "SUPER_ADMIN"]} requiredModule="products" requiredPermission="canUpdate">
+            <ImageCompressionSettingsPage />
           </ProtectedRoute>
         }
       />
