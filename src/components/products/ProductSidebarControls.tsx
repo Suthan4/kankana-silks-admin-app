@@ -1,9 +1,11 @@
-import React from "react";
-import { useFormContext, useWatch } from "react-hook-form";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
 import {
   AlertCircle,
   Box,
   CheckCircle2,
+  Check,
+  ChevronDown,
   DollarSign,
   Globe,
   HelpCircle,
@@ -12,6 +14,7 @@ import {
   Ruler,
   Search,
   Tag,
+  X,
   Video,
   Warehouse as WarehouseIcon,
 } from "lucide-react";
@@ -48,6 +51,244 @@ function getCategoryDisplayPath(category: Category, allCategories: Category[]): 
   }
   return names.join(" › ");
 }
+
+interface CategoryAutocompleteProps {
+  categories: Category[];
+  value: string;
+  onChange: (value: string) => void;
+  invalid?: boolean;
+}
+
+const normalizeCategoryText = (value: string) =>
+  value.toLocaleLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim();
+
+function categoryDepth(category: Category, allCategories: Category[]): number {
+  const path = getCategoryDisplayPath(category, allCategories);
+  const separators = path.match(/(?:\s>\s|\s›\s|\s\/\s)/g);
+  if (separators?.length) return separators.length;
+  let depth = 0;
+  let parentId = category.parentId ?? category.parent?.id ?? category.parents?.[0]?.id ?? null;
+  const seen = new Set<string>([String(category.id)]);
+  while (parentId && !seen.has(String(parentId))) {
+    seen.add(String(parentId));
+    const parent = allCategories.find((item) => String(item.id) === String(parentId));
+    if (!parent) break;
+    depth += 1;
+    parentId = parent.parentId ?? parent.parent?.id ?? parent.parents?.[0]?.id ?? null;
+  }
+  return depth;
+}
+
+const CategoryAutocomplete: React.FC<CategoryAutocompleteProps> = ({
+  categories,
+  value,
+  onChange,
+  invalid = false,
+}) => {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const orderedCategories = useMemo(
+    () => [...categories].sort((a, b) =>
+      getCategoryDisplayPath(a, categories).localeCompare(
+        getCategoryDisplayPath(b, categories),
+        undefined,
+        { sensitivity: "base", numeric: true },
+      ),
+    ),
+    [categories],
+  );
+  const selectedCategory = categories.find((category) => String(category.id) === String(value));
+  const selectedPath = selectedCategory ? getCategoryDisplayPath(selectedCategory, categories) : "";
+  const filteredCategories = useMemo(() => {
+    const term = normalizeCategoryText(query);
+    if (!term) return orderedCategories;
+    return orderedCategories.filter((category) => {
+      const name = normalizeCategoryText(category.name);
+      const path = normalizeCategoryText(getCategoryDisplayPath(category, categories));
+      return name.includes(term) || path.includes(term);
+    });
+  }, [categories, orderedCategories, query]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
+  const chooseCategory = (category: Category) => {
+    onChange(String(category.id));
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div ref={rootRef} className="relative">
+      <div className={`flex items-center gap-2 rounded-lg border bg-white px-3 transition-all focus-within:ring-2 ${
+        invalid
+          ? "border-red-500 focus-within:border-red-500 focus-within:ring-red-100"
+          : open
+            ? "border-blue-500 focus-within:ring-blue-100"
+            : "border-slate-300 focus-within:border-blue-500 focus-within:ring-blue-100"
+      }`}>
+        <Search className="h-4 w-4 shrink-0 text-slate-400" />
+        <input
+          ref={inputRef}
+          type="text"
+          role="combobox"
+          aria-label="Search categories"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls="product-category-options"
+          aria-activedescendant={open && filteredCategories[activeIndex] ? `category-option-${filteredCategories[activeIndex].id}` : undefined}
+          value={open ? query : selectedPath}
+          placeholder="Search by category or parent path…"
+          onFocus={() => {
+            setQuery("");
+            setOpen(true);
+          }}
+          onClick={() => {
+            if (!open) {
+              setQuery("");
+              setOpen(true);
+            }
+          }}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setOpen(true);
+              setActiveIndex((current) => Math.min(current + 1, Math.max(filteredCategories.length - 1, 0)));
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setActiveIndex((current) => Math.max(current - 1, 0));
+            } else if (event.key === "Enter" && open && filteredCategories[activeIndex]) {
+              event.preventDefault();
+              chooseCategory(filteredCategories[activeIndex]);
+            } else if (event.key === "Escape") {
+              setOpen(false);
+              setQuery("");
+              inputRef.current?.blur();
+            }
+          }}
+          className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:ring-0"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => {
+              onChange("");
+              setQuery("");
+              setOpen(true);
+              inputRef.current?.focus();
+            }}
+            aria-label="Clear selected category"
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen((current) => !current);
+            if (!open) {
+              setQuery("");
+              inputRef.current?.focus();
+            }
+          }}
+          aria-label={open ? "Close category list" : "Open category list"}
+          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      {open && (
+        <div className="absolute z-[120] mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-3 py-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              {query ? "Matching categories" : "Browse category hierarchy"}
+            </span>
+            <span className="text-[10px] tabular-nums text-slate-400">
+              {filteredCategories.length} {filteredCategories.length === 1 ? "category" : "categories"}
+            </span>
+          </div>
+          <div id="product-category-options" role="listbox" className="max-h-72 overflow-y-auto overscroll-contain p-1.5">
+            {filteredCategories.length === 0 ? (
+              <div className="px-3 py-7 text-center">
+                <Search className="mx-auto mb-2 h-5 w-5 text-slate-300" />
+                <p className="text-xs font-medium text-slate-600">No categories found</p>
+                <p className="mt-1 text-[11px] text-slate-400">Try a category name or part of its parent path.</p>
+              </div>
+            ) : filteredCategories.map((category, index) => {
+              const path = getCategoryDisplayPath(category, categories);
+              const depth = categoryDepth(category, categories);
+              const selected = String(category.id) === String(value);
+              const active = index === activeIndex;
+              const parts = path.split(/\s(?:>|›|\/)\s/);
+              const leafName = parts[parts.length - 1] || category.name;
+              const parentPath = parts.length > 1 ? parts.slice(0, -1).join(" › ") : "";
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  id={`category-option-${category.id}`}
+                  key={category.id}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => chooseCategory(category)}
+                  className={`flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                    selected ? "bg-blue-50 text-blue-800" : active ? "bg-slate-50 text-slate-900" : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                  style={{ paddingLeft: `${10 + Math.min(depth, 5) * 12}px` }}
+                >
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                    {depth > 0 ? (
+                      <span className="h-3 w-3 border-b border-l border-slate-300" />
+                    ) : (
+                      <span className={`h-2 w-2 rounded-sm ${selected ? "bg-blue-600" : "bg-slate-300"}`} />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium">{leafName}</span>
+                    {parentPath && (
+                      <span className="mt-0.5 block truncate text-[10px] text-slate-400">{parentPath}</span>
+                    )}
+                  </span>
+                  {selected && <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="border-t border-slate-100 bg-slate-50/70 px-3 py-2 text-[10px] text-slate-400">
+            Search matches both category names and full parent paths.
+          </div>
+        </div>
+      )}
+      {selectedPath && !open && (
+        <p className="mt-1.5 truncate text-[10px] text-slate-500" title={selectedPath}>
+          Selected: <span className="font-medium text-slate-600">{selectedPath}</span>
+        </p>
+      )}
+    </div>
+  );
+};
 
 export const ProductSidebarControls: React.FC<ProductSidebarControlsProps> = ({
   categories,
@@ -126,23 +367,18 @@ export const ProductSidebarControls: React.FC<ProductSidebarControlsProps> = ({
             <label className="block text-2xs font-semibold text-slate-700 uppercase mb-1">
               Category *
             </label>
-            <select
-              {...register("categoryId")}
-              className={`w-full px-3 py-2 rounded-lg border text-xs bg-white ${
-                errors.categoryId
-                  ? "border-red-500 focus:ring-red-500"
-                  : "border-slate-300 focus:ring-blue-500"
-              } focus:outline-hidden`}
-            >
-              <option value="">Select a category</option>
-              {[...categories]
-                .sort((a, b) => getCategoryDisplayPath(a, categories).localeCompare(getCategoryDisplayPath(b, categories)))
-                .map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {getCategoryDisplayPath(c, categories)}
-                  </option>
-                ))}
-            </select>
+            <Controller
+              name="categoryId"
+              control={control}
+              render={({ field }) => (
+                <CategoryAutocomplete
+                  categories={categories}
+                  value={String(field.value ?? "")}
+                  onChange={field.onChange}
+                  invalid={Boolean(errors.categoryId)}
+                />
+              )}
+            />
             {errors.categoryId && (
               <p className="mt-1 text-2xs text-red-600 font-medium">
                 {errors.categoryId.message}
