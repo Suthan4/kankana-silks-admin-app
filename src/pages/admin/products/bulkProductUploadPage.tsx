@@ -556,6 +556,7 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
     try {
       for (let index = 0; index < localFiles.length; index += 1) {
         const item = localFiles[index];
+        setLocalFilePercent(0);
         try {
           const result = await uploadFileToS3WithMetadata(
             item.file,
