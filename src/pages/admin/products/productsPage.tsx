@@ -513,7 +513,6 @@ const ProductsPage: React.FC = () => {
 
   const selectedCategoryPath = categoryPaths.find((category) => category.id === filterCategory)?.path || '';
   const selectedConsolidationProducts = Object.values(selectedProductMap);
-  const selectedConsolidationIds = Object.keys(selectedProductMap);
   const toggleConsolidationSelection = useCallback((product: Product) => {
     if (product.hasVariants || !product.isActive) return;
     setSelectedProductMap((current) => {
