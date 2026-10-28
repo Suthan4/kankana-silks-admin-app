@@ -37,24 +37,52 @@ export interface MediaPreviewItem {
  * Upload a single File to S3 and return its public URL.
  * Handles both flat responses `{ success, url, key }` and nested `{ success, data: { url } }`.
  */
+export interface UploadedMediaResult {
+  url: string;
+  key?: string;
+  size?: number;
+  width?: number;
+  height?: number;
+  mimeType?: string;
+  format?: string;
+  qualityUsed?: number;
+}
+
+export async function uploadFileToS3WithMetadata(
+  file: File,
+  folder: string = "products",
+  uploadType: "product" | "category" | "banner" | "bulk" = "product",
+  onProgress?: (percent: number) => void,
+): Promise<UploadedMediaResult> {
+  // Images use browser-to-S3 staging, then trusted server-side validation and
+  // compression. Video uploads retain the existing non-image upload path.
+  const res: any = file.type.startsWith("image/")
+    ? await s3Api.uploadDirect(file, folder, uploadType, onProgress)
+    : await s3Api.uploadSingle(file, folder, uploadType);
+
+  const url = res?.url || res?.data?.url ||
+    (typeof res?.data === "string" ? res.data : "") ||
+    (typeof res === "string" ? res : "");
+  if (!url) throw new Error(`Failed to upload ${file.name}: No permanent storage URL returned.`);
+
+  return {
+    url,
+    key: res?.key || res?.data?.key,
+    size: res?.size,
+    width: res?.width,
+    height: res?.height,
+    mimeType: res?.format === "webp" ? "image/webp" : file.type,
+    format: res?.format,
+    qualityUsed: res?.qualityUsed,
+  };
+}
+
 export async function uploadFileToS3(
   file: File,
   folder: string = "products",
   uploadType: "product" | "category" | "banner" | "bulk" = "product",
 ): Promise<string> {
-  const res: any = await s3Api.uploadSingle(file, folder, uploadType);
-
-  const url =
-    res?.url ||
-    res?.data?.url ||
-    (typeof res?.data === "string" ? res.data : "") ||
-    (typeof res === "string" ? res : "");
-
-  if (!url) {
-    throw new Error(`Failed to upload ${file.name}: No URL returned from server`);
-  }
-
-  return url;
+  return (await uploadFileToS3WithMetadata(file, folder, uploadType)).url;
 }
 
 /**
