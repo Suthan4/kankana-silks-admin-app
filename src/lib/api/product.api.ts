@@ -118,6 +118,19 @@ export const productApi = {
     return apiCall("GET", "/admin/products", undefined, { params });
   },
 
+  /** Consolidate selected existing simple products into variants of one retained parent product. */
+  consolidateSimpleProducts: async (payload: {
+    parentProductId: string;
+    attributeName: "color" | "size" | "fabric" | "style";
+    products: Array<{ productId: string; attributeValue: string }>;
+  }): Promise<ApiResponse<{
+    product: Product;
+    archivedProductIds: string[];
+    variantsCreated: number;
+  }>> => {
+    return apiCall("POST", "/admin/products/consolidate-variants", payload);
+  },
+
   // Get product by ID
   getProduct: async (id: string): Promise<ApiResponse<Product>> => {
     return apiCall("GET", `/products/${id}`);
