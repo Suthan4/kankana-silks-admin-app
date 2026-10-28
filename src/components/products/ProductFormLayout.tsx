@@ -37,7 +37,7 @@ import { ProductSidebarControls } from "./ProductSidebarControls";
 import { UnsavedChangesModal } from "./UnsavedChangesModal";
 import { FormActionBar } from "./FormActionBar";
 
-export async function mapSequential<T, R>(
+async function mapSequential<T, R>(
   items: T[],
   mapper: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
