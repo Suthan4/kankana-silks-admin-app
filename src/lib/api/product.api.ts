@@ -525,9 +525,5 @@ export const productApi = {
 
   retryJob: async (jobId: string): Promise<ApiResponse<BulkImportJob>> => {
     return apiCall("POST", `/products/bulk/job/${jobId}/retry`);
-  },
-
-  cancelJob: async (jobId: string): Promise<ApiResponse<BulkImportJob>> => {
-    return apiCall("POST", `/products/bulk/job/${jobId}/cancel`);
-  },
+  }
 };
