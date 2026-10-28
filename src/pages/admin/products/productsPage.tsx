@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layouts/mainLayout';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -27,6 +27,7 @@ import {
   Video,
   Play,
   FileSpreadsheet,
+  GitMerge,
 } from 'lucide-react';
 import { productApi } from '@/lib/api/product.api';
 import { categoryApi } from '@/lib/api/category.api';
@@ -55,7 +56,7 @@ const StatsCard: React.FC<{
     purple: 'bg-purple-100 text-purple-600',
   };
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{label}</p>
@@ -68,7 +69,7 @@ const StatsCard: React.FC<{
             </p>
           )}
         </div>
-        <div className={`h-12 w-12 rounded-full flex items-center justify-center ${colorMap[color] ?? ''}`}>
+        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${colorMap[color] ?? ''}`}>
           {icon}
         </div>
       </div>
@@ -87,12 +88,21 @@ const ProductCard: React.FC<{
   onView: (product: Product) => void;
   canUpdate: boolean;
   canDelete: boolean;
-}> = React.memo(({ product, onEdit, onDelete, onView, canUpdate, canDelete }) => {
+  selectable?: boolean;
+  selectedForConsolidation?: boolean;
+  onToggleSelection?: (id: string) => void;
+}> = React.memo(({ product, onEdit, onDelete, onView, canUpdate, canDelete, selectable = false, selectedForConsolidation = false, onToggleSelection }) => {
   const primaryMedia = product.media?.find((m) => m.order === 0) || product.media?.[0];
   const isVideo = primaryMedia?.type === 'VIDEO';
   return (
-    <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 hover:border-blue-300 group">
-      <div className="relative h-56 bg-gradient-to-br from-gray-100 to-gray-200">
+    <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden border border-slate-200 hover:border-blue-300 group">
+      <div className="relative h-44 bg-gradient-to-br from-gray-100 to-gray-200">
+        {selectable && (
+          <label className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-lg bg-white/95 px-2.5 py-2 text-xs font-semibold text-slate-800 shadow-md">
+            <input type="checkbox" checked={selectedForConsolidation} disabled={product.hasVariants || !product.isActive} onChange={() => onToggleSelection?.(product.id)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed" aria-label={`Select ${product.name} for consolidation`} />
+            <span>{selectedForConsolidation ? 'Selected' : 'Select'}</span>
+          </label>
+        )}
         {primaryMedia ? (
           isVideo ? (
             <div className="relative w-full h-full">
@@ -328,7 +338,8 @@ const ViewProductModal: React.FC<{
                   <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Layers className="h-5 w-5 text-purple-600" />Available Variants ({product.variants.length})</h4>
                   <div className="space-y-3 max-h-60 overflow-y-auto">
                     {product.variants.map((variant, idx) => {
-                      const label = [variant.size, variant.color, variant.fabric].filter(Boolean).join(' / ') || `Variant ${idx + 1}`;
+                      const attributeLabels = variant.attributes && typeof variant.attributes === 'object' ? Object.values(variant.attributes).filter((value) => typeof value === 'string') as string[] : [];
+                      const label = [variant.size, variant.color, variant.fabric].filter(Boolean).join(' / ') || attributeLabels.join(' / ') || `Variant ${idx + 1}`;
                       const vStock = product.stock?.find((s) => s.variantId === variant.id);
                       return (
                         <div key={idx} className="bg-purple-50 rounded-lg p-3 border border-purple-200">
@@ -378,15 +389,31 @@ const ProductsPage: React.FC = () => {
 
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
   const [filterHasVariants, setFilterHasVariants] = useState<boolean | undefined>(undefined);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
+  const [pageSize, setPageSize] = useState(48);
   const [categorySearch, setCategorySearch] = useState('');
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [selectedProductMap, setSelectedProductMap] = useState<Record<string, Product>>({});
+  const [showConsolidationModal, setShowConsolidationModal] = useState(false);
+  const [consolidationParentId, setConsolidationParentId] = useState('');
+  const [consolidationAttributeName, setConsolidationAttributeName] = useState<'color' | 'size' | 'fabric' | 'style'>('color');
+  const [consolidationValues, setConsolidationValues] = useState<Record<string, string>>({});
+  const [consolidationError, setConsolidationError] = useState('');
+  const [consolidationAcknowledged, setConsolidationAcknowledged] = useState(false);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
 
   const canCreate = hasPermission('products', 'canCreate');
   const canUpdate = hasPermission('products', 'canUpdate');
@@ -437,6 +464,25 @@ const ProductsPage: React.FC = () => {
   });
   const hasWarehouses = warehousesData && warehousesData.length > 0;
 
+  const consolidationMutation = useMutation({
+    mutationFn: productApi.consolidateSimpleProducts,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+      setSelectedProductMap({});
+      setConsolidationValues({});
+      setConsolidationError('');
+      setConsolidationAcknowledged(false);
+      setShowConsolidationModal(false);
+      setConsolidationParentId('');
+      toast.success('Products consolidated successfully');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || error?.message || 'Unable to consolidate these products';
+      setConsolidationError(message);
+      toast.error(message);
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: productApi.deleteProduct,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); toast.success('Product deleted successfully!'); },
@@ -482,6 +528,108 @@ const ProductsPage: React.FC = () => {
   }, [categoryPaths, categorySearch]);
 
   const selectedCategoryPath = categoryPaths.find((category) => category.id === filterCategory)?.path || '';
+  const selectedConsolidationProducts = Object.values(selectedProductMap);
+  const selectedCategoryIds = Array.from(new Set(selectedConsolidationProducts.map((product) => String(product.categoryId))));
+  const consolidationHasMixedCategories = selectedCategoryIds.length > 1;
+  const selectableVisibleProducts = filteredProducts.filter((product) => product.isActive && !product.hasVariants);
+  const allVisibleSimpleProductsSelected = selectableVisibleProducts.length > 0 && selectableVisibleProducts.every((product) => Boolean(selectedProductMap[product.id]));
+  const toggleVisibleSimpleProducts = () => {
+    setSelectedProductMap((current) => {
+      const next = { ...current };
+      if (allVisibleSimpleProductsSelected) {
+        selectableVisibleProducts.forEach((product) => { delete next[product.id]; });
+      } else {
+        selectableVisibleProducts.forEach((product) => { next[product.id] = product; });
+      }
+      return next;
+    });
+  };
+  const toggleConsolidationSelection = useCallback((product: Product) => {
+    if (product.hasVariants || !product.isActive) return;
+    setSelectedProductMap((current) => {
+      const next = { ...current };
+      if (next[product.id]) {
+        delete next[product.id];
+      } else {
+        next[product.id] = product;
+      }
+      return next;
+    });
+  }, []);
+  const openConsolidationModal = () => {
+    setConsolidationError('');
+    setConsolidationAcknowledged(false);
+    if (selectedConsolidationProducts.length < 2) {
+      toast.error('Select at least two simple products first');
+      return;
+    }
+    if (consolidationHasMixedCategories) {
+      toast.error('Select products from the same category. Clear the selection and choose one category.');
+      return;
+    }
+    const first = selectedConsolidationProducts[0];
+    setConsolidationParentId(first.id);
+    setConsolidationValues((current) => {
+      const next = { ...current };
+      selectedConsolidationProducts.forEach((product) => {
+        if (!next[product.id]) {
+          const existingVariant = product.variants?.[0];
+          const knownAttribute = consolidationAttributeName === 'color' ? existingVariant?.color
+            : consolidationAttributeName === 'size' ? existingVariant?.size
+            : consolidationAttributeName === 'fabric' ? existingVariant?.fabric
+            : existingVariant?.attributes?.style;
+          const parts = product.name.split(/\s[-–|]\s/);
+          next[product.id] = (typeof knownAttribute === 'string' && knownAttribute.trim())
+            ? knownAttribute.trim()
+            : (parts.length > 1 ? parts[parts.length - 1].trim() : '');
+        }
+      });
+      return next;
+    });
+    setShowConsolidationModal(true);
+  };
+  const duplicateConsolidationValue = useMemo(() => {
+    const values = selectedConsolidationProducts.map((product) => (consolidationValues[product.id] || '').trim().toLocaleLowerCase());
+    return values.some((value, index) => Boolean(value) && values.indexOf(value) !== index);
+  }, [selectedConsolidationProducts, consolidationValues]);
+  const missingConsolidationValues = selectedConsolidationProducts.filter((product) => !consolidationValues[product.id]?.trim());
+  const submitConsolidation = (event: React.FormEvent) => {
+    event.preventDefault();
+    setConsolidationError('');
+    if (selectedConsolidationProducts.length < 2) {
+      setConsolidationError('Select at least two simple products to continue.');
+      return;
+    }
+    if (consolidationHasMixedCategories) {
+      setConsolidationError('All products must belong to the same category. Clear your selection and choose products from one category.');
+      return;
+    }
+    if (!consolidationParentId || !selectedConsolidationProducts.some((product) => product.id === consolidationParentId)) {
+      setConsolidationError('Choose one of the selected products to keep as the parent.');
+      return;
+    }
+    if (missingConsolidationValues.length) {
+      setConsolidationError(`Enter a ${consolidationAttributeName} value for every selected product.`);
+      return;
+    }
+    if (duplicateConsolidationValue) {
+      setConsolidationError('Each variant value must be unique. Duplicate values are highlighted below.');
+      return;
+    }
+    if (!consolidationAcknowledged) {
+      setConsolidationError('Confirm that you understand the source products will be archived.');
+      return;
+    }
+    consolidationMutation.mutate({
+      parentProductId: consolidationParentId,
+      attributeName: consolidationAttributeName,
+      products: selectedConsolidationProducts.map((product) => ({
+        productId: product.id,
+        attributeValue: consolidationValues[product.id].trim(),
+      })),
+    });
+  };
+
 
   return (
     <MainLayout>
@@ -545,11 +693,11 @@ const ProductsPage: React.FC = () => {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard icon={<Package className="h-6 w-6" />} label="Total Products" value={totalProducts} color="blue" subtitle="In catalog" trend="+12% this month" />
-          <StatsCard icon={<CheckCircle className="h-6 w-6" />} label="Active" value={activeProducts} color="green" subtitle="Live on store" />
-          <StatsCard icon={<Layers className="h-6 w-6" />} label="With Variants" value={productsWithVariants} color="purple" subtitle="Variable products" />
-          <StatsCard icon={<ShoppingCart className="h-6 w-6" />} label="Orders" value="1,234" color="orange" subtitle="This month" trend="+8%" />
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatsCard icon={<Package className="h-5 w-5" />} label="Catalog products" value={totalProducts} color="blue" subtitle="Matching current filters" />
+          <StatsCard icon={<CheckCircle className="h-5 w-5" />} label="Active on this page" value={activeProducts} color="green" subtitle={`Of ${filteredProducts.length} shown`} />
+          <StatsCard icon={<Layers className="h-5 w-5" />} label="Variable on this page" value={productsWithVariants} color="purple" subtitle="Products with variants" />
+          <StatsCard icon={<Box className="h-5 w-5" />} label="Simple on this page" value={filteredProducts.filter((p) => !p.hasVariants).length} color="orange" subtitle="Standalone products" />
         </div>
 
         {/* Search and filters */}
@@ -557,7 +705,7 @@ const ProductsPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(220px,1fr)_repeat(2,minmax(145px,.65fr))_auto]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }} placeholder="Search name, SKU, description..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />
+              <input type="text" value={searchInput} onChange={(e) => { setSearchInput(e.target.value); setPage(1); }} placeholder="Search name, SKU, description..." aria-label="Search products by name or SKU" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-10 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" />{searchQuery && <button type="button" onClick={() => { setSearchInput(''); setSearchQuery(''); setPage(1); }} aria-label="Clear product search" className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"><X className="h-4 w-4" /></button>}
             </div>
 
             <div className="relative">
@@ -601,9 +749,22 @@ const ProductsPage: React.FC = () => {
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
             <span>{pagination ? `Showing ${filteredProducts.length ? (page - 1) * pageSize + 1 : 0}–${Math.min((page - 1) * pageSize + filteredProducts.length, pagination.total)} of ${pagination.total} products` : 'Filtering products'}{isFetching ? ' · Updating…' : ''}</span>
-            {(searchQuery || filterCategory || filterActive !== undefined || filterHasVariants !== undefined) && <button type="button" onClick={() => { setSearchQuery(''); setFilterCategory(''); setFilterActive(undefined); setFilterHasVariants(undefined); setCategorySearch(''); setPage(1); }} className="font-semibold text-blue-700 hover:text-blue-900">Clear all filters</button>}
+            {(searchQuery || filterCategory || filterActive !== undefined || filterHasVariants !== undefined) && <button type="button" onClick={() => { setSearchInput(''); setSearchQuery(''); setFilterCategory(''); setFilterActive(undefined); setFilterHasVariants(undefined); setCategorySearch(''); setPage(1); }} className="font-semibold text-blue-700 hover:text-blue-900">Clear all filters</button>}
           </div>
         </div>
+
+        {canUpdate && selectedConsolidationProducts.length > 0 && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-700 shadow-sm"><GitMerge className="h-5 w-5" /></div>
+              <div><p className="font-semibold text-slate-900">{selectedConsolidationProducts.length} simple product{selectedConsolidationProducts.length === 1 ? '' : 's'} selected</p><p className="text-xs text-slate-600">Choose a parent product and turn the selected products into variants without recreating them.</p>{consolidationHasMixedCategories && <p className="mt-1 text-xs font-medium text-rose-700">Mixed categories selected. Choose products from one category to continue.</p>}</div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setSelectedProductMap({})} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Clear selection</button>
+              <button type="button" disabled={selectedConsolidationProducts.length < 2 || consolidationHasMixedCategories} onClick={openConsolidationModal} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"><GitMerge className="h-4 w-4" />Consolidate as variants</button>
+            </div>
+          </div>
+        )}
 
         {/* Products Display */}
         {isLoading ? (
@@ -625,24 +786,31 @@ const ProductsPage: React.FC = () => {
             )}
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+              <span className="text-slate-600">{filteredProducts.length} products on this page · {selectableVisibleProducts.length} eligible for consolidation</span>
+              <button type="button" disabled={!canUpdate || selectableVisibleProducts.length === 0} onClick={toggleVisibleSimpleProducts} className="font-semibold text-blue-700 hover:text-blue-900 disabled:cursor-not-allowed disabled:opacity-40">{allVisibleSimpleProductsSelected ? 'Deselect eligible on this page' : 'Select eligible on this page'}</button>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {filteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} onEdit={handleEdit} onDelete={handleDelete} onView={handleView} canUpdate={canUpdate} canDelete={canDelete} />
+              <ProductCard key={product.id} product={product} onEdit={handleEdit} onDelete={handleDelete} onView={handleView} canUpdate={canUpdate} canDelete={canDelete} selectable={canUpdate} selectedForConsolidation={Boolean(selectedProductMap[product.id])} onToggleSelection={() => toggleConsolidationSelection(product)} />
             ))}
+            </div>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="overflow-x-auto">
-              <table className="min-w-[850px] w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <tr><th className="px-4 py-3 font-semibold">Product</th><th className="px-4 py-3 font-semibold">Category</th><th className="px-4 py-3 font-semibold">Price</th><th className="px-4 py-3 font-semibold">Type</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 text-right font-semibold">Actions</th></tr>
+              <table className="min-w-[900px] w-full divide-y divide-slate-200 text-sm">
+                <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr><th className="px-3 py-3 font-semibold"><input type="checkbox" checked={allVisibleSimpleProductsSelected} disabled={!canUpdate || selectableVisibleProducts.length === 0} onChange={toggleVisibleSimpleProducts} aria-label="Select all active simple products on this page" title="Select active simple products on this page" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-30" /></th><th className="px-4 py-3 font-semibold">Product</th><th className="px-4 py-3 font-semibold">Category</th><th className="px-4 py-3 font-semibold">Price</th><th className="px-4 py-3 font-semibold">Type</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 text-right font-semibold">Actions</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredProducts.map((product) => {
                     const media = product.media?.find((item) => item.order === 0) || product.media?.[0];
                     return <tr key={product.id} className="transition hover:bg-slate-50/80">
+                      <td className="px-3 py-3"><input type="checkbox" checked={Boolean(selectedProductMap[product.id])} disabled={!canUpdate || product.hasVariants || !product.isActive} onChange={() => toggleConsolidationSelection(product)} aria-label={`Select ${product.name} for consolidation`} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30" /></td>
                       <td className="px-4 py-3"><div className="flex min-w-[250px] items-center gap-3">
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">{media?.type === 'IMAGE' ? <img src={media.url} alt={media.altText || product.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-5 w-5 text-slate-400" /></div>}</div>
+                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100">{media?.type === 'IMAGE' ? <img src={media.url} alt={media.altText || product.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-5 w-5 text-slate-400" /></div>}</div>
                         <div className="min-w-0"><p className="truncate font-semibold text-slate-900">{product.name}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{product.sku}</p></div>
                       </div></td>
                       <td className="px-4 py-3 text-slate-600">{product.category?.name || '—'}</td>
@@ -667,13 +835,13 @@ const ProductsPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
               <span>Rows per page</span>
               <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 outline-none focus:border-blue-500">
-                <option value={12}>12</option><option value={24}>24</option><option value={48}>48</option>
+                <option value={24}>24</option><option value={48}>48</option><option value={96}>96</option>
               </select>
-              <span className="text-slate-400">Page {pagination.page} of {pagination.totalPages}</span>
+              <span className="text-slate-400">{pagination.total ? `Showing ${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}` : 'No results'}</span>
             </div>
             <div className="flex items-center gap-2">
               <button type="button" disabled={page <= 1 || isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
-              <span className="min-w-20 text-center text-sm font-semibold text-slate-700">{pagination.page} / {pagination.totalPages}</span>
+              <span className="min-w-28 text-center text-sm font-semibold text-slate-700">Page {pagination.page} of {pagination.totalPages}</span>
               <button type="button" disabled={page >= pagination.totalPages || isFetching} onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
             </div>
           </div>
@@ -682,6 +850,64 @@ const ProductsPage: React.FC = () => {
         {/* View Modal */}
         {showViewModal && selectedProduct && (
           <ViewProductModal product={selectedProduct} onClose={() => { setShowViewModal(false); setSelectedProduct(null); }} onEdit={handleEdit} canUpdate={canUpdate} />
+        )}
+
+        {showConsolidationModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+            <form onSubmit={submitConsolidation} className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-start justify-between border-b border-slate-200 bg-gradient-to-r from-blue-700 to-indigo-700 px-6 py-5 text-white">
+                <div className="flex items-start gap-3"><div className="rounded-xl bg-white/15 p-2.5"><GitMerge className="h-5 w-5" /></div><div><h2 className="text-xl font-bold">Consolidate simple products</h2><p className="mt-1 text-sm text-blue-100">Reuse existing products as variants. No product recreation or image re-upload.</p></div></div>
+                <button type="button" onClick={() => { if (!consolidationMutation.isPending) { setShowConsolidationModal(false); setConsolidationError(''); } }} aria-label="Close consolidation dialog" className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="space-y-5 overflow-y-auto p-6">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><strong>Before you continue:</strong> products must represent the same underlying item and use the same category. The chosen parent remains active; the other products are archived, while their SKUs, images, inventory, and order history are preserved.</div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-800">Variant attribute</label>
+                  <select value={consolidationAttributeName} onChange={(e) => {
+                    const attribute = e.target.value as 'color' | 'size' | 'fabric' | 'style';
+                    setConsolidationAttributeName(attribute);
+                    setConsolidationError('');
+                    setConsolidationValues((current) => {
+                      const next = { ...current };
+                      selectedConsolidationProducts.forEach((product) => {
+                        const variant = product.variants?.[0];
+                        const known = attribute === 'color' ? variant?.color
+                          : attribute === 'size' ? variant?.size
+                          : attribute === 'fabric' ? variant?.fabric
+                          : variant?.attributes?.style;
+                        if (typeof known === 'string' && known.trim()) next[product.id] = known.trim();
+                        else if (attribute !== consolidationAttributeName) next[product.id] = '';
+                      });
+                      return next;
+                    });
+                  }} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
+                    <option value="color">Color</option><option value="size">Size</option><option value="fabric">Fabric</option><option value="style">Style</option>
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">Each selected product becomes one variant using this attribute and the value you provide below.</p>
+                </div>
+                <div className="space-y-3">
+                  <div><h3 className="text-sm font-semibold text-slate-800">Choose the parent product</h3><p className="text-xs text-slate-500">This product keeps its catalog identity, URL/slug, description, and SKU.</p></div>
+                  {selectedConsolidationProducts.map((product) => (
+                    <div key={product.id} className={`grid grid-cols-1 gap-3 rounded-xl border p-3 sm:grid-cols-[auto_minmax(0,1fr)_minmax(160px,.8fr)] sm:items-center ${consolidationParentId === product.id ? 'border-blue-300 bg-blue-50/70' : 'border-slate-200'}`}>
+                      <input type="radio" name="consolidation-parent" value={product.id} checked={consolidationParentId === product.id} onChange={() => setConsolidationParentId(product.id)} aria-label={`Keep ${product.name} as parent product`} className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500" />
+                      <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{product.name}</p><p className="mt-0.5 text-xs text-slate-500">SKU: {product.sku} · ₹{Number(product.sellingPrice).toLocaleString('en-IN')}</p>{consolidationParentId === product.id && <span className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">Parent product</span>}</div>
+                      <div><label htmlFor={`variant-value-${product.id}`} className="mb-1 block text-xs font-semibold text-slate-600">{consolidationAttributeName[0].toUpperCase() + consolidationAttributeName.slice(1)} value <span className="text-rose-600">*</span></label><input id={`variant-value-${product.id}`} required maxLength={120} value={consolidationValues[product.id] || ''} aria-invalid={Boolean(consolidationValues[product.id]?.trim() && selectedConsolidationProducts.some((other) => other.id !== product.id && (consolidationValues[other.id] || '').trim().toLocaleLowerCase() === consolidationValues[product.id].trim().toLocaleLowerCase()))} onChange={(e) => { setConsolidationValues((current) => ({ ...current, [product.id]: e.target.value })); setConsolidationError(''); }} placeholder={consolidationAttributeName === 'color' ? 'e.g. Wine, Peach, Emerald Green' : `Enter ${consolidationAttributeName}`} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-4 focus:ring-blue-100 ${consolidationValues[product.id]?.trim() && selectedConsolidationProducts.some((other) => other.id !== product.id && (consolidationValues[other.id] || '').trim().toLocaleLowerCase() === consolidationValues[product.id].trim().toLocaleLowerCase()) ? 'border-rose-400 bg-rose-50 focus:border-rose-500' : 'border-slate-300 focus:border-blue-500'}`} />{!consolidationValues[product.id]?.trim() && <p className="mt-1 text-[11px] text-slate-500">Required</p>}{consolidationValues[product.id]?.trim() && selectedConsolidationProducts.some((other) => other.id !== product.id && (consolidationValues[other.id] || '').trim().toLocaleLowerCase() === consolidationValues[product.id].trim().toLocaleLowerCase()) && <p className="mt-1 text-[11px] font-medium text-rose-600">This value is already used.</p>}</div>
+                    </div>
+                  ))}
+                </div>
+                {consolidationError && <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{consolidationError}</span></div>}
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
+                  <input type="checkbox" checked={consolidationAcknowledged} onChange={(e) => { setConsolidationAcknowledged(e.target.checked); setConsolidationError(''); }} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  <span><strong className="block text-slate-900">I reviewed the selection</strong><span className="mt-0.5 block text-xs text-slate-500">I understand that the chosen parent stays active and the other selected products are archived, not deleted.</span></span>
+                </label>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">Validation runs before saving. The database transaction rolls back all changes if a migration fails. No image files are uploaded again.</div>
+              </div>
+              <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => { setShowConsolidationModal(false); setConsolidationError(''); }} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">Cancel</button>
+                <button type="submit" disabled={consolidationMutation.isPending || selectedConsolidationProducts.length < 2 || missingConsolidationValues.length > 0 || duplicateConsolidationValue || !consolidationAcknowledged || !consolidationParentId} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{consolidationMutation.isPending ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />Consolidating…</> : <><GitMerge className="h-4 w-4" />Confirm consolidation</>}</button>
+              </div>
+            </form>
+          </div>
         )}
 
         {!canCreate && !canUpdate && !canDelete && (
