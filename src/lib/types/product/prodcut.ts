@@ -191,8 +191,17 @@ export interface CreateProductData {
   media?: Array<{
     type?: MediaType;
     url: string;
+    key?: string;
+    thumbnailUrl?: string;
+    title?: string;
+    description?: string;
+    mimeType?: string;
+    fileSize?: number;
+    width?: number;
+    height?: number;
     altText?: string;
     order?: number;
+    isActive?: boolean;
   }>;
 
   // 🆕 ENHANCED: Variants with media, pricing, dimensions
