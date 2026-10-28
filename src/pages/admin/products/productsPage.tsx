@@ -513,8 +513,16 @@ const ProductsPage: React.FC = () => {
   }));
   const extractParentProduct = filteredProducts.find((product) => product.id === extractParentId);
   const extractableVariants = extractParentProduct?.variants || [];
-
   const selectedExtractVariant = extractableVariants.find((variant) => String(variant.id) === extractVariantId);
+  const archivedOriginalExtractProduct = extractParentProduct && selectedExtractVariant
+    ? filteredProducts.find((product) =>
+        !product.isActive &&
+        !product.hasVariants &&
+        product.categoryId === extractParentProduct.categoryId &&
+        product.sku === selectedExtractVariant.sku
+      )
+    : undefined;
+
   const getExtractAttributeValue = (variant: NonNullable<typeof selectedExtractVariant>) => {
     const attrs = variant.attributes && typeof variant.attributes === 'object' ? variant.attributes : {};
     const dynamicValue = Object.entries(attrs).find(([key, value]) =>
@@ -526,6 +534,7 @@ const ProductsPage: React.FC = () => {
   };
   const extractVariantAttributeValue = selectedExtractVariant ? getExtractAttributeValue(selectedExtractVariant) : '';
   const extractProductName = useMemo(() => {
+    if (archivedOriginalExtractProduct) return archivedOriginalExtractProduct.name;
     if (!extractParentProduct || !selectedExtractVariant || !extractVariantAttributeValue) return '';
     let baseName = extractParentProduct.name.trim();
     const knownValues = extractableVariants
@@ -543,7 +552,7 @@ const ProductsPage: React.FC = () => {
       }
     }
     return `${baseName || extractParentProduct.name.trim()} - ${extractVariantAttributeValue}`.trim();
-  }, [extractParentProduct, selectedExtractVariant, extractVariantAttributeValue, extractableVariants]);
+  }, [archivedOriginalExtractProduct, extractParentProduct, selectedExtractVariant, extractVariantAttributeValue, extractableVariants]);
 
   const pagination = productsData?.pagination;
   const totalProducts = pagination?.total ?? filteredProducts.length;
@@ -961,7 +970,7 @@ const ProductsPage: React.FC = () => {
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New simple product name (generated automatically)</p>
                   <p className="mt-1 font-semibold text-slate-900">{extractProductName || 'Select a variant to preview its product name'}</p>
-                  <p className="mt-1 text-xs text-slate-500">The current variant value is used automatically, for example “Mysore Crepe Silk Saree - Wine”.</p>
+                  <p className="mt-1 text-xs text-slate-500">If this variant came from a previously combined product, its original product name is restored. Otherwise, the name uses the existing variant value.</p>
                 </div>
                 {extractVariantError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{extractVariantError}</p>}
                 <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm"><input type="checkbox" checked={extractAcknowledged} onChange={(e) => setExtractAcknowledged(e.target.checked)} className="mt-1" /><span>I understand this variant becomes a separate simple product. If no variants remain, the old product will be archived.</span></label>
