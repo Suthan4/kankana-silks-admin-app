@@ -2923,7 +2923,7 @@ const BulkProductUploadPage: React.FC = () => {
               ? { ...result, status: "skipped" as const, error: "Skipped by administrator" }
               : result),
           failed: Math.max(0, current.failed - 1),
-          skipped: current.skipped + (action === "skip" ? 1 : 0),
+          skipped: (current.skipped ?? 0) + (action === "skip" ? 1 : 0),
         }) : current);
       }
       setImageMatches((current) => current ? filterImageMatchesToProductMedia(current, nextProducts) : current);
