@@ -166,10 +166,12 @@ class S3Api {
     await axios.put(staged.uploadUrl, file, {
       headers: { "Content-Type": file.type },
       onUploadProgress: (event) => {
-        if (event.total) onProgress?.(Math.round((event.loaded / event.total) * 100));
+        if (event.total) onProgress?.(Math.round((event.loaded / event.total) * 90));
       },
     });
-    return this.finalizeStagedUpload(staged.stagingKey, folder, uploadType);
+    const finalized = await this.finalizeStagedUpload(staged.stagingKey, folder, uploadType);
+    onProgress?.(100);
+    return finalized;
   }
 }
 
