@@ -1946,18 +1946,30 @@ const BulkProductUploadPage: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: warehouseData } = useQuery({
+  const { data: warehouseData, isLoading: warehousesLoading, error: warehousesError } = useQuery({
     queryKey: ["bulk-warehouses"],
     queryFn: async () => {
       const res = await productApi.getWarehouses();
-      return res.data;
+      const payload: any = res?.data;
+      // Support both the standard { warehouses: [...] } response and the
+      // nested response shape returned by some API middleware versions.
+      const list = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.warehouses)
+          ? payload.warehouses
+          : Array.isArray(payload?.data?.warehouses)
+            ? payload.data.warehouses
+            : Array.isArray(payload?.data)
+              ? payload.data
+              : [];
+      return { warehouses: list };
     },
     staleTime: 5 * 60 * 1000,
   });
 
   const categoriesTree: BulkCategoryNode[] = categoryData?.tree ?? [];
   const flatCategories: BulkCategoryLookup[] = categoryData?.flatList ?? [];
-  const warehouses: BulkWarehouse[] = warehouseData?.warehouses ?? [];
+  const warehouses: BulkWarehouse[] = (warehouseData?.warehouses ?? []).map((warehouse: any) => ({\n    ...warehouse,\n    id: String(warehouse.id),\n    isActive: warehouse.isActive !== false,\n  }));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
