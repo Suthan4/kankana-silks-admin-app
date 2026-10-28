@@ -128,42 +128,35 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
 
   // Helper to extract actual options from variant attributes (filtering out backend defaults)
   const extractOptions = useCallback((variantsList: any[]): VariantOption[] => {
-    const map = new Map<string, Set<string>>();
-    variantsList.forEach((v) => {
-      if (v.attributes && typeof v.attributes === "object") {
-        Object.entries(v.attributes).forEach(([k, val]) => {
-          const cleanKey = k?.trim();
-          if (
-            cleanKey &&
-            cleanKey.toLowerCase() !== "default" &&
-            cleanKey.toLowerCase() !== "isdefault" &&
-            val !== undefined &&
-            val !== null &&
-            val !== "" &&
-            val !== true &&
-            val !== false
-          ) {
-            if (!map.has(cleanKey)) map.set(cleanKey, new Set());
-            map.get(cleanKey)!.add(String(val));
-          }
-        });
+    const map = new Map<string, { name: string; values: Map<string, string> }>();
+    const addValue = (rawName: string, rawValue: unknown) => {
+      const name = rawName.trim();
+      const value = String(rawValue ?? "").trim();
+      if (!name || !value || value.toLowerCase() === "default" || value === "true" || value === "false") return;
+      const key = name.toLocaleLowerCase().replace(/[\\s-]+/g, "_");
+      if (!key || key === "default" || key === "isdefault") return;
+      const displayName = key === "color" ? "Color"
+        : key === "size" ? "Size"
+        : key === "fabric" ? "Fabric"
+        : name.charAt(0).toLocaleUpperCase() + name.slice(1);
+      if (!map.has(key)) map.set(key, { name: displayName, values: new Map() });
+      const option = map.get(key)!;
+      const valueKey = value.toLocaleLowerCase();
+      if (!option.values.has(valueKey)) option.values.set(valueKey, value);
+    };
+
+    variantsList.forEach((variant) => {
+      if (variant.attributes && typeof variant.attributes === "object" && !Array.isArray(variant.attributes)) {
+        Object.entries(variant.attributes).forEach(([key, value]) => addValue(key, value));
       }
-      if (v.size && v.size.toLowerCase() !== "default") {
-        if (!map.has("Size")) map.set("Size", new Set());
-        map.get("Size")!.add(String(v.size));
-      }
-      if (v.color && v.color.toLowerCase() !== "default") {
-        if (!map.has("Color")) map.set("Color", new Set());
-        map.get("Color")!.add(String(v.color));
-      }
-      if (v.fabric && v.fabric.toLowerCase() !== "default") {
-        if (!map.has("Fabric")) map.set("Fabric", new Set());
-        map.get("Fabric")!.add(String(v.fabric));
-      }
+      addValue("Size", variant.size);
+      addValue("Color", variant.color);
+      addValue("Fabric", variant.fabric);
     });
-    return Array.from(map.entries()).map(([name, set]) => ({
+
+    return Array.from(map.values()).map(({ name, values }) => ({
       name,
-      values: Array.from(set),
+      values: Array.from(values.values()),
     }));
   }, []);
 
