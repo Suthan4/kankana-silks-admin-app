@@ -29,13 +29,24 @@ import {
   useProductQuery,
   useUpdateProductMutation,
 } from "@/lib/hooks/useProductMutations";
-import { uploadFileToS3 } from "@/services/mediaUploadService";
+import { uploadFileToS3WithMetadata } from "@/services/mediaUploadService";
 import { BasicProductInfoCard } from "./BasicProductInfoCard";
 import { GlobalMediaUploader } from "./GlobalMediaUploader";
 import { VariantMatrixBuilder } from "./VariantMatrixBuilder";
 import { ProductSidebarControls } from "./ProductSidebarControls";
 import { UnsavedChangesModal } from "./UnsavedChangesModal";
 import { FormActionBar } from "./FormActionBar";
+
+async function mapSequential<T, R>(
+  items: T[],
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let index = 0; index < items.length; index++) {
+    results.push(await mapper(items[index], index));
+  }
+  return results;
+}
 
 export interface ProductFormLayoutProps {
   productId?: string;
@@ -428,21 +439,29 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
       }
 
       if (data.media && data.media.length > 0) {
-        finalGlobalMedia = await Promise.all(
-          data.media.map(async (m: any, idx: number) => {
+        finalGlobalMedia = await mapSequential(
+          data.media,
+          async (m: any, idx: number) => {
             if (m.file) {
-              const publicUrl = await uploadFileToS3(m.file, "products", uploadType);
+              const uploaded = await uploadFileToS3WithMetadata(
+                m.file,
+                "products",
+                uploadType,
+                (percent) => {
+                  if (uploadToastId) toast.loading(`Uploading ${m.file.name}: ${percent}%`, { id: uploadToastId });
+                },
+              );
               return {
                 type: m.type || "IMAGE",
-                url: publicUrl,
-                key: m.key,
+                url: uploaded.url,
+                key: uploaded.key,
                 thumbnailUrl: m.thumbnailUrl,
                 title: m.title,
                 description: m.description,
-                mimeType: m.mimeType || m.file?.type,
-                fileSize: m.file?.size ?? m.fileSize,
-                width: m.width,
-                height: m.height,
+                mimeType: uploaded.mimeType || m.mimeType || m.file?.type,
+                fileSize: uploaded.size ?? m.file?.size ?? m.fileSize,
+                width: uploaded.width ?? m.width,
+                height: uploaded.height ?? m.height,
                 order: m.order ?? idx,
                 altText: m.altText || data.name,
                 isActive: m.isActive ?? true,
@@ -463,7 +482,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
               altText: m.altText,
               isActive: m.isActive ?? true,
             };
-          }),
+          },
         );
       }
 
@@ -482,28 +501,33 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
           );
         }
 
-        finalVariants = await Promise.all(
-          data.variants.map(async (v: any) => {
+        finalVariants = await mapSequential(
+          data.variants,
+          async (v: any) => {
             const vMedia = v.media || [];
-            const uploadedVMedia = await Promise.all(
-              vMedia.map(async (m: any, mOrder: number) => {
+            const uploadedVMedia = await mapSequential(
+              vMedia,
+              async (m: any, mOrder: number) => {
                 if (m.file) {
-                  const publicUrl = await uploadFileToS3(
+                  const uploaded = await uploadFileToS3WithMetadata(
                     m.file,
                     "products/variants",
                     uploadType,
+                    (percent) => {
+                      if (uploadToastId) toast.loading(`Uploading ${m.file.name}: ${percent}%`, { id: uploadToastId });
+                    },
                   );
                   return {
                     type: m.type || "IMAGE",
-                    url: publicUrl,
-                    key: m.key,
+                    url: uploaded.url,
+                    key: uploaded.key,
                     thumbnailUrl: m.thumbnailUrl,
                     title: m.title,
                     description: m.description,
-                    mimeType: m.mimeType || m.file?.type,
-                    fileSize: m.file?.size ?? m.fileSize,
-                    width: m.width,
-                    height: m.height,
+                    mimeType: uploaded.mimeType || m.mimeType || m.file?.type,
+                    fileSize: uploaded.size ?? m.file?.size ?? m.fileSize,
+                    width: uploaded.width ?? m.width,
+                    height: uploaded.height ?? m.height,
                     order: m.order ?? mOrder,
                     altText: m.altText || `${v.sku || data.name} photo`,
                     isActive: m.isActive ?? true,
@@ -524,13 +548,13 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                   altText: m.altText,
                   isActive: m.isActive ?? true,
                 };
-              }),
+              },
             );
             return {
               ...v,
               media: uploadedVMedia,
             };
-          }),
+          },
         );
       }
 
