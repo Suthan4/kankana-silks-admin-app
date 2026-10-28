@@ -880,7 +880,7 @@ const ProductsPage: React.FC = () => {
                       });
                       return next;
                     });
-                  } className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
+                  }} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
                     <option value="color">Color</option><option value="size">Size</option><option value="fabric">Fabric</option><option value="style">Style</option>
                   </select>
                   <p className="mt-1 text-xs text-slate-500">Each selected product becomes one variant using this attribute and the value you provide below.</p>
