@@ -1939,7 +1939,7 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
         )}
 
         {/* Retry on failure */}
-        {job.status === "failed" && (
+        {job.status === "failed" && job.results.some((result) => result.status === "failed") && (
           <button
             onClick={onRetry}
             disabled={isRetrying}
@@ -1959,6 +1959,11 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
         {job.status === "completed" && (
           <div className="bg-green-50 rounded-lg p-3 text-sm text-green-700 text-center font-medium">
             ✓ Import complete — {job.successful} product(s) created
+          </div>
+        )}
+        {job.status === "failed" && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+            You are in control: use <strong>Skip</strong> to keep a record but exclude an item from this draft, or <strong>Delete</strong> to remove it from the draft. Neither action deletes a live catalog product. Existing images are retained unless the system can safely prove they are unused.
           </div>
         )}
       </div>
