@@ -121,7 +121,7 @@ export const productApi = {
   /** Consolidate selected existing simple products into variants of one retained parent product. */
   consolidateSimpleProducts: async (payload: {
     parentProductId: string;
-    attributeName: "color" | "size" | "fabric" | "style";
+    attributeName: string;
     products: Array<{ productId: string; attributeValue: string }>;
   }): Promise<ApiResponse<{
     product: Product;
@@ -135,7 +135,7 @@ export const productApi = {
   addSimpleProductAsVariant: async (payload: {
     parentProductId: string;
     sourceProductId: string;
-    attributeName: "color" | "size" | "fabric" | "style";
+    attributeName: string;
     attributeValue: string;
   }) => {
     return apiCall("POST", "/admin/products/add-simple-variant", payload);
