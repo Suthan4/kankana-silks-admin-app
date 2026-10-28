@@ -338,7 +338,8 @@ const ViewProductModal: React.FC<{
                   <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Layers className="h-5 w-5 text-purple-600" />Available Variants ({product.variants.length})</h4>
                   <div className="space-y-3 max-h-60 overflow-y-auto">
                     {product.variants.map((variant, idx) => {
-                      const label = [variant.size, variant.color, variant.fabric].filter(Boolean).join(' / ') || `Variant ${idx + 1}`;
+                      const attributeLabels = variant.attributes && typeof variant.attributes === 'object' ? Object.values(variant.attributes).filter((value) => typeof value === 'string') as string[] : [];
+                      const label = [variant.size, variant.color, variant.fabric].filter(Boolean).join(' / ') || attributeLabels.join(' / ') || `Variant ${idx + 1}`;
                       const vStock = product.stock?.find((s) => s.variantId === variant.id);
                       return (
                         <div key={idx} className="bg-purple-50 rounded-lg p-3 border border-purple-200">
