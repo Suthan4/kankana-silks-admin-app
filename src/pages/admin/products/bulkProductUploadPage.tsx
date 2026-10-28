@@ -142,7 +142,7 @@ function summaryFromProducts(
   };
 }
 
-const POLLING_INTERVAL = 5000; // Avoid excessive status traffic; backend work continues independently.
+const POLLING_INTERVAL = 10000; // Status refresh only; pause while the browser tab is hidden.
 
 // ─── Draft Selector modal ────────────────────────────────────────────────────
 
@@ -2108,9 +2108,17 @@ const BulkProductUploadPage: React.FC = () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let requestInFlight = false;
 
+    // Poll only while this page is visible. The server job keeps running when
+    // the admin navigates away; returning to this page triggers an immediate refresh.
+    const scheduleRefresh = (delay = POLLING_INTERVAL) => {
+      if (disposed || document.visibilityState === "hidden") return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void refreshJob(); }, delay);
+    };
+
     // Recursive timeout prevents overlapping status requests when the API is slow.
     const refreshJob = async () => {
-      if (disposed || requestInFlight) return;
+      if (disposed || requestInFlight || document.visibilityState === "hidden") return;
       requestInFlight = true;
       try {
         const res = await productApi.getJobStatus(jobId);
@@ -2217,18 +2225,25 @@ const BulkProductUploadPage: React.FC = () => {
         // Polling is the realtime fallback if a transient network request fails.
       } finally {
         requestInFlight = false;
-        if (!disposed) {
-          timer = setTimeout(() => {
-            void refreshJob();
-          }, POLLING_INTERVAL);
-        }
+        scheduleRefresh();
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshJob();
+      } else if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     void refreshJob();
     return () => {
       disposed = true;
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [jobId, job?.status, draftId, queryClient, setSearchParams]);
 
@@ -2930,6 +2945,21 @@ const BulkProductUploadPage: React.FC = () => {
     }
   };
 
+  const handleCancelImport = async () => {
+    if (!jobId || !window.confirm("Stop this import? Images already uploaded to S3 will remain, and products not yet created will be skipped.")) return;
+    try {
+      const res = await productApi.cancelJob(jobId);
+      if (res.data) {
+        setJob({ ...(res.data as BulkImportJob), status: "cancelled" } as BulkImportJob);
+        setDraftStatus("DRAFT");
+        localStorage.removeItem("active_bulk_job_id");
+        toast.success("Stop requested. The current image operation may finish before the job stops.");
+      }
+    } catch (err) {
+      toast.error(humanError(err));
+    }
+  };
+
   const handleMatchComplete = useCallback(
     async (
       matches: ImageMatchResult,
@@ -3294,9 +3324,16 @@ const BulkProductUploadPage: React.FC = () => {
                       ? "Uploading and optimizing images in the background"
                       : "Importing products in the background"}
                 </span>
-                <span className="font-semibold tabular-nums text-indigo-700">
-                  {job.progress ?? 0}%
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold tabular-nums text-indigo-700">{job.progress ?? 0}%</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleCancelImport()}
+                    className="rounded-md border border-red-200 px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50"
+                  >
+                    Stop import
+                  </button>
+                </div>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div
