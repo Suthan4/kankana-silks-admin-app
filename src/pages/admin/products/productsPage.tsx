@@ -375,8 +375,6 @@ const ProductsPage: React.FC = () => {
   const [showExtractVariantModal, setShowExtractVariantModal] = useState(false);
   const [extractParentId, setExtractParentId] = useState('');
   const [extractVariantId, setExtractVariantId] = useState('');
-  const [extractProductName, setExtractProductName] = useState('');
-  const [extractProductSku, setExtractProductSku] = useState('');
   const [extractVariantError, setExtractVariantError] = useState('');
   const [extractAcknowledged, setExtractAcknowledged] = useState(false);
 
@@ -478,7 +476,7 @@ const ProductsPage: React.FC = () => {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['products'] });
       setShowExtractVariantModal(false);
-      setExtractParentId(''); setExtractVariantId(''); setExtractProductName(''); setExtractProductSku('');
+      setExtractParentId(''); setExtractVariantId('');
       setExtractVariantError(''); setExtractAcknowledged(false);
       toast.success('Variant extracted as a new simple product');
     },
@@ -515,6 +513,37 @@ const ProductsPage: React.FC = () => {
   }));
   const extractParentProduct = filteredProducts.find((product) => product.id === extractParentId);
   const extractableVariants = extractParentProduct?.variants || [];
+
+  const selectedExtractVariant = extractableVariants.find((variant) => String(variant.id) === extractVariantId);
+  const getExtractAttributeValue = (variant: NonNullable<typeof selectedExtractVariant>) => {
+    const attrs = variant.attributes && typeof variant.attributes === 'object' ? variant.attributes : {};
+    const dynamicValue = Object.entries(attrs).find(([key, value]) =>
+      key.toLocaleLowerCase() !== 'default' && typeof value === 'string' && value.trim()
+    )?.[1];
+    return typeof dynamicValue === 'string' && dynamicValue.trim()
+      ? dynamicValue.trim()
+      : variant.color?.trim() || variant.size?.trim() || variant.fabric?.trim() || '';
+  };
+  const extractVariantAttributeValue = selectedExtractVariant ? getExtractAttributeValue(selectedExtractVariant) : '';
+  const extractProductName = useMemo(() => {
+    if (!extractParentProduct || !selectedExtractVariant || !extractVariantAttributeValue) return '';
+    let baseName = extractParentProduct.name.trim();
+    const knownValues = extractableVariants
+      .map((variant) => getExtractAttributeValue(variant))
+      .filter(Boolean)
+      .sort((left, right) => right.length - left.length);
+    for (const value of knownValues) {
+      const lowerBase = baseName.toLocaleLowerCase();
+      const lowerValue = value.toLocaleLowerCase();
+      if (!lowerBase.endsWith(lowerValue)) continue;
+      const prefix = baseName.slice(0, baseName.length - value.length).replace(/[-–—|: ]+$/, '').trim();
+      if (prefix) {
+        baseName = prefix;
+        break;
+      }
+    }
+    return `${baseName || extractParentProduct.name.trim()} - ${extractVariantAttributeValue}`.trim();
+  }, [extractParentProduct, selectedExtractVariant, extractVariantAttributeValue, extractableVariants]);
 
   const pagination = productsData?.pagination;
   const totalProducts = pagination?.total ?? filteredProducts.length;
@@ -789,7 +818,7 @@ const ProductsPage: React.FC = () => {
             </summary>
             <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
               <button type="button" onClick={() => { setAddVariantError(""); setAddVariantAcknowledged(false); setAddVariantValue(""); const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants); const activeSimple = filteredProducts.find((p) => p.isActive && !p.hasVariants); setAddVariantParentId(activeVariable?.id || ""); setAddVariantSourceId(activeSimple?.id || ""); setShowAddVariantModal(true); }} className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100">Add simple product to variants</button>
-              <button type="button" onClick={() => { setExtractVariantError(""); setExtractAcknowledged(false); setExtractVariantId(""); const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants); setExtractParentId(activeVariable?.id || ""); setExtractProductName(""); setExtractProductSku(""); setShowExtractVariantModal(true); }} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">Extract variant to simple</button>
+              <button type="button" onClick={() => { setExtractVariantError(""); setExtractAcknowledged(false); setExtractVariantId(""); const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants); setExtractParentId(activeVariable?.id || ""); setExtractVariantId(""); setShowExtractVariantModal(true); }} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">Extract variant to simple</button>
               <span className="text-xs text-slate-500">Existing SKUs and media are reused. Source simple products are archived after conversion.</span>
             </div>
           </details>
@@ -920,21 +949,24 @@ const ProductsPage: React.FC = () => {
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
             <form onSubmit={(event) => {
               event.preventDefault(); setExtractVariantError('');
-              if (!extractParentId || !extractVariantId || !extractProductName.trim()) { setExtractVariantError('Choose a variable product and variant, then enter a new product name.'); return; }
-              if (!extractAcknowledged) { setExtractVariantError('Confirm that the original variable product must retain at least two variants.'); return; }
-              extractVariantMutation.mutate({ parentProductId: extractParentId, variantId: extractVariantId, productName: extractProductName.trim(), ...(extractProductSku.trim() ? { productSku: extractProductSku.trim() } : {}) });
+              if (!extractParentId || !extractVariantId || !extractProductName) { setExtractVariantError('Choose a variable product and variant first.'); return; }
+              if (!extractAcknowledged) { setExtractVariantError('Confirm the product change to continue.'); return; }
+              extractVariantMutation.mutate({ parentProductId: extractParentId, variantId: extractVariantId, productName: extractProductName });
             }} className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
               <div className="flex items-center justify-between bg-amber-600 px-5 py-4 text-white"><div><h2 className="text-lg font-bold">Extract variant to simple product</h2><p className="text-xs text-amber-100">Move an existing variant without recreating it</p></div><button type="button" onClick={() => setShowExtractVariantModal(false)} aria-label="Close extract variant modal"><X className="h-5 w-5" /></button></div>
               <div className="space-y-4 p-5">
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Safety rule: the original product must have at least 3 variants before extraction, leaving at least 2 variants in the original variable product.</div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Select the variant to move. Its existing variant SKU, photos, and inventory are reused automatically—no SKU entry or image re-upload needed.</div>
                 <div><label className="mb-1 block text-sm font-semibold">Variable product</label><select required value={extractParentId} onChange={(e) => { setExtractParentId(e.target.value); setExtractVariantId(''); }} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"><option value="">Select variable product</option>{filteredProducts.filter((p) => p.isActive && p.hasVariants).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></div>
                 <div><label className="mb-1 block text-sm font-semibold">Variant to extract</label>{extractParentId && extractableVariants.length === 1 && <p className="mb-1 text-xs text-amber-700">This is the only variant. The old product will be archived after extraction.</p>}{extractParentId && extractableVariants.length === 2 && <p className="mb-1 text-xs text-amber-700">The remaining variant will become a simple product.</p>}<select required value={extractVariantId} onChange={(e) => setExtractVariantId(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" disabled={!extractParentId}><option value="">Select variant</option>{(filteredProducts.find((p) => p.id === extractParentId)?.variants || []).map((v) => { const attrs = Object.entries(v.attributes || {}).filter(([key]) => key !== 'default').map(([key, value]) => `${key}: ${String(value)}`).join(', '); return <option key={v.id} value={v.id}>{attrs || v.color || v.size || v.fabric || 'Variant'} · SKU {v.sku}</option>; })}</select></div>
-                <div><label className="mb-1 block text-sm font-semibold">New simple product name</label><input required minLength={2} maxLength={180} value={extractProductName} onChange={(e) => setExtractProductName(e.target.value)} placeholder="e.g. Kanchipuram Silk Saree – Wine Red" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div>
-                <div><label className="mb-1 block text-sm font-semibold">New product SKU (optional)</label><input maxLength={100} value={extractProductSku} onChange={(e) => setExtractProductSku(e.target.value)} placeholder="Leave blank to generate a unique SKU" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New simple product name (generated automatically)</p>
+                  <p className="mt-1 font-semibold text-slate-900">{extractProductName || 'Select a variant to preview its product name'}</p>
+                  <p className="mt-1 text-xs text-slate-500">The current variant value is used automatically, for example “Mysore Crepe Silk Saree - Wine”.</p>
+                </div>
                 {extractVariantError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{extractVariantError}</p>}
                 <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm"><input type="checkbox" checked={extractAcknowledged} onChange={(e) => setExtractAcknowledged(e.target.checked)} className="mt-1" /><span>I understand this variant becomes a separate simple product. If no variants remain, the old product will be archived.</span></label>
               </div>
-              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowExtractVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={extractVariantMutation.isPending || !extractParentId || !extractVariantId || !extractProductName.trim() || !extractAcknowledged} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{extractVariantMutation.isPending ? 'Extracting…' : 'Extract as simple product'}</button></div>
+              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowExtractVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={extractVariantMutation.isPending || !extractParentId || !extractVariantId || !extractProductName || !extractAcknowledged} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{extractVariantMutation.isPending ? 'Extracting…' : 'Extract as simple product'}</button></div>
             </form>
           </div>
         )}
