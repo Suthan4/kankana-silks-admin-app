@@ -454,7 +454,7 @@ const ProductsPage: React.FC = () => {
 
   const consolidationMutation = useMutation({
     mutationFn: productApi.consolidateSimpleProducts,
-    onSuccess: async (response) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['products'] });
       setSelectedProductMap({});
       setConsolidationValues({});
