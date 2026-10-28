@@ -56,7 +56,7 @@ export async function uploadFileToS3WithMetadata(
 ): Promise<UploadedMediaResult> {
   // Images use browser-to-S3 staging, then trusted server-side validation and
   // compression. Video uploads retain the existing non-image upload path.
-  const res: any = file.type.startsWith("image/")
+  const res = file.type.startsWith("image/")
     ? await s3Api.uploadDirect(file, folder, uploadType, onProgress)
     : await s3Api.uploadSingle(file, folder, uploadType);
 
