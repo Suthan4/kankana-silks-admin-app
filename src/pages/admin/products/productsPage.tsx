@@ -826,30 +826,18 @@ const ProductsPage: React.FC = () => {
 
 
         {canUpdate && (
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
-            <span className="mr-1 text-sm font-semibold text-slate-700">Variant management</span>
-            <button type="button" onClick={() => {
-              setAddVariantError(''); setAddVariantAcknowledged(false); setAddVariantValue('');
-              const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants);
-              const activeSimple = filteredProducts.find((p) => p.isActive && !p.hasVariants);
-              setAddVariantParentId(activeVariable?.id || '');
-              setAddVariantSourceId(activeSimple?.id || '');
-              setShowAddVariantModal(true);
-            }} className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50">
-              Add simple product to existing variants
-            </button>
-            <button type="button" onClick={() => {
-              setExtractVariantError(''); setExtractAcknowledged(false); setExtractVariantId('');
-              const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants);
-              setExtractParentId(activeVariable?.id || ''); setExtractProductName(''); setExtractProductSku('');
-              setShowExtractVariantModal(true);
-            }} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100">
-              Extract variant as simple product
-            </button>
-            <p className="basis-full text-xs text-slate-500">These actions reuse existing variant records and preserve SKUs and inventory; choose active products visible under the current filters.</p>
-          </div>
+          <details className="group rounded-xl border border-slate-200 bg-white px-3 py-2">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800 marker:hidden">
+              <span className="flex items-center gap-2"><GitMerge className="h-4 w-4 text-indigo-600" /> Variant tools <span className="text-xs font-normal text-slate-500">Consolidate, add, or extract variants</span></span>
+              <span className="text-xs font-semibold text-indigo-700 group-open:hidden">Show tools +</span><span className="hidden text-xs font-semibold text-indigo-700 group-open:inline">Hide tools −</span>
+            </summary>
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+              <button type="button" onClick={() => { setAddVariantError(""); setAddVariantAcknowledged(false); setAddVariantValue(""); const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants); const activeSimple = filteredProducts.find((p) => p.isActive && !p.hasVariants); setAddVariantParentId(activeVariable?.id || ""); setAddVariantSourceId(activeSimple?.id || ""); setShowAddVariantModal(true); }} className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100">Add simple product to variants</button>
+              <button type="button" onClick={() => { setExtractVariantError(""); setExtractAcknowledged(false); setExtractVariantId(""); const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants); setExtractParentId(activeVariable?.id || ""); setExtractProductName(""); setExtractProductSku(""); setShowExtractVariantModal(true); }} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">Extract variant to simple</button>
+              <span className="text-xs text-slate-500">Existing SKUs and media are reused. Source simple products are archived after conversion.</span>
+            </div>
+          </details>
         )}
-
         {/* Products Display */}
         {isLoading ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
