@@ -443,7 +443,14 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
           data.media,
           async (m: any, idx: number) => {
             if (m.file) {
-              const uploaded = await uploadFileToS3WithMetadata(m.file, "products", uploadType);
+              const uploaded = await uploadFileToS3WithMetadata(
+                m.file,
+                "products",
+                uploadType,
+                (percent) => {
+                  if (uploadToastId) toast.loading(`Uploading ${m.file.name}: ${percent}%`, { id: uploadToastId });
+                },
+              );
               return {
                 type: m.type || "IMAGE",
                 url: uploaded.url,
@@ -506,6 +513,9 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                     m.file,
                     "products/variants",
                     uploadType,
+                    (percent) => {
+                      if (uploadToastId) toast.loading(`Uploading ${m.file.name}: ${percent}%`, { id: uploadToastId });
+                    },
                   );
                   return {
                     type: m.type || "IMAGE",
