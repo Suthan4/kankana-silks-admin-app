@@ -83,7 +83,7 @@ export const BulkSharedProductEditor: React.FC<Props> = ({
         updatedAt: "",
       }] : [],
     }));
-    const stock = product.stock ? [{
+    const productStock = product.stock ? [{
       id: "draft-stock",
       productId: product.id || product.productGroupId,
       warehouseId: product.stock.warehouseId,
@@ -91,6 +91,8 @@ export const BulkSharedProductEditor: React.FC<Props> = ({
       lowStockThreshold: product.stock.lowStockThreshold ?? 5,
       updatedAt: "",
     }] : [];
+    const variantStock = variants.flatMap((variant) => variant.stock || []);
+    const stock = [...productStock, ...variantStock];
     return {
       id: product.id || product.productGroupId,
       slug: product.seo?.slug || product.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-"),
