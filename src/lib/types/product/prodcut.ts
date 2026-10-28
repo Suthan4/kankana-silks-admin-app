@@ -230,9 +230,17 @@ export interface CreateProductData {
     media?: Array<{
       type?: MediaType;
       url: string;
+      key?: string;
       altText?: string;
       order?: number;
       thumbnailUrl?: string;
+      title?: string;
+      description?: string;
+      mimeType?: string;
+      fileSize?: number;
+      width?: number;
+      height?: number;
+      isActive?: boolean;
     }>;
 
     stock: {
