@@ -536,13 +536,13 @@ const ProductsPage: React.FC = () => {
       const lowerBase = baseName.toLocaleLowerCase();
       const lowerValue = value.toLocaleLowerCase();
       if (!lowerBase.endsWith(lowerValue)) continue;
-      const prefix = baseName.slice(0, baseName.length - value.length).replace(/[\\s\\-–—|:]+$/, '').trim();
+      const prefix = baseName.slice(0, baseName.length - value.length).replace(/[-–—|: ]+$/, '').trim();
       if (prefix) {
         baseName = prefix;
         break;
       }
     }
-    return `${baseName || extractParentProduct.name.trim()} - ${extractVariantAttributeValue}`.replace(/\\s+/g, ' ').trim();
+    return `${baseName || extractParentProduct.name.trim()} - ${extractVariantAttributeValue}`.trim();
   }, [extractParentProduct, selectedExtractVariant, extractVariantAttributeValue, extractableVariants]);
 
   const pagination = productsData?.pagination;
