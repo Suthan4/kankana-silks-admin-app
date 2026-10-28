@@ -375,8 +375,6 @@ const ProductsPage: React.FC = () => {
   const [showExtractVariantModal, setShowExtractVariantModal] = useState(false);
   const [extractParentId, setExtractParentId] = useState('');
   const [extractVariantId, setExtractVariantId] = useState('');
-  const [extractProductName, setExtractProductName] = useState('');
-  const [extractProductSku, setExtractProductSku] = useState('');
   const [extractVariantError, setExtractVariantError] = useState('');
   const [extractAcknowledged, setExtractAcknowledged] = useState(false);
 
@@ -478,7 +476,7 @@ const ProductsPage: React.FC = () => {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['products'] });
       setShowExtractVariantModal(false);
-      setExtractParentId(''); setExtractVariantId(''); setExtractProductName(''); setExtractProductSku('');
+      setExtractParentId(''); setExtractVariantId('');
       setExtractVariantError(''); setExtractAcknowledged(false);
       toast.success('Variant extracted as a new simple product');
     },
@@ -515,6 +513,547 @@ const ProductsPage: React.FC = () => {
   }));
   const extractParentProduct = filteredProducts.find((product) => product.id === extractParentId);
   const extractableVariants = extractParentProduct?.variants || [];
+
+  const selectedExtractVariant = extractableVariants.find((variant) => String(variant.id) === extractVariantId);
+  const getExtractAttributeValue = (variant: NonNullable<typeof selectedExtractVariant>) => {
+    const attrs = variant.attributes && typeof variant.attributes === 'object' ? variant.attributes : {};
+    const dynamicValue = Object.entries(attrs).find(([key, value]) =>
+      key.toLocaleLowerCase() !== 'default' && typeof value === 'string' && value.trim()
+    )?.[1];
+    return typeof dynamicValue === 'string' && dynamicValue.trim()
+      ? dynamicValue.trim()
+      : variant.color?.trim() || variant.size?.trim() || variant.fabric?.trim() || '';
+  };
+  const extractVariantAttributeValue = selectedExtractVariant ? getExtractAttributeValue(selectedExtractVariant) : '';
+  const extractProductName = useMemo(() => {
+    if (!extractParentProduct || !selectedExtractVariant || !extractVariantAttributeValue) return '';
+    let baseName = extractParentProduct.name.trim();
+    const knownValues = extractableVariants
+      .map((variant) => getExtractAttributeValue(variant))
+      .filter(Boolean)
+      .sort((left, right) => right.length - left.length);
+    for (const value of knownValues) {
+      const escaped = value.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\  const extractParentProduct = filteredProducts.find((product) => product.id === extractParentId);
+  const extractableVariants = extractParentProduct?.variants || [];
+');
+      baseName = baseName.replace(new RegExp(`(?:\\\\s*[-–—|:]\\\\s*)?${escaped}\\\\s*import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { MainLayout } from '@/components/layouts/mainLayout';
+import { usePermissions } from '@/hooks/usePermissions';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  X,
+  Package,
+  Search,
+  Grid3x3,
+  List,
+  Eye,
+  Image as ImageIcon,
+  Tag,
+  Layers,
+  Box,
+  AlertCircle,
+  CheckCircle,
+  Sparkles,
+  ShoppingCart,
+  Warehouse as WarehouseIcon,
+  MapPin,
+  User,
+  Video,
+  Play,
+  FileSpreadsheet,
+  GitMerge,
+} from 'lucide-react';
+import { productApi } from '@/lib/api/product.api';
+import { categoryApi } from '@/lib/api/category.api';
+import { warehouseApi } from '@/lib/api/warehouse.api';
+import type { Product } from '@/lib/types/product/prodcut';
+import type { Category } from '@/lib/types/category/category';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router';
+import { BackButton } from '@/components/ui/BackButton';
+
+// ---------------------------------------------------------------------------
+// ProductCard
+// ---------------------------------------------------------------------------
+const ProductCard: React.FC<{
+  product: Product;
+  onEdit: (product: Product) => void;
+  onDelete: (id: string) => void;
+  onView: (product: Product) => void;
+  canUpdate: boolean;
+  canDelete: boolean;
+  selectable?: boolean;
+  selectedForConsolidation?: boolean;
+  onToggleSelection?: (id: string) => void;
+}> = React.memo(({ product, onEdit, onDelete, onView, canUpdate, canDelete, selectable = false, selectedForConsolidation = false, onToggleSelection }) => {
+  const primaryMedia = product.media?.find((m) => m.order === 0) || product.media?.[0];
+  const isVideo = primaryMedia?.type === 'VIDEO';
+  return (
+    <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden border border-slate-200 hover:border-blue-300 group">
+      <div className="relative h-32 bg-gradient-to-br from-gray-100 to-gray-200">
+        {selectable && (
+          <label className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-lg bg-white/95 px-2.5 py-2 text-xs font-semibold text-slate-800 shadow-md">
+            <input type="checkbox" checked={selectedForConsolidation} disabled={product.hasVariants || !product.isActive} onChange={() => onToggleSelection?.(product.id)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed" aria-label={`Select ${product.name} for consolidation`} />
+            <span>{selectedForConsolidation ? 'Selected' : 'Select'}</span>
+          </label>
+        )}
+        {primaryMedia ? (
+          isVideo ? (
+            <div className="relative w-full h-full">
+              {primaryMedia.thumbnailUrl ? (
+                <img src={primaryMedia.thumbnailUrl} alt={primaryMedia.altText || product.name} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                  <Video className="h-20 w-20 text-gray-400" />
+                </div>
+              )}
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+                <div className="w-16 h-16 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
+                  <Play className="h-8 w-8 text-gray-800 ml-1" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <img src={primaryMedia.url} alt={primaryMedia.altText || product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          )
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Package className="h-20 w-20 text-gray-400" />
+          </div>
+        )}
+        <div className="absolute top-3 right-3 flex flex-col gap-2">
+          {product.hasVariants && (
+            <span className="px-2.5 py-1 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center gap-1 shadow-lg">
+              <Layers className="h-3 w-3" />
+              {product.variants?.length || 0}
+            </span>
+          )}
+          <span className={`px-2.5 py-1 text-xs font-bold rounded-full shadow-lg ${product.isActive ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+            {product.isActive ? 'LIVE' : 'DRAFT'}
+          </span>
+        </div>
+        {product.media && product.media.length > 1 && (
+          <div className="absolute bottom-3 left-3 px-3 py-1.5 bg-black bg-opacity-70 text-white text-xs font-medium rounded-full flex items-center gap-1">
+            <ImageIcon className="h-3 w-3" />
+            {product.media.length}
+          </div>
+        )}
+      </div>
+      <div className="p-4">
+        <h3 className="text-lg font-bold text-gray-900 line-clamp-2 mb-1">{product.name}</h3>
+        {product.category && (
+          <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-3">
+            <Tag className="h-3.5 w-3.5" />
+            <span>{product.category.name}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Price</p>
+            <p className="text-2xl font-bold text-blue-600">&#8377;{product.sellingPrice.toLocaleString()}</p>
+            {product.basePrice !== product.sellingPrice && (
+              <p className="text-xs text-gray-400 line-through">&#8377;{product.basePrice.toLocaleString()}</p>
+            )}
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">SKU</p>
+            <p className="text-sm font-mono font-semibold text-gray-900 bg-gray-100 px-2 py-1 rounded">{product.sku}</p>
+          </div>
+        </div>
+        {product.hasVariants && product.variants && product.variants.length > 0 && (
+          <div className="mb-3 p-2.5 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+            <p className="text-xs font-semibold text-purple-700 flex items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5" />
+              {product.variants.length} Variant{product.variants.length > 1 ? 's' : ''} Available
+            </p>
+            <div className="flex gap-1 mt-1.5 flex-wrap">
+              {product.variants.slice(0, 3).map((variant, idx) => (
+                <span key={idx} className="text-xs bg-white px-2 py-0.5 rounded border border-purple-200 text-purple-700">
+                  {variant.size || variant.color || variant.fabric}
+                </span>
+              ))}
+              {product.variants.length > 3 && (
+                <span className="text-xs text-purple-600 font-medium">+{product.variants.length - 3} more</span>
+              )}
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => onView(product)} className="px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center" title="View Details">
+            <Eye className="h-4 w-4" />
+          </button>
+          {canUpdate && (
+            <button onClick={() => onEdit(product)} className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center justify-center" title="Edit Product">
+              <Edit className="h-4 w-4" />
+            </button>
+          )}
+          {canDelete && (
+            <button onClick={() => onDelete(product.id)} className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center" title="Delete Product">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+ProductCard.displayName = 'ProductCard';
+
+// ---------------------------------------------------------------------------
+// ViewProductModal
+// ---------------------------------------------------------------------------
+const ViewProductModal: React.FC<{
+  product: Product;
+  onClose: () => void;
+  onEdit?: (product: Product) => void;
+  canUpdate: boolean;
+}> = ({ product, onClose, onEdit, canUpdate }) => {
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
+  const selectedMedia = product.media?.[selectedMediaIndex];
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Eye className="h-6 w-6" />
+            <div>
+              <h2 className="text-xl font-bold">Product Details</h2>
+              <p className="text-sm text-blue-100">{product.sku}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {canUpdate && onEdit && (
+              <button onClick={() => { onClose(); onEdit(product); }} className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition-colors flex items-center gap-2">
+                <Edit className="h-4 w-4" /> Edit
+              </button>
+            )}
+            <button onClick={onClose} className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors">
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden border-2 border-gray-200">
+                {selectedMedia ? (
+                  selectedMedia.type === 'VIDEO' ? (
+                    <video src={selectedMedia.url} controls className="w-full h-full object-cover" poster={selectedMedia.thumbnailUrl}>
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <img src={selectedMedia.url} alt={selectedMedia.altText || product.name} className="w-full h-full object-cover" />
+                  )
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Package className="h-24 w-24 text-gray-400" />
+                  </div>
+                )}
+              </div>
+              {product.media && product.media.length > 1 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {product.media.map((m, idx) => (
+                    <button key={idx} onClick={() => setSelectedMediaIndex(idx)} className={`aspect-square rounded-lg overflow-hidden border-2 transition-all relative ${selectedMediaIndex === idx ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}>
+                      {m.type === 'VIDEO' ? (
+                        <>
+                          {m.thumbnailUrl ? <img src={m.thumbnailUrl} alt={m.altText || `Video ${idx+1}`} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-gray-800"><Video className="h-8 w-8 text-gray-400" /></div>}
+                          <div className="absolute inset-0 flex items-center justify-center"><Play className="h-6 w-6 text-white drop-shadow-lg" /></div>
+                        </>
+                      ) : (
+                        <img src={m.url} alt={m.altText || `Image ${idx+1}`} className="w-full h-full object-cover" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-3 pb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                {product.hasVariants && (
+                  <span className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-sm font-semibold flex items-center gap-1">
+                    <Layers className="h-4 w-4" /> Variable Product
+                  </span>
+                )}
+                <span className={`px-3 py-1.5 rounded-full text-sm font-semibold ${product.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {product.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              <div>
+                <h3 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h3>
+                {product.category && <div className="flex items-center gap-2 text-gray-600"><Tag className="h-4 w-4" /><span>{product.category.name}</span></div>}
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Description</h4>
+                <p className="text-gray-600 leading-relaxed">{product.description}</p>
+              </div>
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                <div className="flex items-baseline gap-3">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Selling Price</p>
+                    <p className="text-4xl font-bold text-blue-600">&#8377;{product.sellingPrice.toLocaleString()}</p>
+                  </div>
+                  {product.basePrice !== product.sellingPrice && (
+                    <div>
+                      <p className="text-sm text-gray-500">Base Price</p>
+                      <p className="text-xl text-gray-400 line-through">&#8377;{product.basePrice.toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
+                {product.basePrice !== product.sellingPrice && (
+                  <p className="text-sm text-green-600 font-medium mt-2">
+                    Save &#8377;{(product.basePrice - product.sellingPrice).toLocaleString()} ({Math.round(((product.basePrice - product.sellingPrice) / product.basePrice) * 100)}% off)
+                  </p>
+                )}
+              </div>
+              {product.hsnCode && <div><p className="text-sm text-gray-600">HSN Code</p><p className="text-lg font-semibold text-gray-900">{product.hsnCode}</p></div>}
+              {(product.artisanName || product.artisanAbout || product.artisanLocation) && (
+                <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><User className="h-5 w-5 text-amber-600" />Artisan Information</h4>
+                  {product.artisanName && <p className="font-medium text-gray-900 mb-1">{product.artisanName}</p>}
+                  {product.artisanLocation && <p className="text-sm text-gray-600 flex items-center gap-1 mb-2"><MapPin className="h-4 w-4" />{product.artisanLocation}</p>}
+                  {product.artisanAbout && <p className="text-sm text-gray-700 italic">{product.artisanAbout}</p>}
+                </div>
+              )}
+              {product.specifications && product.specifications.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Tag className="h-5 w-5 text-blue-600" />Specifications</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {product.specifications.map((spec, idx) => (
+                      <div key={idx} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{spec.key}</p>
+                        <p className="text-sm font-semibold text-gray-900">{spec.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {product.hasVariants && product.variants && product.variants.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Layers className="h-5 w-5 text-purple-600" />Available Variants ({product.variants.length})</h4>
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {product.variants.map((variant, idx) => {
+                      const attributeLabels = variant.attributes && typeof variant.attributes === 'object' ? Object.values(variant.attributes).filter((value) => typeof value === 'string') as string[] : [];
+                      const label = [variant.size, variant.color, variant.fabric].filter(Boolean).join(' / ') || attributeLabels.join(' / ') || `Variant ${idx + 1}`;
+                      const vStock = product.stock?.find((s) => s.variantId === variant.id);
+                      return (
+                        <div key={idx} className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold text-gray-900">{label}</span>
+                            <span className="text-purple-600 font-bold text-lg">&#8377;{Number(variant.price || 0).toLocaleString()}</span>
+                          </div>
+                          {vStock && (
+                            <div className="flex items-center gap-4 text-sm text-gray-600">
+                              <span>Stock: <strong className="text-gray-900">{vStock.quantity}</strong></span>
+                              {vStock.warehouse && <span className="flex items-center gap-1"><WarehouseIcon className="h-3 w-3" />{vStock.warehouse.name}</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {!product.hasVariants && product.stock && product.stock.length > 0 && (
+                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Box className="h-5 w-5 text-green-600" />Stock Information</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><p className="text-sm text-gray-600 mb-1">Quantity</p><p className="text-2xl font-bold text-green-600">{product.stock[0].quantity}</p></div>
+                    {product.stock[0].warehouse && (
+                      <div><p className="text-sm text-gray-600 mb-1">Warehouse</p><p className="text-sm font-semibold text-gray-900">{product.stock[0].warehouse.name}</p><p className="text-xs text-gray-500">{product.stock[0].warehouse.code}</p></div>
+                    )}
+                  </div>
+                  {product.stock[0].lowStockThreshold && <p className="text-sm text-gray-600 mt-3">Low stock alert at {product.stock[0].lowStockThreshold} units</p>}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// ProductsPage
+// ---------------------------------------------------------------------------
+const ProductsPage: React.FC = () => {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
+  const [filterHasVariants, setFilterHasVariants] = useState<boolean | undefined>(undefined);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(48);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [selectedProductMap, setSelectedProductMap] = useState<Record<string, Product>>({});
+  const [showConsolidationModal, setShowConsolidationModal] = useState(false);
+  const [consolidationParentId, setConsolidationParentId] = useState('');
+  const [consolidationAttributeName, setConsolidationAttributeName] = useState<string>('color');
+  const [consolidationValues, setConsolidationValues] = useState<Record<string, string>>({});
+  const [consolidationError, setConsolidationError] = useState('');
+  const [consolidationAcknowledged, setConsolidationAcknowledged] = useState(false);
+  const [showAddVariantModal, setShowAddVariantModal] = useState(false);
+  const [addVariantParentId, setAddVariantParentId] = useState('');
+  const [addVariantSourceId, setAddVariantSourceId] = useState('');
+  const [addVariantAttribute, setAddVariantAttribute] = useState<string>('color');
+  const [addVariantValue, setAddVariantValue] = useState('');
+  const [addVariantError, setAddVariantError] = useState('');
+  const [addVariantAcknowledged, setAddVariantAcknowledged] = useState(false);
+  const [showExtractVariantModal, setShowExtractVariantModal] = useState(false);
+  const [extractParentId, setExtractParentId] = useState('');
+  const [extractVariantId, setExtractVariantId] = useState('');
+  const [extractVariantError, setExtractVariantError] = useState('');
+  const [extractAcknowledged, setExtractAcknowledged] = useState(false);
+
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
+
+  const canCreate = hasPermission('products', 'canCreate');
+  const canUpdate = hasPermission('products', 'canUpdate');
+  const canDelete = hasPermission('products', 'canDelete');
+
+  const { data: productsData, isLoading, isFetching } = useQuery({
+    queryKey: ['products', searchQuery, filterCategory, filterActive, filterHasVariants, page, pageSize],
+    queryFn: async () => {
+      // Explicitly preserve false values: inactive/simple filters are valid filters,
+      // not the same as an omitted query parameter.
+      const response = await productApi.getProducts({
+        page,
+        limit: pageSize,
+        search: searchQuery.trim() || undefined,
+        categoryId: filterCategory || undefined,
+        ...(filterActive !== undefined ? { isActive: filterActive } : {}),
+        ...(filterHasVariants !== undefined ? { hasVariants: filterHasVariants } : {}),
+      });
+      const data = response.data as typeof response.data & {
+        page?: number;
+        limit?: number;
+        total?: number;
+        totalPages?: number;
+      };
+      // The admin endpoint returns pagination fields at the top level,
+      // while the shared API type models them under pagination. Normalize both.
+      return {
+        ...data,
+        pagination: data.pagination ?? {
+          page: data.page ?? page,
+          limit: data.limit ?? pageSize,
+          total: data.total ?? data.products?.length ?? 0,
+          totalPages: data.totalPages ?? Math.max(1, Math.ceil((data.total ?? data.products?.length ?? 0) / pageSize)),
+        },
+      };
+    },
+    placeholderData: (previousData) => previousData,
+  });
+
+  const { data: categoriesData } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => { const r = await categoryApi.getCategories({ limit: 100 }); return r.data; },
+  });
+
+  const { data: warehousesData, isLoading: isLoadingWarehouses } = useQuery({
+    queryKey: ['warehouses-active'],
+    queryFn: async () => { const r = await warehouseApi.getActiveWarehouses(); return r.data; },
+  });
+  const hasWarehouses = warehousesData && warehousesData.length > 0;
+
+  const consolidationMutation = useMutation({
+    mutationFn: productApi.consolidateSimpleProducts,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+      setSelectedProductMap({});
+      setConsolidationValues({});
+      setConsolidationError('');
+      setConsolidationAcknowledged(false);
+      setShowConsolidationModal(false);
+      setConsolidationParentId('');
+      toast.success('Products consolidated successfully');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || error?.message || 'Unable to consolidate these products';
+      setConsolidationError(message);
+      toast.error(message);
+    },
+  });
+
+
+  const addSimpleVariantMutation = useMutation({
+    mutationFn: productApi.addSimpleProductAsVariant,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+      setShowAddVariantModal(false);
+      setAddVariantParentId(''); setAddVariantSourceId(''); setAddVariantValue('');
+      setAddVariantError(''); setAddVariantAcknowledged(false);
+      toast.success('Existing simple product added as a variant');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || error?.message || 'Unable to add this product as a variant';
+      setAddVariantError(message); toast.error(message);
+    },
+  });
+
+  const extractVariantMutation = useMutation({
+    mutationFn: productApi.extractVariantAsSimpleProduct,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+      setShowExtractVariantModal(false);
+      setExtractParentId(''); setExtractVariantId('');
+      setExtractVariantError(''); setExtractAcknowledged(false);
+      toast.success('Variant extracted as a new simple product');
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || error?.message || 'Unable to extract this variant';
+      setExtractVariantError(message); toast.error(message);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: productApi.deleteProduct,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); toast.success('Product deleted successfully!'); },
+    onError: () => { toast.error('Failed to delete product'); },
+  });
+
+  const handleDelete = useCallback((id: string) => {
+    if (window.confirm('Delete this product? This cannot be undone.')) deleteMutation.mutate(id);
+  }, [deleteMutation]);
+
+  const handleView = useCallback((product: Product) => { setSelectedProduct(product); setShowViewModal(true); }, []);
+
+  const handleEdit = useCallback((product: Product) => { navigate(`/admin/products/${product.id}/edit`); }, [navigate]);
+
+  const filteredProducts = productsData?.products || [];
+  const addVariantParentProduct = filteredProducts.find((product) => product.id === addVariantParentId);
+  const addVariantSourceProduct = filteredProducts.find((product) => product.id === addVariantSourceId);
+  const addVariantCategoryMismatch = Boolean(addVariantParentProduct && addVariantSourceProduct && addVariantParentProduct.categoryId !== addVariantSourceProduct.categoryId);
+  const addVariantDuplicateValue = Boolean(addVariantParentProduct && addVariantValue.trim() && addVariantParentProduct.variants?.some((variant) => {
+    const attrs = variant.attributes && typeof variant.attributes === 'object' ? variant.attributes : {};
+    const attributeKey = addVariantAttribute.trim().toLocaleLowerCase().replace(/[\\s-]+/g, '_');
+    const legacy = attributeKey === 'color' ? variant.color : attributeKey === 'size' ? variant.size : attributeKey === 'fabric' ? variant.fabric : undefined;
+    const current = legacy ?? attrs[attributeKey];
+    return typeof current === 'string' && current.trim().toLocaleLowerCase() === addVariantValue.trim().toLocaleLowerCase();
+  }));
+, 'i'), '').trim();
+      if (baseName) break;
+    }
+    return `${baseName || extractParentProduct.name.trim()} - ${extractVariantAttributeValue}`.replace(/\\s+/g, ' ').trim();
+  }, [extractParentProduct, selectedExtractVariant, extractVariantAttributeValue, extractableVariants]);
 
   const pagination = productsData?.pagination;
   const totalProducts = pagination?.total ?? filteredProducts.length;
@@ -789,7 +1328,7 @@ const ProductsPage: React.FC = () => {
             </summary>
             <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
               <button type="button" onClick={() => { setAddVariantError(""); setAddVariantAcknowledged(false); setAddVariantValue(""); const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants); const activeSimple = filteredProducts.find((p) => p.isActive && !p.hasVariants); setAddVariantParentId(activeVariable?.id || ""); setAddVariantSourceId(activeSimple?.id || ""); setShowAddVariantModal(true); }} className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100">Add simple product to variants</button>
-              <button type="button" onClick={() => { setExtractVariantError(""); setExtractAcknowledged(false); setExtractVariantId(""); const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants); setExtractParentId(activeVariable?.id || ""); setExtractProductName(""); setExtractProductSku(""); setShowExtractVariantModal(true); }} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">Extract variant to simple</button>
+              <button type="button" onClick={() => { setExtractVariantError(""); setExtractAcknowledged(false); setExtractVariantId(""); const activeVariable = filteredProducts.find((p) => p.isActive && p.hasVariants); setExtractParentId(activeVariable?.id || ""); setExtractVariantId(""); setShowExtractVariantModal(true); }} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">Extract variant to simple</button>
               <span className="text-xs text-slate-500">Existing SKUs and media are reused. Source simple products are archived after conversion.</span>
             </div>
           </details>
@@ -920,21 +1459,24 @@ const ProductsPage: React.FC = () => {
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
             <form onSubmit={(event) => {
               event.preventDefault(); setExtractVariantError('');
-              if (!extractParentId || !extractVariantId || !extractProductName.trim()) { setExtractVariantError('Choose a variable product and variant, then enter a new product name.'); return; }
-              if (!extractAcknowledged) { setExtractVariantError('Confirm that the original variable product must retain at least two variants.'); return; }
-              extractVariantMutation.mutate({ parentProductId: extractParentId, variantId: extractVariantId, productName: extractProductName.trim(), ...(extractProductSku.trim() ? { productSku: extractProductSku.trim() } : {}) });
+              if (!extractParentId || !extractVariantId || !extractProductName) { setExtractVariantError('Choose a variable product and variant first.'); return; }
+              if (!extractAcknowledged) { setExtractVariantError('Confirm the product change to continue.'); return; }
+              extractVariantMutation.mutate({ parentProductId: extractParentId, variantId: extractVariantId, productName: extractProductName });
             }} className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
               <div className="flex items-center justify-between bg-amber-600 px-5 py-4 text-white"><div><h2 className="text-lg font-bold">Extract variant to simple product</h2><p className="text-xs text-amber-100">Move an existing variant without recreating it</p></div><button type="button" onClick={() => setShowExtractVariantModal(false)} aria-label="Close extract variant modal"><X className="h-5 w-5" /></button></div>
               <div className="space-y-4 p-5">
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Safety rule: the original product must have at least 3 variants before extraction, leaving at least 2 variants in the original variable product.</div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Select the variant to move. Its existing variant SKU, photos, and inventory are reused automatically—no SKU entry or image re-upload needed.</div>
                 <div><label className="mb-1 block text-sm font-semibold">Variable product</label><select required value={extractParentId} onChange={(e) => { setExtractParentId(e.target.value); setExtractVariantId(''); }} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"><option value="">Select variable product</option>{filteredProducts.filter((p) => p.isActive && p.hasVariants).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></div>
                 <div><label className="mb-1 block text-sm font-semibold">Variant to extract</label>{extractParentId && extractableVariants.length === 1 && <p className="mb-1 text-xs text-amber-700">This is the only variant. The old product will be archived after extraction.</p>}{extractParentId && extractableVariants.length === 2 && <p className="mb-1 text-xs text-amber-700">The remaining variant will become a simple product.</p>}<select required value={extractVariantId} onChange={(e) => setExtractVariantId(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" disabled={!extractParentId}><option value="">Select variant</option>{(filteredProducts.find((p) => p.id === extractParentId)?.variants || []).map((v) => { const attrs = Object.entries(v.attributes || {}).filter(([key]) => key !== 'default').map(([key, value]) => `${key}: ${String(value)}`).join(', '); return <option key={v.id} value={v.id}>{attrs || v.color || v.size || v.fabric || 'Variant'} · SKU {v.sku}</option>; })}</select></div>
-                <div><label className="mb-1 block text-sm font-semibold">New simple product name</label><input required minLength={2} maxLength={180} value={extractProductName} onChange={(e) => setExtractProductName(e.target.value)} placeholder="e.g. Kanchipuram Silk Saree – Wine Red" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div>
-                <div><label className="mb-1 block text-sm font-semibold">New product SKU (optional)</label><input maxLength={100} value={extractProductSku} onChange={(e) => setExtractProductSku(e.target.value)} placeholder="Leave blank to generate a unique SKU" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New simple product name (generated automatically)</p>
+                  <p className="mt-1 font-semibold text-slate-900">{extractProductName || 'Select a variant to preview its product name'}</p>
+                  <p className="mt-1 text-xs text-slate-500">The current variant value is used automatically, for example “Mysore Crepe Silk Saree - Wine”.</p>
+                </div>
                 {extractVariantError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{extractVariantError}</p>}
                 <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm"><input type="checkbox" checked={extractAcknowledged} onChange={(e) => setExtractAcknowledged(e.target.checked)} className="mt-1" /><span>I understand this variant becomes a separate simple product. If no variants remain, the old product will be archived.</span></label>
               </div>
-              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowExtractVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={extractVariantMutation.isPending || !extractParentId || !extractVariantId || !extractProductName.trim() || !extractAcknowledged} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{extractVariantMutation.isPending ? 'Extracting…' : 'Extract as simple product'}</button></div>
+              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowExtractVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={extractVariantMutation.isPending || !extractParentId || !extractVariantId || !extractProductName || !extractAcknowledged} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{extractVariantMutation.isPending ? 'Extracting…' : 'Extract as simple product'}</button></div>
             </form>
           </div>
         )}
