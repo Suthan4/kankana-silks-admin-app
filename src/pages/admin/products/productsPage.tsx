@@ -709,13 +709,6 @@ const ProductsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Compact catalog summary */}
-        <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 sm:grid-cols-4">
-          <div className="flex items-center gap-2"><Package className="h-4 w-4 text-blue-600" /><div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Matching</p><p className="text-sm font-bold leading-tight text-slate-900">{totalProducts} products</p></div></div>
-          <div className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-emerald-600" /><div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Active</p><p className="text-sm font-bold leading-tight text-slate-900">{activeProducts} <span className="font-normal text-slate-500">on page</span></p></div></div>
-          <div className="flex items-center gap-2"><Layers className="h-4 w-4 text-violet-600" /><div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Variable</p><p className="text-sm font-bold leading-tight text-slate-900">{productsWithVariants} <span className="font-normal text-slate-500">on page</span></p></div></div>
-          <div className="flex items-center gap-2"><Box className="h-4 w-4 text-orange-600" /><div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Simple</p><p className="text-sm font-bold leading-tight text-slate-900">{filteredProducts.filter((p) => !p.hasVariants).length} <span className="font-normal text-slate-500">on page</span></p></div></div>
-        </div>
         {/* Search and filters */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(220px,1fr)_repeat(2,minmax(145px,.65fr))_auto]">
@@ -859,6 +852,14 @@ const ProductsPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Compact catalog summary */}
+        <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 sm:grid-cols-4">
+          <div className="flex items-center gap-2"><Package className="h-4 w-4 text-blue-600" /><div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Matching</p><p className="text-sm font-bold leading-tight text-slate-900">{totalProducts} products</p></div></div>
+          <div className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-emerald-600" /><div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Active</p><p className="text-sm font-bold leading-tight text-slate-900">{activeProducts} <span className="font-normal text-slate-500">on page</span></p></div></div>
+          <div className="flex items-center gap-2"><Layers className="h-4 w-4 text-violet-600" /><div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Variable</p><p className="text-sm font-bold leading-tight text-slate-900">{productsWithVariants} <span className="font-normal text-slate-500">on page</span></p></div></div>
+          <div className="flex items-center gap-2"><Box className="h-4 w-4 text-orange-600" /><div><p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Simple</p><p className="text-sm font-bold leading-tight text-slate-900">{filteredProducts.filter((p) => !p.hasVariants).length} <span className="font-normal text-slate-500">on page</span></p></div></div>
+        </div>
 
         {pagination && pagination.totalPages > 0 && (
           <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
