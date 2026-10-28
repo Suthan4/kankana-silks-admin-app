@@ -618,6 +618,10 @@ const ProductsPage: React.FC = () => {
       setConsolidationError('Select at least two simple products to continue.');
       return;
     }
+    if (!consolidationAttributeName.trim()) {
+      setConsolidationError('Enter an attribute name, such as color, weave, pattern, or border.');
+      return;
+    }
     if (consolidationHasMixedCategories) {
       setConsolidationError('All products must belong to the same category. Clear your selection and choose products from one category.');
       return;
@@ -890,6 +894,7 @@ const ProductsPage: React.FC = () => {
             <form onSubmit={(event) => {
               event.preventDefault(); setAddVariantError('');
               if (!addVariantParentId || !addVariantSourceId || addVariantParentId === addVariantSourceId) { setAddVariantError('Choose two different products.'); return; }
+              if (!addVariantAttribute.trim()) { setAddVariantError('Enter a variant attribute name, such as color, weave, or pattern.'); return; }
               if (!addVariantValue.trim()) { setAddVariantError('Enter a value for the selected variant attribute.'); return; }
               if (addVariantCategoryMismatch) { setAddVariantError('Both products must belong to the same category.'); return; }
               if (addVariantDuplicateValue) { setAddVariantError('This attribute value already exists on the target product. Choose a unique value.'); return; }
@@ -906,7 +911,7 @@ const ProductsPage: React.FC = () => {
                 {addVariantError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{addVariantError}</p>}
                 <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm"><input type="checkbox" checked={addVariantAcknowledged} onChange={(e) => setAddVariantAcknowledged(e.target.checked)} className="mt-1" /><span>I confirm both products represent the same item/category and understand the source product will be archived.</span></label>
               </div>
-              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowAddVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={addSimpleVariantMutation.isPending || !addVariantParentId || !addVariantSourceId || addVariantParentId === addVariantSourceId || !addVariantValue.trim() || addVariantCategoryMismatch || addVariantDuplicateValue || !addVariantAcknowledged} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{addSimpleVariantMutation.isPending ? 'Adding…' : 'Add as variant'}</button></div>
+              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowAddVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={addSimpleVariantMutation.isPending || !addVariantParentId || !addVariantSourceId || addVariantParentId === addVariantSourceId || !addVariantAttribute.trim() || !addVariantValue.trim() || addVariantCategoryMismatch || addVariantDuplicateValue || !addVariantAcknowledged} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{addSimpleVariantMutation.isPending ? 'Adding…' : 'Add as variant'}</button></div>
             </form>
           </div>
         )}
@@ -944,7 +949,7 @@ const ProductsPage: React.FC = () => {
               <div className="space-y-5 overflow-y-auto p-6">
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><strong>Before you continue:</strong> products must represent the same underlying item and use the same category. The chosen parent remains active; the other products are archived, while their SKUs, images, inventory, and order history are preserved.</div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-800">Variant attribute</label>
+                  <label className="mb-2 block text-sm font-semibold text-slate-800">Variant attribute name</label>
                   <input value={consolidationAttributeName} onChange={(e) => {
                     const attribute = e.target.value;
                     setConsolidationAttributeName(attribute);
