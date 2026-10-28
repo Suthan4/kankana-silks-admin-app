@@ -64,7 +64,7 @@ const normalizeCategoryText = (value: string) =>
 
 function categoryDepth(category: Category, allCategories: Category[]): number {
   const path = getCategoryDisplayPath(category, allCategories);
-  const separators = path.match(/(?:\\s>\\s|\\s›\\s|\\s\\/\\s)/g);
+  const separators = path.match(/(?:\s>\s|\s›\s|\s\/\s)/g);
   if (separators?.length) return separators.length;
   let depth = 0;
   let parentId = category.parentId ?? category.parent?.id ?? category.parents?.[0]?.id ?? null;
