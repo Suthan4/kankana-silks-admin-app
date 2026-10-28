@@ -99,7 +99,7 @@ const ProductCard: React.FC<{
       <div className="relative h-56 bg-gradient-to-br from-gray-100 to-gray-200">
         {selectable && (
           <label className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-lg bg-white/95 px-2.5 py-2 text-xs font-semibold text-slate-800 shadow-md">
-            <input type="checkbox" checked={selectedForConsolidation} disabled={product.hasVariants} onChange={() => onToggleSelection?.(product.id)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed" aria-label={`Select ${product.name} for consolidation`} />
+            <input type="checkbox" checked={selectedForConsolidation} disabled={product.hasVariants || !product.isActive} onChange={() => onToggleSelection?.(product.id)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed" aria-label={`Select ${product.name} for consolidation`} />
             <span>{selectedForConsolidation ? 'Selected' : 'Select'}</span>
           </label>
         )}
@@ -460,7 +460,7 @@ const ProductsPage: React.FC = () => {
       setConsolidationValues({});
       setShowConsolidationModal(false);
       setConsolidationParentId('');
-      toast.success(response.data?.message || 'Products consolidated successfully');
+      toast.success('Products consolidated successfully');
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || error?.message || 'Unable to consolidate these products');
@@ -515,7 +515,7 @@ const ProductsPage: React.FC = () => {
   const selectedConsolidationProducts = Object.values(selectedProductMap);
   const selectedConsolidationIds = Object.keys(selectedProductMap);
   const toggleConsolidationSelection = useCallback((product: Product) => {
-    if (product.hasVariants) return;
+    if (product.hasVariants || !product.isActive) return;
     setSelectedProductMap((current) => {
       const next = { ...current };
       if (next[product.id]) {
@@ -740,7 +740,7 @@ const ProductsPage: React.FC = () => {
                   {filteredProducts.map((product) => {
                     const media = product.media?.find((item) => item.order === 0) || product.media?.[0];
                     return <tr key={product.id} className="transition hover:bg-slate-50/80">
-                      <td className="px-3 py-3"><input type="checkbox" checked={Boolean(selectedProductMap[product.id])} disabled={!canUpdate || product.hasVariants} onChange={() => toggleConsolidationSelection(product)} aria-label={`Select ${product.name} for consolidation`} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30" /></td>
+                      <td className="px-3 py-3"><input type="checkbox" checked={Boolean(selectedProductMap[product.id])} disabled={!canUpdate || product.hasVariants || !product.isActive} onChange={() => toggleConsolidationSelection(product)} aria-label={`Select ${product.name} for consolidation`} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30" /></td>
                       <td className="px-4 py-3"><div className="flex min-w-[250px] items-center gap-3">
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">{media?.type === 'IMAGE' ? <img src={media.url} alt={media.altText || product.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Package className="h-5 w-5 text-slate-400" /></div>}</div>
                         <div className="min-w-0"><p className="truncate font-semibold text-slate-900">{product.name}</p><p className="mt-0.5 font-mono text-xs text-slate-500">{product.sku}</p></div>
