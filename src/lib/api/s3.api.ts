@@ -36,11 +36,13 @@ class S3Api {
    */
   async uploadSingle(
     file: File,
-    folder: string = "products"
+    folder: string = "products",
+    uploadType?: "product" | "category" | "banner" | "bulk",
   ) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", folder);
+    if (uploadType) formData.append("uploadType", uploadType);
 
     const response = await axios.post(
       `${API_BASE_URL}`,

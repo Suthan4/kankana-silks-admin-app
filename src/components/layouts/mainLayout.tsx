@@ -22,6 +22,7 @@ import {
   TicketPercent,
   ClipboardList,
   FileSpreadsheet,
+  Settings2,
 } from "lucide-react";
 
 interface NavItem {
@@ -91,6 +92,13 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         name: "Products",
         path: "/admin/products",
         icon: <Package className="h-5 w-5" />,
+        roles: ["ADMIN", "SUPER_ADMIN"],
+        module: "products",
+      },
+      {
+        name: "Image Compression",
+        path: "/admin/image-compression-settings",
+        icon: <Settings2 className="h-5 w-5" />,
         roles: ["ADMIN", "SUPER_ADMIN"],
         module: "products",
       },

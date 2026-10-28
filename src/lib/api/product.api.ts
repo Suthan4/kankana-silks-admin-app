@@ -466,6 +466,7 @@ export const productApi = {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", "products");
+    formData.append("uploadType", "bulk");
 
     // The existing /upload controller returns { success, url, key } at the
     // top level instead of the standard { success, data } response envelope.
@@ -520,5 +521,9 @@ export const productApi = {
 
   retryJob: async (jobId: string): Promise<ApiResponse<BulkImportJob>> => {
     return apiCall("POST", `/products/bulk/job/${jobId}/retry`);
+  },
+
+  cancelJob: async (jobId: string): Promise<ApiResponse<BulkImportJob>> => {
+    return apiCall("POST", `/products/bulk/job/${jobId}/cancel`);
   },
 };

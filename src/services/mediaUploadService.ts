@@ -40,8 +40,9 @@ export interface MediaPreviewItem {
 export async function uploadFileToS3(
   file: File,
   folder: string = "products",
+  uploadType: "product" | "category" | "banner" | "bulk" = "product",
 ): Promise<string> {
-  const res: any = await s3Api.uploadSingle(file, folder);
+  const res: any = await s3Api.uploadSingle(file, folder, uploadType);
 
   const url =
     res?.url ||
