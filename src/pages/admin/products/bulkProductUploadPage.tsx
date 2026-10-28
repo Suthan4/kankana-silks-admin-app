@@ -492,11 +492,20 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
   const addLocalFiles = (fileList: FileList | null) => {
     if (!fileList) return;
     const list = Array.from(fileList);
-    const accepted = list.filter((file) => file.type.startsWith("image/"));
-    if (accepted.length !== list.length)
+    const imageFiles = list.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length !== list.length)
+      toast.error(list.length - imageFiles.length + " non-image file(s) were skipped.");
+    const maxBytes = 60 * 1024 * 1024;
+    const accepted = imageFiles.filter((file) => file.size <= maxBytes);
+    const tooLarge = imageFiles.filter((file) => file.size > maxBytes);
+    if (tooLarge.length) {
       toast.error(
-        list.length - accepted.length + " non-image file(s) were skipped.",
+        tooLarge.length + " image(s) exceed the server's 60 MB upload limit: " +
+        tooLarge.map((file) => file.name).slice(0, 3).join(", ") +
+        (tooLarge.length > 3 ? "…" : "") + ". Resize or export a smaller source file before uploading.",
+        { duration: 7000 },
       );
+    }
     setLocalFiles((previous) => {
       const keys = new Set(previous.map((item) => item.id));
       const additions = accepted
@@ -564,8 +573,9 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
             fileSize: item.file.size,
           });
           uploadedIds.push(item.id);
-        } catch {
-          failedNames.push(item.file.name);
+        } catch (error: any) {
+          const message = error?.response?.data?.error || error?.response?.data?.message || error?.message || "Unknown upload error";
+          failedNames.push(item.file.name + ": " + message);
         } finally {
           setLocalProgress({ completed: index + 1, total: localFiles.length });
         }
