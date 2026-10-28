@@ -52,6 +52,7 @@ import { BulkSharedProductEditor } from "@/components/products/bulk/BulkSharedPr
 import { BulkAddProductModal } from "@/components/products/bulk/BulkAddProductModal";
 import { BulkFormatExampleModal } from "@/components/products/bulk/BulkFormatExampleModal";
 import { productApi } from "@/lib/api/product.api";
+import { uploadFileToS3WithMetadata } from "@/services/mediaUploadService";
 import {
   normalizeProduct,
   normalizeProducts,
@@ -554,8 +555,14 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
       for (let index = 0; index < localFiles.length; index += 1) {
         const item = localFiles[index];
         try {
-          const response = await productApi.uploadBulkImageFile(item.file);
-          const result = response.data as any;
+          const result = await uploadFileToS3WithMetadata(
+            item.file,
+            "products",
+            "bulk",
+            (percent) => {
+              setLocalProgress({ completed: index + percent / 100, total: localFiles.length });
+            },
+          );
           if (!result?.url || !/^https:\/\//i.test(result.url))
             throw new Error("Storage did not return a valid HTTPS URL.");
           media.push({
@@ -569,8 +576,10 @@ const DriveMatchingPanel: React.FC<DriveMatchingPanelProps> = ({
                 : 0) + media.length,
             isActive: true,
             source: "product",
-            mimeType: item.file.type,
-            fileSize: item.file.size,
+            mimeType: result.mimeType || item.file.type,
+            fileSize: result.size ?? item.file.size,
+            width: result.width,
+            height: result.height,
           });
           uploadedIds.push(item.id);
         } catch (error: any) {
