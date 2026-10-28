@@ -405,7 +405,23 @@ const ProductsPage: React.FC = () => {
         ...(filterActive !== undefined ? { isActive: filterActive } : {}),
         ...(filterHasVariants !== undefined ? { hasVariants: filterHasVariants } : {}),
       });
-      return response.data;
+      const data = response.data as typeof response.data & {
+        page?: number;
+        limit?: number;
+        total?: number;
+        totalPages?: number;
+      };
+      // The admin endpoint returns pagination fields at the top level,
+      // while the shared API type models them under pagination. Normalize both.
+      return {
+        ...data,
+        pagination: data.pagination ?? {
+          page: data.page ?? page,
+          limit: data.limit ?? pageSize,
+          total: data.total ?? data.products?.length ?? 0,
+          totalPages: data.totalPages ?? Math.max(1, Math.ceil((data.total ?? data.products?.length ?? 0) / pageSize)),
+        },
+      };
     },
     placeholderData: (previousData) => previousData,
   });
