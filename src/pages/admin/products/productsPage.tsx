@@ -361,14 +361,14 @@ const ProductsPage: React.FC = () => {
   const [selectedProductMap, setSelectedProductMap] = useState<Record<string, Product>>({});
   const [showConsolidationModal, setShowConsolidationModal] = useState(false);
   const [consolidationParentId, setConsolidationParentId] = useState('');
-  const [consolidationAttributeName, setConsolidationAttributeName] = useState<'color' | 'size' | 'fabric' | 'style'>('color');
+  const [consolidationAttributeName, setConsolidationAttributeName] = useState<string>('color');
   const [consolidationValues, setConsolidationValues] = useState<Record<string, string>>({});
   const [consolidationError, setConsolidationError] = useState('');
   const [consolidationAcknowledged, setConsolidationAcknowledged] = useState(false);
   const [showAddVariantModal, setShowAddVariantModal] = useState(false);
   const [addVariantParentId, setAddVariantParentId] = useState('');
   const [addVariantSourceId, setAddVariantSourceId] = useState('');
-  const [addVariantAttribute, setAddVariantAttribute] = useState<'color' | 'size' | 'fabric' | 'style'>('color');
+  const [addVariantAttribute, setAddVariantAttribute] = useState<string>('color');
   const [addVariantValue, setAddVariantValue] = useState('');
   const [addVariantError, setAddVariantError] = useState('');
   const [addVariantAcknowledged, setAddVariantAcknowledged] = useState(false);
@@ -508,8 +508,9 @@ const ProductsPage: React.FC = () => {
   const addVariantCategoryMismatch = Boolean(addVariantParentProduct && addVariantSourceProduct && addVariantParentProduct.categoryId !== addVariantSourceProduct.categoryId);
   const addVariantDuplicateValue = Boolean(addVariantParentProduct && addVariantValue.trim() && addVariantParentProduct.variants?.some((variant) => {
     const attrs = variant.attributes && typeof variant.attributes === 'object' ? variant.attributes : {};
-    const legacy = addVariantAttribute === 'color' ? variant.color : addVariantAttribute === 'size' ? variant.size : addVariantAttribute === 'fabric' ? variant.fabric : undefined;
-    const current = legacy ?? attrs[addVariantAttribute];
+    const attributeKey = addVariantAttribute.trim().toLocaleLowerCase().replace(/[\\s-]+/g, '_');
+    const legacy = attributeKey === 'color' ? variant.color : attributeKey === 'size' ? variant.size : attributeKey === 'fabric' ? variant.fabric : undefined;
+    const current = legacy ?? attrs[attributeKey];
     return typeof current === 'string' && current.trim().toLocaleLowerCase() === addVariantValue.trim().toLocaleLowerCase();
   }));
   const extractParentProduct = filteredProducts.find((product) => product.id === extractParentId);
@@ -617,6 +618,10 @@ const ProductsPage: React.FC = () => {
       setConsolidationError('Select at least two simple products to continue.');
       return;
     }
+    if (!consolidationAttributeName.trim()) {
+      setConsolidationError('Enter an attribute name, such as color, weave, pattern, or border.');
+      return;
+    }
     if (consolidationHasMixedCategories) {
       setConsolidationError('All products must belong to the same category. Clear your selection and choose products from one category.');
       return;
@@ -639,7 +644,7 @@ const ProductsPage: React.FC = () => {
     }
     consolidationMutation.mutate({
       parentProductId: consolidationParentId,
-      attributeName: consolidationAttributeName,
+      attributeName: consolidationAttributeName.trim(),
       products: selectedConsolidationProducts.map((product) => ({
         productId: product.id,
         attributeValue: consolidationValues[product.id].trim(),
@@ -889,11 +894,12 @@ const ProductsPage: React.FC = () => {
             <form onSubmit={(event) => {
               event.preventDefault(); setAddVariantError('');
               if (!addVariantParentId || !addVariantSourceId || addVariantParentId === addVariantSourceId) { setAddVariantError('Choose two different products.'); return; }
+              if (!addVariantAttribute.trim()) { setAddVariantError('Enter a variant attribute name, such as color, weave, or pattern.'); return; }
               if (!addVariantValue.trim()) { setAddVariantError('Enter a value for the selected variant attribute.'); return; }
               if (addVariantCategoryMismatch) { setAddVariantError('Both products must belong to the same category.'); return; }
               if (addVariantDuplicateValue) { setAddVariantError('This attribute value already exists on the target product. Choose a unique value.'); return; }
               if (!addVariantAcknowledged) { setAddVariantError('Confirm the archive and inventory impact before continuing.'); return; }
-              addSimpleVariantMutation.mutate({ parentProductId: addVariantParentId, sourceProductId: addVariantSourceId, attributeName: addVariantAttribute, attributeValue: addVariantValue.trim() });
+              addSimpleVariantMutation.mutate({ parentProductId: addVariantParentId, sourceProductId: addVariantSourceId, attributeName: addVariantAttribute.trim(), attributeValue: addVariantValue.trim() });
             }} className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
               <div className="flex items-center justify-between bg-indigo-700 px-5 py-4 text-white"><div><h2 className="text-lg font-bold">Add existing product as a variant</h2><p className="text-xs text-indigo-100">No re-creation or image upload required</p></div><button type="button" onClick={() => setShowAddVariantModal(false)} aria-label="Close add variant modal"><X className="h-5 w-5" /></button></div>
               <div className="space-y-4 p-5">
@@ -901,11 +907,11 @@ const ProductsPage: React.FC = () => {
                 <div><label className="mb-1 block text-sm font-semibold">Target variable product</label><select required value={addVariantParentId} onChange={(e) => setAddVariantParentId(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"><option value="">Select variable product</option>{filteredProducts.filter((p) => p.isActive && p.hasVariants).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></div>
                 <div><label className="mb-1 block text-sm font-semibold">Source simple product</label><select required value={addVariantSourceId} onChange={(e) => setAddVariantSourceId(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"><option value="">Select simple product</option>{filteredProducts.filter((p) => p.isActive && !p.hasVariants).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></div>
                 {addVariantCategoryMismatch && <p className="text-sm text-rose-700">Choose products from the same category.</p>}{addVariantDuplicateValue && <p className="text-sm text-rose-700">This value is already used by an existing variant.</p>}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div><label className="mb-1 block text-sm font-semibold">Variant attribute</label><select value={addVariantAttribute} onChange={(e) => setAddVariantAttribute(e.target.value as 'color' | 'size' | 'fabric' | 'style')} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"><option value="color">Color</option><option value="size">Size</option><option value="fabric">Fabric</option><option value="style">Style</option></select></div><div><label className="mb-1 block text-sm font-semibold">Attribute value</label><input required maxLength={120} value={addVariantValue} onChange={(e) => setAddVariantValue(e.target.value)} placeholder="e.g. Wine Red" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div></div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div><label className="mb-1 block text-sm font-semibold">Variant attribute</label><input required maxLength={60} value={addVariantAttribute} onChange={(e) => setAddVariantAttribute(e.target.value)} placeholder="e.g. color, weave, pattern" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div><div><label className="mb-1 block text-sm font-semibold">Attribute value</label><input required maxLength={120} value={addVariantValue} onChange={(e) => setAddVariantValue(e.target.value)} placeholder="e.g. Wine Red" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div></div>
                 {addVariantError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{addVariantError}</p>}
                 <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm"><input type="checkbox" checked={addVariantAcknowledged} onChange={(e) => setAddVariantAcknowledged(e.target.checked)} className="mt-1" /><span>I confirm both products represent the same item/category and understand the source product will be archived.</span></label>
               </div>
-              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowAddVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={addSimpleVariantMutation.isPending || !addVariantParentId || !addVariantSourceId || addVariantParentId === addVariantSourceId || !addVariantValue.trim() || addVariantCategoryMismatch || addVariantDuplicateValue || !addVariantAcknowledged} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{addSimpleVariantMutation.isPending ? 'Adding…' : 'Add as variant'}</button></div>
+              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowAddVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={addSimpleVariantMutation.isPending || !addVariantParentId || !addVariantSourceId || addVariantParentId === addVariantSourceId || !addVariantAttribute.trim() || !addVariantValue.trim() || addVariantCategoryMismatch || addVariantDuplicateValue || !addVariantAcknowledged} className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{addSimpleVariantMutation.isPending ? 'Adding…' : 'Add as variant'}</button></div>
             </form>
           </div>
         )}
@@ -922,13 +928,13 @@ const ProductsPage: React.FC = () => {
               <div className="space-y-4 p-5">
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Safety rule: the original product must have at least 3 variants before extraction, leaving at least 2 variants in the original variable product.</div>
                 <div><label className="mb-1 block text-sm font-semibold">Variable product</label><select required value={extractParentId} onChange={(e) => { setExtractParentId(e.target.value); setExtractVariantId(''); }} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm"><option value="">Select variable product</option>{filteredProducts.filter((p) => p.isActive && p.hasVariants).map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></div>
-                <div><label className="mb-1 block text-sm font-semibold">Variant to extract</label>{extractParentId && extractableVariants.length < 3 && <p className="mb-1 text-xs text-rose-700">This product has fewer than 3 variants. Extraction is blocked to keep at least 2 variants in the original product.</p>}<select required value={extractVariantId} onChange={(e) => setExtractVariantId(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" disabled={!extractParentId}><option value="">Select variant</option>{(filteredProducts.find((p) => p.id === extractParentId)?.variants || []).map((v) => { const attrs = Object.entries(v.attributes || {}).filter(([key]) => key !== 'default').map(([key, value]) => `${key}: ${String(value)}`).join(', '); return <option key={v.id} value={v.id}>{attrs || v.color || v.size || v.fabric || 'Variant'} · SKU {v.sku}</option>; })}</select></div>
+                <div><label className="mb-1 block text-sm font-semibold">Variant to extract</label>{extractParentId && extractableVariants.length === 1 && <p className="mb-1 text-xs text-amber-700">This is the only variant. The old product will be archived after extraction.</p>}{extractParentId && extractableVariants.length === 2 && <p className="mb-1 text-xs text-amber-700">The remaining variant will become a simple product.</p>}<select required value={extractVariantId} onChange={(e) => setExtractVariantId(e.target.value)} className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" disabled={!extractParentId}><option value="">Select variant</option>{(filteredProducts.find((p) => p.id === extractParentId)?.variants || []).map((v) => { const attrs = Object.entries(v.attributes || {}).filter(([key]) => key !== 'default').map(([key, value]) => `${key}: ${String(value)}`).join(', '); return <option key={v.id} value={v.id}>{attrs || v.color || v.size || v.fabric || 'Variant'} · SKU {v.sku}</option>; })}</select></div>
                 <div><label className="mb-1 block text-sm font-semibold">New simple product name</label><input required minLength={2} maxLength={180} value={extractProductName} onChange={(e) => setExtractProductName(e.target.value)} placeholder="e.g. Kanchipuram Silk Saree – Wine Red" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div>
                 <div><label className="mb-1 block text-sm font-semibold">New product SKU (optional)</label><input maxLength={100} value={extractProductSku} onChange={(e) => setExtractProductSku(e.target.value)} placeholder="Leave blank to generate a unique SKU" className="w-full rounded-lg border border-slate-300 p-2.5 text-sm" /></div>
                 {extractVariantError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{extractVariantError}</p>}
-                <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm"><input type="checkbox" checked={extractAcknowledged} onChange={(e) => setExtractAcknowledged(e.target.checked)} className="mt-1" /><span>I understand the selected variant becomes a new simple product and the original product must keep at least two variants.</span></label>
+                <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm"><input type="checkbox" checked={extractAcknowledged} onChange={(e) => setExtractAcknowledged(e.target.checked)} className="mt-1" /><span>I understand this variant becomes a separate simple product. If no variants remain, the old product will be archived.</span></label>
               </div>
-              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowExtractVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={extractVariantMutation.isPending || !extractParentId || extractableVariants.length < 3 || !extractVariantId || !extractProductName.trim() || !extractAcknowledged} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{extractVariantMutation.isPending ? 'Extracting…' : 'Extract as simple product'}</button></div>
+              <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4"><button type="button" onClick={() => setShowExtractVariantModal(false)} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" disabled={extractVariantMutation.isPending || !extractParentId || !extractVariantId || !extractProductName.trim() || !extractAcknowledged} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{extractVariantMutation.isPending ? 'Extracting…' : 'Extract as simple product'}</button></div>
             </form>
           </div>
         )}
@@ -943,28 +949,25 @@ const ProductsPage: React.FC = () => {
               <div className="space-y-5 overflow-y-auto p-6">
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><strong>Before you continue:</strong> products must represent the same underlying item and use the same category. The chosen parent remains active; the other products are archived, while their SKUs, images, inventory, and order history are preserved.</div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-800">Variant attribute</label>
-                  <select value={consolidationAttributeName} onChange={(e) => {
-                    const attribute = e.target.value as 'color' | 'size' | 'fabric' | 'style';
+                  <label className="mb-2 block text-sm font-semibold text-slate-800">Variant attribute name</label>
+                  <input value={consolidationAttributeName} onChange={(e) => {
+                    const attribute = e.target.value;
                     setConsolidationAttributeName(attribute);
                     setConsolidationError('');
+                    const key = attribute.trim().toLocaleLowerCase().replace(/[\\s-]+/g, '_');
                     setConsolidationValues((current) => {
                       const next = { ...current };
                       selectedConsolidationProducts.forEach((product) => {
                         const variant = product.variants?.[0];
-                        const known = attribute === 'color' ? variant?.color
-                          : attribute === 'size' ? variant?.size
-                          : attribute === 'fabric' ? variant?.fabric
-                          : variant?.attributes?.style;
+                        const legacy = key === 'color' ? variant?.color : key === 'size' ? variant?.size : key === 'fabric' ? variant?.fabric : undefined;
+                        const known = legacy ?? variant?.attributes?.[key];
                         if (typeof known === 'string' && known.trim()) next[product.id] = known.trim();
                         else if (attribute !== consolidationAttributeName) next[product.id] = '';
                       });
                       return next;
                     });
-                  }} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100">
-                    <option value="color">Color</option><option value="size">Size</option><option value="fabric">Fabric</option><option value="style">Style</option>
-                  </select>
-                  <p className="mt-1 text-xs text-slate-500">Each selected product becomes one variant using this attribute and the value you provide below.</p>
+                  }} maxLength={60} placeholder="e.g. color, weave, pattern, border" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100" />
+                  <p className="mt-1 text-xs text-slate-500">Use any attribute name, such as color, weave, pattern, border, or style. Enter a distinct value for each product.</p>
                 </div>
                 <div className="space-y-3">
                   <div><h3 className="text-sm font-semibold text-slate-800">Choose the parent product</h3><p className="text-xs text-slate-500">This product keeps its catalog identity, URL/slug, description, and SKU.</p></div>
