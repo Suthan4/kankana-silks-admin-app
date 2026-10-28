@@ -48,7 +48,7 @@ import {
 import { MainLayout } from "@/components/layouts/mainLayout";
 import { BackButton } from "@/components/ui/BackButton";
 import { BulkProductPreviewTable } from "@/components/products/bulk/BulkProductPreviewTable";
-import { BulkProductEditorModal } from "@/components/products/bulk/BulkProductEditorModal";
+import { BulkSharedProductEditor } from "@/components/products/bulk/BulkSharedProductEditor";
 import { BulkAddProductModal } from "@/components/products/bulk/BulkAddProductModal";
 import { BulkFormatExampleModal } from "@/components/products/bulk/BulkFormatExampleModal";
 import { productApi } from "@/lib/api/product.api";
@@ -3429,18 +3429,15 @@ const BulkProductUploadPage: React.FC = () => {
 
       {/* ── Modals ─────────────────────────────────────────────────────────── */}
       {editingProduct && (
-        <BulkProductEditorModal
+        <BulkSharedProductEditor
           product={editingProduct}
-          categoriesTree={categoriesTree}
           flatCategories={flatCategories}
           warehouses={warehouses}
-          isOpen={Boolean(editingProduct)}
           onClose={() => setEditingProduct(null)}
           onSave={(updated) => {
             handleUpdateProduct(updated);
             setEditingProduct(null);
           }}
-          getThumbnailUrl={productApi.getDriveThumbnailUrl}
         />
       )}
 
