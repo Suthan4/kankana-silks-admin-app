@@ -1644,7 +1644,7 @@ interface ImportProgressPanelProps {
   isRetrying: boolean;
   onCancel: () => void;
   isCancelling: boolean;
-  onResolveItem: (productGroupId: string, action: "skip" | "delete") => void;
+  onResolveItem: (productGroupId: string, action: "skip" | "delete") => Promise<void>;
 }
 
 const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
@@ -1657,8 +1657,25 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
 }) => {
   if (!job) return null;
 
-  const pct = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
+  const [selectedFailedIds, setSelectedFailedIds] = useState<Set<string>>(new Set());
+  const failedResults = job.results.filter((result) => result.status === "failed");
   const isRunning = job.status === "pending" || job.status === "processing";
+  const pct = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
+  const toggleFailedSelection = (productGroupId: string) => {
+    setSelectedFailedIds((current) => {
+      const next = new Set(current);
+      if (next.has(productGroupId)) next.delete(productGroupId);
+      else next.add(productGroupId);
+      return next;
+    });
+  };
+  const resolveSelectedFailed = async (action: "skip" | "delete") => {
+    const selected = failedResults.filter((result) => selectedFailedIds.has(result.productGroupId));
+    if (!selected.length) return;
+    if (action === "delete" && !window.confirm(`Remove ${selected.length} failed product(s) from this draft? No catalog products or images will be deleted.`)) return;
+    for (const result of selected) await onResolveItem(result.productGroupId, action);
+    setSelectedFailedIds(new Set());
+  };
   const stageLabel =
     job.stage === "preparing_images"
       ? "Preparing image batch…"
@@ -1862,6 +1879,34 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
           </div>
         )}
 
+        {/* Failed-item bulk actions */}
+        {job.draftId && failedResults.length > 0 && (
+          <div className="space-y-2 rounded-lg border border-red-100 bg-red-50/50 p-2">
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={failedResults.length > 0 && failedResults.every((result) => selectedFailedIds.has(result.productGroupId))}
+                onChange={(event) => setSelectedFailedIds(event.target.checked
+                  ? new Set(failedResults.map((result) => result.productGroupId))
+                  : new Set())}
+              />
+              Select all {failedResults.length} failed product(s)
+            </label>
+            {selectedFailedIds.size > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void resolveSelectedFailed("skip")}
+                  className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50">
+                  Skip {selectedFailedIds.size} selected
+                </button>
+                <button type="button" onClick={() => void resolveSelectedFailed("delete")}
+                  className="rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50">
+                  Delete {selectedFailedIds.size} selected
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Per-item results */}
         {job.results && job.results.length > 0 && (
           <div className="max-h-48 overflow-y-auto space-y-1">
@@ -1877,8 +1922,16 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
                       : "bg-gray-50 text-gray-600",
                 )}
               >
-                <span className="truncate font-medium">
-                  {r.name || r.productGroupId}
+                <span className="flex min-w-0 items-center gap-2 truncate font-medium">
+                  {r.status === "failed" && job.draftId && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${r.name || r.productGroupId}`}
+                      checked={selectedFailedIds.has(r.productGroupId)}
+                      onChange={() => toggleFailedSelection(r.productGroupId)}
+                    />
+                  )}
+                  <span className="truncate">{r.name || r.productGroupId}</span>
                 </span>
                 <div className="flex items-center gap-1 shrink-0 ml-2">
                   {r.status === "success" && (
