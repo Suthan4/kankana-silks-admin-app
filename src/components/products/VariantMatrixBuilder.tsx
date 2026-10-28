@@ -133,7 +133,7 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
       const name = rawName.trim();
       const value = String(rawValue ?? "").trim();
       if (!name || !value || value.toLowerCase() === "default" || value === "true" || value === "false") return;
-      const key = name.toLocaleLowerCase().replace(/[\\s-]+/g, "_");
+      const key = name.toLocaleLowerCase().replace(/[\s-]+/g, "_");
       if (!key || key === "default" || key === "isdefault") return;
       const displayName = key === "color" ? "Color"
         : key === "size" ? "Size"
