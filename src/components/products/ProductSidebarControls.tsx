@@ -1,9 +1,9 @@
-import React from "react";
-import { useFormContext, useWatch } from "react-hook-form";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
 import {
   AlertCircle,
   Box,
-  CheckCircle2,
+  CheckCircle2,\n  Check,\n  ChevronDown,
   DollarSign,
   Globe,
   HelpCircle,
@@ -11,7 +11,7 @@ import {
   Percent,
   Ruler,
   Search,
-  Tag,
+  Tag,\n  X,
   Video,
   Warehouse as WarehouseIcon,
 } from "lucide-react";
