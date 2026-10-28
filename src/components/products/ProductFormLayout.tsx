@@ -48,7 +48,7 @@ export async function mapSequential<T, R>(
   return results;
 }
 
-interface ProductFormLayoutProps {
+export interface ProductFormLayoutProps {
   productId?: string;
   initialProduct?: Product | null;
   categories: Category[];
