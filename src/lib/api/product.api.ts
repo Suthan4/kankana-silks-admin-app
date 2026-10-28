@@ -131,6 +131,26 @@ export const productApi = {
     return apiCall("POST", "/admin/products/consolidate-variants", payload);
   },
 
+  /** Add an existing simple product to a variable product as a variant. */
+  addSimpleProductAsVariant: async (payload: {
+    parentProductId: string;
+    sourceProductId: string;
+    attributeName: "color" | "size" | "fabric" | "style";
+    attributeValue: string;
+  }) => {
+    return apiCall("POST", "/admin/products/add-simple-variant", payload);
+  },
+
+  /** Extract an existing variant into a new standalone simple product. */
+  extractVariantAsSimpleProduct: async (payload: {
+    parentProductId: string;
+    variantId: string;
+    productName: string;
+    productSku?: string;
+  }) => {
+    return apiCall("POST", "/admin/products/extract-variant", payload);
+  },
+
   // Get product by ID
   getProduct: async (id: string): Promise<ApiResponse<Product>> => {
     return apiCall("GET", `/products/${id}`);
