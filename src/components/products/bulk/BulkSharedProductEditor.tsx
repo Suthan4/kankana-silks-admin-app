@@ -38,9 +38,12 @@ export const BulkSharedProductEditor: React.FC<Props> = ({
   product, flatCategories, warehouses, onClose, onSave,
 }) => {
   const categories = useMemo<Category[]>(() => flatCategories.map((item, index) => ({
-    id: item.id,
+    id: String(item.id),
     name: item.name,
     slug: item.slug,
+    // Preserve the full hierarchy path for the shared product form.
+    path: item.path,
+    parentId: (item as any).parentId,
     description: "",
     isActive: item.isActive,
     isRoot: false,
@@ -49,9 +52,14 @@ export const BulkSharedProductEditor: React.FC<Props> = ({
     updatedAt: "",
   })), [flatCategories]);
 
-  const formWarehouses = useMemo<Warehouse[]>(() => warehouses.map((item) => ({
-    id: item.id, name: item.name, code: item.code, isActive: item.isActive,
-  })), [warehouses]);
+  const formWarehouses = useMemo<Warehouse[]>(() => warehouses
+    .filter((item) => item.isActive !== false)
+    .map((item) => ({
+      id: String(item.id),
+      name: item.name,
+      code: item.code,
+      isActive: item.isActive !== false,
+    } as Warehouse)), [warehouses]);
 
   const initialProduct = useMemo<Product>(() => {
     const category = resolveCategory(product.categoryPath, product.categoryId, flatCategories);
@@ -77,16 +85,23 @@ export const BulkSharedProductEditor: React.FC<Props> = ({
         id: `draft-stock-${index}`,
         productId: product.id || product.productGroupId,
         variantId: variant.id || `draft-variant-${index}`,
-        warehouseId: variant.stock.warehouseId,
+        warehouseId: resolveWarehouseId(variant.stock.warehouseId, variant.stock.warehouseCode),
         quantity: variant.stock.quantity,
         lowStockThreshold: variant.stock.lowStockThreshold ?? 5,
         updatedAt: "",
       }] : [],
     }));
+    const resolveWarehouseId = (warehouseId?: string, warehouseCode?: string) => {
+      const normalizedId = String(warehouseId ?? "").trim();
+      const normalizedCode = String(warehouseCode ?? "").trim().toLowerCase();
+      return warehouses.find((item) => String(item.id) === normalizedId)?.id
+        ?? warehouses.find((item) => normalizedCode && item.code?.trim().toLowerCase() === normalizedCode)?.id
+        ?? normalizedId;
+    };
     const productStock = product.stock ? [{
       id: "draft-stock",
       productId: product.id || product.productGroupId,
-      warehouseId: product.stock.warehouseId,
+      warehouseId: resolveWarehouseId(product.stock.warehouseId, product.stock.warehouseCode),
       quantity: product.stock.quantity,
       lowStockThreshold: product.stock.lowStockThreshold ?? 5,
       updatedAt: "",
@@ -128,7 +143,7 @@ export const BulkSharedProductEditor: React.FC<Props> = ({
       createdAt: "",
       updatedAt: "",
     };
-  }, [product, flatCategories]);
+  }, [product, flatCategories, warehouses]);
 
   const saveDraftPayload = async (payload: CreateProductData) => {
     const extended = payload as any;

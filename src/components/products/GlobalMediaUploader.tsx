@@ -6,6 +6,8 @@ import {
   Image as ImageIcon,
   Plus,
   Trash2,
+  ArrowUp,
+  ArrowDown,
   Upload,
   Video,
 } from "lucide-react";
@@ -98,6 +100,18 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
       shouldDirty: true,
       shouldValidate: true,
     });
+  };
+
+  const handleMoveMedia = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= media.length) return;
+    const reordered = [...media];
+    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    setValue("media", reordered.map((item, order) => ({
+      ...item,
+      order,
+      isPrimary: order === 0,
+    })) as any, { shouldDirty: true, shouldValidate: true });
   };
 
   const handleSetCover = (index: number) => {
@@ -291,6 +305,26 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
                       <Crop className="h-3.5 w-3.5" />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleMoveMedia(idx, -1)}
+                    disabled={idx === 0}
+                    className="p-1.5 bg-white hover:bg-blue-50 text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed rounded shadow-xs"
+                    title="Move image earlier"
+                    aria-label={`Move image ${idx + 1} earlier`}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMoveMedia(idx, 1)}
+                    disabled={idx === media.length - 1}
+                    className="p-1.5 bg-white hover:bg-blue-50 text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed rounded shadow-xs"
+                    title="Move image later"
+                    aria-label={`Move image ${idx + 1} later`}
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </button>
                   {!isCover && (
                     <button
                       type="button"

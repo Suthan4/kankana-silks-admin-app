@@ -33,6 +33,22 @@ export interface ProductSidebarControlsProps {
  * - Video Consultation & Backorders
  * - Live Google Search Preview (SEO)
  */
+function getCategoryDisplayPath(category: Category, allCategories: Category[]): string {
+  const explicitPath = (category as Category & { path?: string }).path;
+  if (explicitPath?.trim()) return explicitPath.trim();
+  const seen = new Set<string>([String(category.id)]);
+  const names = [category.name];
+  let parentId = category.parentId ?? category.parent?.id ?? category.parents?.[0]?.id ?? null;
+  while (parentId && !seen.has(String(parentId))) {
+    seen.add(String(parentId));
+    const parent = allCategories.find((item) => String(item.id) === String(parentId));
+    if (!parent) break;
+    names.unshift(parent.name);
+    parentId = parent.parentId ?? parent.parent?.id ?? parent.parents?.[0]?.id ?? null;
+  }
+  return names.join(" › ");
+}
+
 export const ProductSidebarControls: React.FC<ProductSidebarControlsProps> = ({
   categories,
   warehouses,
@@ -119,11 +135,13 @@ export const ProductSidebarControls: React.FC<ProductSidebarControlsProps> = ({
               } focus:outline-hidden`}
             >
               <option value="">Select a category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {[...categories]
+                .sort((a, b) => getCategoryDisplayPath(a, categories).localeCompare(getCategoryDisplayPath(b, categories)))
+                .map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {getCategoryDisplayPath(c, categories)}
+                  </option>
+                ))}
             </select>
             {errors.categoryId && (
               <p className="mt-1 text-2xs text-red-600 font-medium">
@@ -250,8 +268,8 @@ export const ProductSidebarControls: React.FC<ProductSidebarControlsProps> = ({
               >
                 <option value="">Select warehouse</option>
                 {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
+                  <option key={String(w.id)} value={String(w.id)}>
+                    {w.name}{w.code ? ` (${w.code})` : ""}
                   </option>
                 ))}
               </select>
