@@ -2011,7 +2011,7 @@ const ImportProgressPanel: React.FC<ImportProgressPanelProps> = ({
 
         {job.status === "completed" && (
           <div className="bg-green-50 rounded-lg p-3 text-sm text-green-700 text-center font-medium">
-            ✓ Import complete — {job.successful} product(s) created
+            ✓ Draft resolved — {job.successful} product(s) imported, {job.skipped ?? 0} product(s) intentionally skipped or removed, no failed items remaining.
           </div>
         )}
         {job.status === "failed" && (
@@ -2968,16 +2968,29 @@ const BulkProductUploadPage: React.FC = () => {
       setDraftStatus(draft.status || "DRAFT");
       setIsDirty(false);
       if (job) {
-        setJob((current) => current ? ({
-          ...current,
-          results: action === "delete"
+        setJob((current) => {
+          if (!current) return current;
+          const nextResults = action === "delete"
             ? current.results.filter((result) => result.productGroupId !== productGroupId)
             : current.results.map((result) => result.productGroupId === productGroupId
               ? { ...result, status: "skipped" as const, error: "Skipped by administrator" }
-              : result),
-          failed: Math.max(0, current.failed - 1),
-          skipped: (current.skipped ?? 0) + (action === "skip" ? 1 : 0),
-        }) : current);
+              : result);
+          const remainingFailures = nextResults.some((result) => result.status === "failed");
+          const resolved = current.status === "failed" && !remainingFailures;
+          return {
+            ...current,
+            results: nextResults,
+            failed: Math.max(0, current.failed - 1),
+            skipped: (current.skipped ?? 0) + 1,
+            ...(resolved ? {
+              status: "completed" as const,
+              stage: "completed" as const,
+              error: undefined,
+              completedAt: new Date().toISOString(),
+              progress: 100,
+            } : {}),
+          };
+        });
       }
       setImageMatches((current) => current ? filterImageMatchesToProductMedia(current, nextProducts) : current);
       toast.success(action === "skip"
