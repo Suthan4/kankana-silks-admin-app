@@ -2762,7 +2762,7 @@ const BulkProductUploadPage: React.FC = () => {
         if (currentDraftId) {
           await productApi.updateDraft(currentDraftId, {
             rawInput,
-            parsedData: normalized,
+            parsedData: productsWithErrors,
           });
         }
         setIsDirty(false);
