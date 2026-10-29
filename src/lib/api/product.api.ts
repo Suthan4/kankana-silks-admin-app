@@ -118,6 +118,14 @@ export const productApi = {
     return apiCall("GET", "/admin/products", undefined, { params });
   },
 
+  /** Update out-of-stock ordering for multiple existing products without changing other fields. */
+  bulkUpdateOutOfStockOrders: async (payload: {
+    productIds: string[];
+    allowOutOfStockOrders: boolean;
+  }): Promise<ApiResponse<{ updatedCount: number; allowOutOfStockOrders: boolean }>> => {
+    return apiCall("PATCH", "/admin/products/bulk/out-of-stock-orders", payload);
+  },
+
   /** Consolidate selected existing simple products into variants of one retained parent product. */
   consolidateSimpleProducts: async (payload: {
     parentProductId: string;
