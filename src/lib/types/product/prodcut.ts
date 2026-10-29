@@ -320,6 +320,7 @@ export interface QueryProductParams {
   categoryIds?: string[];
   isActive?: boolean;
   hasVariants?: boolean;
+  allowOutOfStockOrders?: boolean;
   minPrice?: number;
   maxPrice?: number;
   sortBy?: "createdAt" | "price" | "name" | "popularity";
