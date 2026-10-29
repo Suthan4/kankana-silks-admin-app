@@ -508,6 +508,10 @@ const ProductsPage: React.FC = () => {
       toast.error('Select at least one product first.');
       return;
     }
+    if (selected.length > 100) {
+      toast.error('You can update up to 100 products at a time. Clear some selections and try again.');
+      return;
+    }
     const action = allowOutOfStockOrders ? 'ALLOW' : 'DISALLOW';
     const description = allowOutOfStockOrders
       ? 'allow customers to order when out of stock'
