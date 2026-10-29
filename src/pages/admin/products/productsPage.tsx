@@ -354,6 +354,7 @@ const ProductsPage: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined);
   const [filterHasVariants, setFilterHasVariants] = useState<boolean | undefined>(undefined);
+  const [filterAllowOutOfStockOrders, setFilterAllowOutOfStockOrders] = useState<boolean | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(48);
   const [categorySearch, setCategorySearch] = useState('');
@@ -392,7 +393,7 @@ const ProductsPage: React.FC = () => {
   const canDelete = hasPermission('products', 'canDelete');
 
   const { data: productsData, isLoading, isFetching } = useQuery({
-    queryKey: ['products', searchQuery, filterCategory, filterActive, filterHasVariants, page, pageSize],
+    queryKey: ['products', searchQuery, filterCategory, filterActive, filterHasVariants, filterAllowOutOfStockOrders, page, pageSize],
     queryFn: async () => {
       // Explicitly preserve false values: inactive/simple filters are valid filters,
       // not the same as an omitted query parameter.
@@ -403,6 +404,7 @@ const ProductsPage: React.FC = () => {
         categoryId: filterCategory || undefined,
         ...(filterActive !== undefined ? { isActive: filterActive } : {}),
         ...(filterHasVariants !== undefined ? { hasVariants: filterHasVariants } : {}),
+        ...(filterAllowOutOfStockOrders !== undefined ? { allowOutOfStockOrders: filterAllowOutOfStockOrders } : {}),
       });
       const data = response.data as typeof response.data & {
         page?: number;
@@ -754,7 +756,7 @@ const ProductsPage: React.FC = () => {
 
         {/* Search and filters */}
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(260px,1.5fr)_minmax(220px,1fr)_repeat(2,minmax(145px,.65fr))_auto]">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(240px,1.4fr)_minmax(200px,1fr)_repeat(3,minmax(140px,.65fr))_auto]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input type="text" value={searchInput} onChange={(e) => { setSearchInput(e.target.value); setPage(1); }} placeholder="Search name, SKU, description..." aria-label="Search products by name or SKU" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-10 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100" />{searchQuery && <button type="button" onClick={() => { setSearchInput(''); setSearchQuery(''); setPage(1); }} aria-label="Clear product search" className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"><X className="h-4 w-4" /></button>}
@@ -794,6 +796,9 @@ const ProductsPage: React.FC = () => {
             <select value={filterHasVariants === undefined ? 'all' : filterHasVariants ? 'variable' : 'simple'} onChange={(e) => { const value = e.target.value; setFilterHasVariants(value === 'all' ? undefined : value === 'variable'); setPage(1); }} aria-label="Filter by product type" className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100">
               <option value="all">All types</option><option value="simple">Simple</option><option value="variable">Variable</option>
             </select>
+            <select value={filterAllowOutOfStockOrders === undefined ? 'all' : filterAllowOutOfStockOrders ? 'allowed' : 'blocked'} onChange={(e) => { const value = e.target.value; setFilterAllowOutOfStockOrders(value === 'all' ? undefined : value === 'allowed'); setPage(1); }} aria-label="Filter by out-of-stock ordering" className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100">
+              <option value="all">Out-of-stock orders: All</option><option value="allowed">Allowed</option><option value="blocked">Not allowed</option>
+            </select>
             <div className="flex items-center justify-start gap-1 rounded-xl bg-slate-100 p-1 xl:justify-self-end">
               <button type="button" onClick={() => setViewMode('grid')} aria-label="Grid view" className={`rounded-lg p-2.5 transition ${viewMode === 'grid' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}><Grid3x3 className="h-4 w-4" /></button>
               <button type="button" onClick={() => setViewMode('table')} aria-label="Table view" className={`rounded-lg p-2.5 transition ${viewMode === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}><List className="h-4 w-4" /></button>
@@ -801,7 +806,7 @@ const ProductsPage: React.FC = () => {
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
             <span>{pagination ? `Showing ${filteredProducts.length ? (page - 1) * pageSize + 1 : 0}–${Math.min((page - 1) * pageSize + filteredProducts.length, pagination.total)} of ${pagination.total} products` : 'Filtering products'}{isFetching ? ' · Updating…' : ''}</span>
-            {(searchQuery || filterCategory || filterActive !== undefined || filterHasVariants !== undefined) && <button type="button" onClick={() => { setSearchInput(''); setSearchQuery(''); setFilterCategory(''); setFilterActive(undefined); setFilterHasVariants(undefined); setCategorySearch(''); setPage(1); }} className="font-semibold text-blue-700 hover:text-blue-900">Clear all filters</button>}
+            {(searchQuery || filterCategory || filterActive !== undefined || filterHasVariants !== undefined || filterAllowOutOfStockOrders !== undefined) && <button type="button" onClick={() => { setSearchInput(''); setSearchQuery(''); setFilterCategory(''); setFilterActive(undefined); setFilterHasVariants(undefined); setFilterAllowOutOfStockOrders(undefined); setCategorySearch(''); setPage(1); }} className="font-semibold text-blue-700 hover:text-blue-900">Clear all filters</button>}
           </div>
         </div>
 
