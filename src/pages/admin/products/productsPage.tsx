@@ -622,11 +622,11 @@ const ProductsPage: React.FC = () => {
   const consolidationHasMixedCategories = selectedCategoryIds.length > 1;
   const selectedProductsAreConsolidatable = selectedConsolidationProducts.every((product) => product.isActive && !product.hasVariants);
   const selectableVisibleProducts = filteredProducts;
-  const allVisibleSimpleProductsSelected = selectableVisibleProducts.length > 0 && selectableVisibleProducts.every((product) => Boolean(selectedProductMap[product.id]));
+  const allVisibleProductsSelected = selectableVisibleProducts.length > 0 && selectableVisibleProducts.every((product) => Boolean(selectedProductMap[product.id]));
   const toggleVisibleSimpleProducts = () => {
     setSelectedProductMap((current) => {
       const next = { ...current };
-      if (allVisibleSimpleProductsSelected) {
+      if (allVisibleProductsSelected) {
         selectableVisibleProducts.forEach((product) => { delete next[product.id]; });
       } else {
         selectableVisibleProducts.forEach((product) => { next[product.id] = product; });
@@ -849,7 +849,7 @@ const ProductsPage: React.FC = () => {
           <div className="flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-700 shadow-sm"><GitMerge className="h-5 w-5" /></div>
-              <div><p className="font-semibold text-slate-900">{selectedConsolidationProducts.length} simple product{selectedConsolidationProducts.length === 1 ? '' : 's'} selected</p><p className="text-xs text-slate-600">Bulk-update out-of-stock ordering, or choose a parent product to turn them into variants.</p>{consolidationHasMixedCategories && <p className="mt-1 text-xs font-medium text-rose-700">Mixed categories selected. Choose products from one category to continue.</p>}</div>
+              <div><p className="font-semibold text-slate-900">{selectedConsolidationProducts.length} product{selectedConsolidationProducts.length === 1 ? '' : 's'} selected</p><p className="text-xs text-slate-600">Bulk-update out-of-stock ordering, or choose a parent product to turn them into variants.</p>{consolidationHasMixedCategories && <p className="mt-1 text-xs font-medium text-rose-700">Mixed categories selected. Bulk updates still work; variant consolidation requires one category.</p>}</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => setSelectedProductMap({})} disabled={bulkOutOfStockMutation.isPending} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Clear selection</button>
@@ -897,7 +897,7 @@ const ProductsPage: React.FC = () => {
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
               <span className="text-slate-600">{filteredProducts.length} products on this page · {selectableVisibleProducts.length} products selectable</span>
-              <button type="button" disabled={!canUpdate || selectableVisibleProducts.length === 0} onClick={toggleVisibleSimpleProducts} className="font-semibold text-blue-700 hover:text-blue-900 disabled:cursor-not-allowed disabled:opacity-40">{allVisibleSimpleProductsSelected ? 'Deselect eligible on this page' : 'Select all products on this page'}</button>
+              <button type="button" disabled={!canUpdate || selectableVisibleProducts.length === 0} onClick={toggleVisibleSimpleProducts} className="font-semibold text-blue-700 hover:text-blue-900 disabled:cursor-not-allowed disabled:opacity-40">{allVisibleProductsSelected ? 'Deselect all on this page' : 'Select all products on this page'}</button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {filteredProducts.map((product) => (
@@ -910,7 +910,7 @@ const ProductsPage: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="min-w-[900px] w-full divide-y divide-slate-200 text-[13px]">
                 <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <tr><th className="px-3 py-3 font-semibold"><input type="checkbox" checked={allVisibleSimpleProductsSelected} disabled={!canUpdate || selectableVisibleProducts.length === 0} onChange={toggleVisibleSimpleProducts} aria-label="Select all products on this page" title="Select all products on this page" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-30" /></th><th className="px-4 py-3 font-semibold">Product</th><th className="px-4 py-3 font-semibold">Category</th><th className="px-4 py-3 font-semibold">Price</th><th className="px-4 py-3 font-semibold">Type</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 text-right font-semibold">Actions</th></tr>
+                  <tr><th className="px-3 py-3 font-semibold"><input type="checkbox" checked={allVisibleProductsSelected} disabled={!canUpdate || selectableVisibleProducts.length === 0} onChange={toggleVisibleSimpleProducts} aria-label="Select all products on this page" title="Select all products on this page" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-30" /></th><th className="px-4 py-3 font-semibold">Product</th><th className="px-4 py-3 font-semibold">Category</th><th className="px-4 py-3 font-semibold">Price</th><th className="px-4 py-3 font-semibold">Type</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 text-right font-semibold">Actions</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredProducts.map((product) => {
