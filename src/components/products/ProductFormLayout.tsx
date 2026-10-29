@@ -208,6 +208,16 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
     ),
   );
 
+  const handleInvalidSubmit = (errors: Record<string, any>) => {
+    const firstError = Object.values(errors).find(
+      (error: any) => error?.message || error?.type || error?.root,
+    ) as any;
+    const message = firstError?.message
+      || firstError?.root?.message
+      || "Please check the highlighted fields and try saving again.";
+    toast.error(String(message));
+  };
+
   const submitProductForm = (data: ProductFormValues) => {
     if (hasTemporaryDriveMedia) {
       toast.error(
@@ -761,8 +771,9 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
             </button>
             <button
               type="button"
-              onClick={handleSubmit((data) =>
-                submitProductForm(data as ProductFormValues),
+              onClick={handleSubmit(
+                (data) => submitProductForm(data as ProductFormValues),
+                handleInvalidSubmit,
               )}
               disabled={isProcessing}
               className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-xs inline-flex items-center gap-2 disabled:opacity-50"
@@ -986,7 +997,10 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
           isDirty={isDirty}
           isSubmitting={isProcessing}
           onDiscard={handleDiscard}
-          onSave={handleSubmit((data) => submitProductForm(data as ProductFormValues))}
+          onSave={handleSubmit(
+            (data) => submitProductForm(data as ProductFormValues),
+            handleInvalidSubmit,
+          )}
           saveLabel={draftMode ? "Save to Draft" : isEditMode ? "Save Changes" : "Publish Product"}
         />
 
