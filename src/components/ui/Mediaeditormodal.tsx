@@ -112,7 +112,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
         const imageUrl = new URL(src, window.location.origin);
         const key = decodeURIComponent(imageUrl.pathname.replace(/^\/+/, ""));
         if (!key || key.includes("..")) throw new Error("Invalid image storage path.");
-        const response = await apiClient.get("/upload/image-preview", {
+        const response = await apiClient.get("/image-preview", {
           params: { key },
           responseType: "blob",
         });
