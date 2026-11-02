@@ -57,6 +57,9 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
   const [flip, setFlip] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isSaving, setIsSaving] = useState(false);
+  const [viewportSize, setViewportSize] = useState(VIEWPORT_SIZE);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const dragState = useRef<{
     dragging: boolean;
@@ -88,7 +91,19 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
     }
   }, [naturalSize, viewportWidth, viewportHeight]);
 
+  const rotationRadians = (rotation * Math.PI) / 180;
+  const rotatedBounds = {
+    width: Math.abs(baseDraw.w * Math.cos(rotationRadians)) + Math.abs(baseDraw.h * Math.sin(rotationRadians)),
+    height: Math.abs(baseDraw.w * Math.sin(rotationRadians)) + Math.abs(baseDraw.h * Math.cos(rotationRadians)),
+  };
+  const rotationCoverScale = Math.max(
+    viewportWidth / Math.max(1, rotatedBounds.width),
+    viewportHeight / Math.max(1, rotatedBounds.height),
+    1,
+  );
+
   const handleImgLoad = () => {
+    setLoadError(null);
     const img = imgRef.current;
     if (!img) return;
     setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
@@ -141,64 +156,49 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
 
   const handleSave = useCallback(async () => {
     const img = imgRef.current;
-    if (!img || !naturalSize) return;
-
+    if (!img || !naturalSize || !img.complete || img.naturalWidth === 0) {
+      setSaveError("The original image is not ready. Please wait for it to load and try again.");
+      return;
+    }
     setIsSaving(true);
+    setSaveError(null);
     try {
       const canvas = document.createElement("canvas");
-      canvas.width = Math.round(viewportWidth * (OUTPUT_SIZE / VIEWPORT_SIZE));
-      canvas.height = Math.round(
-        viewportHeight * (OUTPUT_SIZE / VIEWPORT_SIZE),
-      );
+      canvas.width = Math.max(1, Math.round(viewportWidth * (OUTPUT_SIZE / VIEWPORT_SIZE)));
+      canvas.height = Math.max(1, Math.round(viewportHeight * (OUTPUT_SIZE / VIEWPORT_SIZE)));
       const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas not supported");
-
+      if (!ctx) throw new Error("Your browser could not create an image editor canvas.");
       const ratio = canvas.width / viewportWidth;
-
       ctx.save();
-      ctx.translate(
-        canvas.width / 2 + offset.x * ratio,
-        canvas.height / 2 + offset.y * ratio,
-      );
+      ctx.translate(canvas.width / 2 + offset.x * ratio, canvas.height / 2 + offset.y * ratio);
       ctx.rotate((rotation * Math.PI) / 180);
-      ctx.scale((flip ? -1 : 1) * zoom, zoom);
-
-      const drawW = baseDraw.w * ratio;
-      const drawH = baseDraw.h * ratio;
-      ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+      ctx.scale((flip ? -1 : 1) * zoom * rotationCoverScale, zoom * rotationCoverScale);
+      ctx.drawImage(img, -(baseDraw.w * ratio) / 2, -(baseDraw.h * ratio) / 2, baseDraw.w * ratio, baseDraw.h * ratio);
       ctx.restore();
-
-      canvas.toBlob(
-        (blob) => {
-          setIsSaving(false);
-          if (!blob) return;
-          const editedFile = new File(
-            [blob],
-            fileName.replace(/\.(png|webp|gif)$/i, ".jpg"),
-            { type: "image/jpeg" },
-          );
-          const previewUrl = URL.createObjectURL(blob);
-          onSave(editedFile, previewUrl);
-        },
-        "image/jpeg",
-        0.9,
-      );
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((result) => result ? resolve(result) : reject(new Error("The edited image could not be exported. Check image storage CORS permissions and try again.")), "image/jpeg", 0.92);
+      });
+      const baseName = fileName.replace(/\\.[^.]+$/, "") || "edited-image";
+      const editedFile = new File([blob], baseName + ".jpg", { type: "image/jpeg", lastModified: Date.now() });
+      const previewUrl = URL.createObjectURL(blob);
+      try { await onSave(editedFile, previewUrl); }
+      catch (callbackError) { URL.revokeObjectURL(previewUrl); throw callbackError; }
     } catch (err) {
       console.error("Image edit save failed:", err);
-      setIsSaving(false);
-    }
-  }, [
-    naturalSize,
-    viewportWidth,
-    viewportHeight,
-    offset,
-    rotation,
-    flip,
-    zoom,
-    baseDraw,
-    fileName,
-    onSave,
-  ]);
+      setSaveError(err instanceof Error ? err.message : "Could not save the edited image. Please try again.");
+    } finally { setIsSaving(false); }
+  }, [naturalSize, viewportWidth, viewportHeight, viewportSize, offset, rotation, flip, zoom, baseDraw, rotationCoverScale, fileName, onSave]);
+
+  useEffect(() => {
+    const updateViewport = () => {
+      const availableWidth = Math.max(220, window.innerWidth - 96);
+      const availableHeight = Math.max(220, window.innerHeight * 0.52);
+      setViewportSize(Math.min(VIEWPORT_SIZE, availableWidth, availableHeight));
+    };
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   // Prevent page scroll while dragging inside the crop viewport
   useEffect(() => {
@@ -218,7 +218,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[92dvh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-bold text-gray-900">Edit image</h3>
@@ -231,21 +231,23 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex flex-col md:flex-row">
+        <div className="flex flex-col lg:flex-row">
           {/* Crop viewport */}
-          <div className="flex-1 bg-gray-900 flex items-center justify-center p-6">
+          <div className="flex-1 min-w-0 bg-gray-900 flex items-center justify-center p-3 sm:p-6 overflow-hidden">
             <div
               data-media-editor-viewport
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
-              className="relative overflow-hidden bg-gray-800 cursor-grab active:cursor-grabbing select-none rounded-lg"
+              className="relative overflow-hidden bg-gray-800 cursor-grab active:cursor-grabbing select-none touch-none rounded-lg"
               style={{ width: viewportWidth, height: viewportHeight }}
             >
               <img
                 ref={imgRef}
+                crossOrigin="anonymous"
                 src={src}
                 onLoad={handleImgLoad}
+                onError={() => setLoadError("This image could not be loaded for editing. Check that its storage URL is accessible and allows cross-origin image access.")}
                 alt="Editing"
                 draggable={false}
                 className="absolute top-1/2 left-1/2 pointer-events-none max-w-none"
@@ -257,17 +259,18 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
                       // note: separate scale for flip via scaleX handled below for browsers that need it
                       .replace(
                         `scale(${flip ? -1 : 1} ${zoom}, ${zoom})`,
-                        `scaleX(${flip ? -1 : 1}) scale(${zoom})`,
+                        `scaleX(${flip ? -1 : 1}) scale(${zoom * rotationCoverScale})`,
                       ),
                 }}
               />
               {/* crop frame overlay (subtle) */}
               <div className="absolute inset-0 pointer-events-none ring-1 ring-white/30 rounded-lg" />
+              {loadError && <div className="absolute inset-x-2 bottom-2 rounded-lg bg-red-600/95 px-3 py-2 text-xs text-white">{loadError}</div>}
             </div>
           </div>
 
           {/* Controls */}
-          <div className="w-full md:w-56 p-6 space-y-6 border-t md:border-t-0 md:border-l border-gray-200">
+          <div className="w-full lg:w-56 shrink-0 p-4 sm:p-6 space-y-4 sm:space-y-6 border-t lg:border-t-0 lg:border-l border-gray-200">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -332,6 +335,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
             <p className="text-xs text-gray-500">
               Drag the image to reposition it. Scroll to zoom.
             </p>
+            {saveError && <p role="alert" className="text-xs text-red-600 leading-relaxed">{saveError}</p>}
 
             <button
               type="button"
@@ -344,7 +348,9 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 border-t border-gray-200">
+          <p className="text-xs text-gray-500 max-w-md">Save changes applies this edit to the product form. Save the product to upload the edited image and replace the previous file.</p>
+          <div className="flex justify-end gap-3">
           <button
             type="button"
             onClick={onCancel}
@@ -356,7 +362,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving || !naturalSize}
+            disabled={isSaving || !naturalSize || Boolean(loadError)}
             className="px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 disabled:opacity-50"
           >
             {isSaving ? (
@@ -371,6 +377,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
               </>
             )}
           </button>
+          </div>
         </div>
       </div>
     </div>

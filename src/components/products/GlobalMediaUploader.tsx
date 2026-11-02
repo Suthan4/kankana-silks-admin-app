@@ -204,7 +204,7 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
 
       {/* Media Thumbnails Grid */}
       {media.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 w-full">
           {media.map((item: any, idx: number) => {
             const isCover = idx === 0;
             const mediaKey = String(item.id || idx);
@@ -218,7 +218,7 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
             return (
               <div
                 key={item.id || idx}
-                className={`relative rounded-lg overflow-hidden border-2 aspect-square bg-slate-100 group shadow-xs ${
+                className={`relative min-w-0 rounded-lg overflow-hidden border-2 aspect-square bg-slate-100 group shadow-xs ${
                   isCover
                     ? "border-blue-600 ring-2 ring-blue-100"
                     : "border-slate-200"
@@ -274,7 +274,7 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
 
                 {/* Badges */}
                 {isCover && (
-                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-blue-600 text-white text-3xs font-bold rounded shadow-xs flex items-center gap-0.5 z-10">
+                  <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-blue-600 text-white text-3xs font-bold rounded shadow-xs flex items-center gap-0.5 z-10">
                     <Check className="h-2.5 w-2.5" />
                     Cover
                   </div>
