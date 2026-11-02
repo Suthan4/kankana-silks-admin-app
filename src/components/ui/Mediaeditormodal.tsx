@@ -57,6 +57,8 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
   const [flip, setFlip] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const dragState = useRef<{
     dragging: boolean;
@@ -89,6 +91,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
   }, [naturalSize, viewportWidth, viewportHeight]);
 
   const handleImgLoad = () => {
+    setLoadError(null);
     const img = imgRef.current;
     if (!img) return;
     setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
@@ -141,64 +144,38 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
 
   const handleSave = useCallback(async () => {
     const img = imgRef.current;
-    if (!img || !naturalSize) return;
-
+    if (!img || !naturalSize || !img.complete || img.naturalWidth === 0) {
+      setSaveError("The original image is not ready. Please wait for it to load and try again.");
+      return;
+    }
     setIsSaving(true);
+    setSaveError(null);
     try {
       const canvas = document.createElement("canvas");
-      canvas.width = Math.round(viewportWidth * (OUTPUT_SIZE / VIEWPORT_SIZE));
-      canvas.height = Math.round(
-        viewportHeight * (OUTPUT_SIZE / VIEWPORT_SIZE),
-      );
+      canvas.width = Math.max(1, Math.round(viewportWidth * (OUTPUT_SIZE / VIEWPORT_SIZE)));
+      canvas.height = Math.max(1, Math.round(viewportHeight * (OUTPUT_SIZE / VIEWPORT_SIZE)));
       const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas not supported");
-
+      if (!ctx) throw new Error("Your browser could not create an image editor canvas.");
       const ratio = canvas.width / viewportWidth;
-
       ctx.save();
-      ctx.translate(
-        canvas.width / 2 + offset.x * ratio,
-        canvas.height / 2 + offset.y * ratio,
-      );
+      ctx.translate(canvas.width / 2 + offset.x * ratio, canvas.height / 2 + offset.y * ratio);
       ctx.rotate((rotation * Math.PI) / 180);
       ctx.scale((flip ? -1 : 1) * zoom, zoom);
-
-      const drawW = baseDraw.w * ratio;
-      const drawH = baseDraw.h * ratio;
-      ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+      ctx.drawImage(img, -(baseDraw.w * ratio) / 2, -(baseDraw.h * ratio) / 2, baseDraw.w * ratio, baseDraw.h * ratio);
       ctx.restore();
-
-      canvas.toBlob(
-        (blob) => {
-          setIsSaving(false);
-          if (!blob) return;
-          const editedFile = new File(
-            [blob],
-            fileName.replace(/\.(png|webp|gif)$/i, ".jpg"),
-            { type: "image/jpeg" },
-          );
-          const previewUrl = URL.createObjectURL(blob);
-          onSave(editedFile, previewUrl);
-        },
-        "image/jpeg",
-        0.9,
-      );
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((result) => result ? resolve(result) : reject(new Error("The edited image could not be exported. Check image storage CORS permissions and try again.")), "image/jpeg", 0.92);
+      });
+      const baseName = fileName.replace(/\\.[^.]+$/, "") || "edited-image";
+      const editedFile = new File([blob], baseName + ".jpg", { type: "image/jpeg", lastModified: Date.now() });
+      const previewUrl = URL.createObjectURL(blob);
+      try { await onSave(editedFile, previewUrl); }
+      catch (callbackError) { URL.revokeObjectURL(previewUrl); throw callbackError; }
     } catch (err) {
       console.error("Image edit save failed:", err);
-      setIsSaving(false);
-    }
-  }, [
-    naturalSize,
-    viewportWidth,
-    viewportHeight,
-    offset,
-    rotation,
-    flip,
-    zoom,
-    baseDraw,
-    fileName,
-    onSave,
-  ]);
+      setSaveError(err instanceof Error ? err.message : "Could not save the edited image. Please try again.");
+    } finally { setIsSaving(false); }
+  }, [naturalSize, viewportWidth, viewportHeight, offset, rotation, flip, zoom, baseDraw, fileName, onSave]);
 
   // Prevent page scroll while dragging inside the crop viewport
   useEffect(() => {
@@ -244,8 +221,10 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
             >
               <img
                 ref={imgRef}
+                crossOrigin="anonymous"
                 src={src}
                 onLoad={handleImgLoad}
+                onError={() => setLoadError("This image could not be loaded for editing. Check that its storage URL is accessible and allows cross-origin image access.")}
                 alt="Editing"
                 draggable={false}
                 className="absolute top-1/2 left-1/2 pointer-events-none max-w-none"
@@ -263,6 +242,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
               />
               {/* crop frame overlay (subtle) */}
               <div className="absolute inset-0 pointer-events-none ring-1 ring-white/30 rounded-lg" />
+              {loadError && <div className="absolute inset-x-2 bottom-2 rounded-lg bg-red-600/95 px-3 py-2 text-xs text-white">{loadError}</div>}
             </div>
           </div>
 
@@ -332,6 +312,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
             <p className="text-xs text-gray-500">
               Drag the image to reposition it. Scroll to zoom.
             </p>
+            {saveError && <p role="alert" className="text-xs text-red-600 leading-relaxed">{saveError}</p>}
 
             <button
               type="button"
@@ -356,7 +337,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving || !naturalSize}
+            disabled={isSaving || !naturalSize || Boolean(loadError)}
             className="px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 disabled:opacity-50"
           >
             {isSaving ? (
