@@ -57,6 +57,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
   const [flip, setFlip] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isSaving, setIsSaving] = useState(false);
+  const [viewportSize, setViewportSize] = useState(VIEWPORT_SIZE);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -186,7 +187,18 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
       console.error("Image edit save failed:", err);
       setSaveError(err instanceof Error ? err.message : "Could not save the edited image. Please try again.");
     } finally { setIsSaving(false); }
-  }, [naturalSize, viewportWidth, viewportHeight, offset, rotation, flip, zoom, baseDraw, rotationCoverScale, fileName, onSave]);
+  }, [naturalSize, viewportWidth, viewportHeight, viewportSize, offset, rotation, flip, zoom, baseDraw, rotationCoverScale, fileName, onSave]);
+
+  useEffect(() => {
+    const updateViewport = () => {
+      const availableWidth = Math.max(220, window.innerWidth - 96);
+      const availableHeight = Math.max(220, window.innerHeight * 0.52);
+      setViewportSize(Math.min(VIEWPORT_SIZE, availableWidth, availableHeight));
+    };
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   // Prevent page scroll while dragging inside the crop viewport
   useEffect(() => {
