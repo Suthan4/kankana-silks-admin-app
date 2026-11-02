@@ -164,6 +164,11 @@ export const productApi = {
     return apiCall("GET", `/products/${id}`);
   },
 
+  /** Admin edit endpoint returns the complete variant media history. */
+  getAdminProduct: async (id: string): Promise<ApiResponse<Product>> => {
+    return apiCall("GET", `/admin/products/${id}`);
+  },
+
   // Alias getProductById
   getProductById: async (id: string): Promise<ApiResponse<Product>> => {
     return apiCall("GET", `/products/${id}`);
