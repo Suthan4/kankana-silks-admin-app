@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import apiClient from "@/lib/api/api.base.service";
 import {
   X,
   RotateCcw,
@@ -59,6 +60,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [viewportSize, setViewportSize] = useState(VIEWPORT_SIZE);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(src.startsWith("blob:") || src.startsWith("data:") ? src : null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const dragState = useRef<{
@@ -90,6 +92,47 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
       return { w, h };
     }
   }, [naturalSize, viewportWidth, viewportHeight]);
+
+  // Existing CloudFront/S3 URLs are not guaranteed to send CORS headers.
+  // Fetch remote media through the authenticated same-origin admin API, then
+  // edit the returned blob URL so canvas export remains origin-clean.
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setNaturalSize(null);
+    setLoadError(null);
+    if (src.startsWith("blob:") || src.startsWith("data:")) {
+      setResolvedSrc(src);
+      return () => {};
+    }
+
+    setResolvedSrc(null);
+    const loadImage = async () => {
+      try {
+        const imageUrl = new URL(src, window.location.origin);
+        const key = decodeURIComponent(imageUrl.pathname.replace(/^\\/+/, ""));
+        if (!key || key.includes("..")) throw new Error("Invalid image storage path.");
+        const response = await apiClient.get("/upload/image-preview", {
+          params: { key },
+          responseType: "blob",
+        });
+        if (!String(response.data?.type || "").startsWith("image/")) {
+          throw new Error("The image preview endpoint returned an unsupported file.");
+        }
+        objectUrl = URL.createObjectURL(response.data);
+        if (!cancelled) setResolvedSrc(objectUrl);
+      } catch (error: any) {
+        if (cancelled) return;
+        const message = error?.response?.data?.message || error?.response?.data?.error || error?.message;
+        setLoadError(message || "Unable to load this image from storage. Please check your admin session and try again.");
+      }
+    };
+    loadImage();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src]);
 
   const rotationRadians = (rotation * Math.PI) / 180;
   const rotatedBounds = {
@@ -244,10 +287,9 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
             >
               <img
                 ref={imgRef}
-                crossOrigin="anonymous"
-                src={src}
+                src={resolvedSrc || ""}
                 onLoad={handleImgLoad}
-                onError={() => setLoadError("This image could not be loaded for editing. Check that its storage URL is accessible and allows cross-origin image access.")}
+                onError={() => setLoadError("The image preview could not be decoded. Please try reopening the editor.")}
                 alt="Editing"
                 draggable={false}
                 className="absolute top-1/2 left-1/2 pointer-events-none max-w-none"
@@ -362,7 +404,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving || !naturalSize || Boolean(loadError)}
+            disabled={isSaving || !naturalSize || Boolean(loadError) || !resolvedSrc}
             className="px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 disabled:opacity-50"
           >
             {isSaving ? (
