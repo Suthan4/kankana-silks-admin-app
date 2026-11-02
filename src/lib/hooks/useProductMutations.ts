@@ -15,7 +15,7 @@ import { mapApiErrorsToForm } from "@/lib/utils/errorMapper";
  */
 export function useProductQuery(id?: string, enabled: boolean = true) {
   return useQuery({
-    queryKey: ["product", id],
+    queryKey: ["admin-product-edit", id],
     queryFn: async () => {
       if (!id) return null;
       const response = await productApi.getAdminProduct(id);
@@ -74,6 +74,7 @@ export function usePatchProductMutation(setError?: UseFormSetError<any>) {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-product-edit", variables.id] });
       toast.success("Changes saved successfully!");
     },
     onError: (error) => {
