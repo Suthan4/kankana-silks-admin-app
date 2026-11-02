@@ -90,6 +90,17 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
     }
   }, [naturalSize, viewportWidth, viewportHeight]);
 
+  const rotationRadians = (rotation * Math.PI) / 180;
+  const rotatedBounds = {
+    width: Math.abs(baseDraw.w * Math.cos(rotationRadians)) + Math.abs(baseDraw.h * Math.sin(rotationRadians)),
+    height: Math.abs(baseDraw.w * Math.sin(rotationRadians)) + Math.abs(baseDraw.h * Math.cos(rotationRadians)),
+  };
+  const rotationCoverScale = Math.max(
+    viewportWidth / Math.max(1, rotatedBounds.width),
+    viewportHeight / Math.max(1, rotatedBounds.height),
+    1,
+  );
+
   const handleImgLoad = () => {
     setLoadError(null);
     const img = imgRef.current;
@@ -160,7 +171,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
       ctx.save();
       ctx.translate(canvas.width / 2 + offset.x * ratio, canvas.height / 2 + offset.y * ratio);
       ctx.rotate((rotation * Math.PI) / 180);
-      ctx.scale((flip ? -1 : 1) * zoom, zoom);
+      ctx.scale((flip ? -1 : 1) * zoom * rotationCoverScale, zoom * rotationCoverScale);
       ctx.drawImage(img, -(baseDraw.w * ratio) / 2, -(baseDraw.h * ratio) / 2, baseDraw.w * ratio, baseDraw.h * ratio);
       ctx.restore();
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -175,7 +186,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
       console.error("Image edit save failed:", err);
       setSaveError(err instanceof Error ? err.message : "Could not save the edited image. Please try again.");
     } finally { setIsSaving(false); }
-  }, [naturalSize, viewportWidth, viewportHeight, offset, rotation, flip, zoom, baseDraw, fileName, onSave]);
+  }, [naturalSize, viewportWidth, viewportHeight, offset, rotation, flip, zoom, baseDraw, rotationCoverScale, fileName, onSave]);
 
   // Prevent page scroll while dragging inside the crop viewport
   useEffect(() => {
@@ -195,7 +206,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[92dvh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-bold text-gray-900">Edit image</h3>
@@ -208,15 +219,15 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex flex-col md:flex-row">
+        <div className="flex flex-col lg:flex-row">
           {/* Crop viewport */}
-          <div className="flex-1 bg-gray-900 flex items-center justify-center p-6">
+          <div className="flex-1 min-w-0 bg-gray-900 flex items-center justify-center p-3 sm:p-6 overflow-hidden">
             <div
               data-media-editor-viewport
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
-              className="relative overflow-hidden bg-gray-800 cursor-grab active:cursor-grabbing select-none rounded-lg"
+              className="relative overflow-hidden bg-gray-800 cursor-grab active:cursor-grabbing select-none touch-none rounded-lg"
               style={{ width: viewportWidth, height: viewportHeight }}
             >
               <img
@@ -236,7 +247,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
                       // note: separate scale for flip via scaleX handled below for browsers that need it
                       .replace(
                         `scale(${flip ? -1 : 1} ${zoom}, ${zoom})`,
-                        `scaleX(${flip ? -1 : 1}) scale(${zoom})`,
+                        `scaleX(${flip ? -1 : 1}) scale(${zoom * rotationCoverScale})`,
                       ),
                 }}
               />
@@ -247,7 +258,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
           </div>
 
           {/* Controls */}
-          <div className="w-full md:w-56 p-6 space-y-6 border-t md:border-t-0 md:border-l border-gray-200">
+          <div className="w-full lg:w-56 shrink-0 p-4 sm:p-6 space-y-4 sm:space-y-6 border-t lg:border-t-0 lg:border-l border-gray-200">
             <div className="flex items-center gap-2">
               <button
                 type="button"
