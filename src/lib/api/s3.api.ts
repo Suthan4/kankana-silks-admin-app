@@ -152,53 +152,37 @@ class S3Api {
     return response.data;
   }
 
-  /** Upload bytes directly to S3, then finalize through the trusted backend pipeline. */
+  /**
+   * Upload through the existing backend media pipeline. The backend writes
+   * the optimized image to the configured public media bucket and returns
+   * the permanent public URL. This intentionally does not require a private
+   * staging bucket or presigned browser-to-S3 upload.
+   */
   async uploadDirect(
     file: File,
     folder: string,
     uploadType: "product" | "category" | "banner" | "bulk",
     onProgress?: (percent: number) => void,
   ): Promise<FinalizedUploadResponse> {
-    let staged: PresignedUrlResponse;
-    try {
-      staged = await this.getPresignedUrl(file.name, file.type, file.size, folder, uploadType);
-    } catch (error: any) {
-      const payload = error?.response?.data;
-      const stagingUnavailable =
-        error?.response?.status === 503 &&
-        payload?.code === "SECURITY_VALIDATION_FAILED" &&
-        /AWS_S3_STAGING_BUCKET|private staging bucket/i.test(String(payload?.error || payload?.message || ""));
-      if (!stagingUnavailable) throw error;
-
-      // Use the authenticated backend's existing optimizer and public-media
-      // bucket path when this environment has no private staging bucket.
-      const uploaded = await this.uploadSingle(file, folder, uploadType, onProgress);
-      if (!uploaded?.success || !uploaded?.url) {
-        throw new Error(uploaded?.error || "Upload did not return a public media URL.");
-      }
-      onProgress?.(100);
-      return {
-        success: true,
-        url: uploaded.url,
-        key: uploaded.key,
-        size: uploaded.size,
-        width: uploaded.width,
-        height: uploaded.height,
-        format: uploaded.format,
-        qualityUsed: uploaded.qualityUsed,
-        attempts: uploaded.attempts,
-      };
+    const uploaded = await this.uploadSingle(file, folder, uploadType, onProgress);
+    const url = uploaded?.url || uploaded?.data?.url;
+    if (!uploaded?.success || typeof url !== "string" || !url) {
+      throw new Error(uploaded?.error || uploaded?.message || "Upload did not return a public media URL.");
     }
 
-    await axios.put(staged.uploadUrl, file, {
-      headers: { "Content-Type": file.type },
-      onUploadProgress: (event) => {
-        if (event.total) onProgress?.(Math.round((event.loaded / event.total) * 90));
-      },
-    });
-    const finalized = await this.finalizeStagedUpload(staged.stagingKey, folder, uploadType);
     onProgress?.(100);
-    return finalized;
+    return {
+      success: true,
+      url,
+      key: uploaded.key || uploaded.data?.key,
+      size: uploaded.size ?? uploaded.data?.size,
+      width: uploaded.width ?? uploaded.data?.width,
+      height: uploaded.height ?? uploaded.data?.height,
+      format: uploaded.format ?? uploaded.data?.format,
+      qualityUsed: uploaded.qualityUsed ?? uploaded.data?.qualityUsed,
+      attempts: uploaded.attempts ?? uploaded.data?.attempts,
+    };
+
   }
 }
 
