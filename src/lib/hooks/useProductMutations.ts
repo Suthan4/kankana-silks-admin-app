@@ -18,7 +18,7 @@ export function useProductQuery(id?: string, enabled: boolean = true) {
     queryKey: ["product", id],
     queryFn: async () => {
       if (!id) return null;
-      const response = await productApi.getProduct(id);
+      const response = await productApi.getAdminProduct(id);
       return response.data;
     },
     enabled: Boolean(id) && enabled,
