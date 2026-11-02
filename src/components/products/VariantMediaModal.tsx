@@ -217,11 +217,9 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
                   <div
                     key={item.id || idx}
                     className={`group relative aspect-square rounded-lg overflow-hidden border-2 bg-gray-100 ${
-                      item.isActive === false
-                        ? "border-amber-300 opacity-70"
-                        : isCover
-                          ? "border-indigo-600 ring-2 ring-indigo-100"
-                          : "border-gray-200"
+                      isCover
+                        ? "border-indigo-600 ring-2 ring-indigo-100"
+                        : "border-gray-200"
                     }`}
                   >
                     {item.type === "VIDEO" ? (
@@ -237,12 +235,6 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
                         alt={item.altText || `Variant photo ${idx + 1}`}
                         className="w-full h-full object-cover"
                       />
-                    )}
-
-                    {item.isActive === false && (
-                      <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-amber-500 text-white rounded text-3xs font-bold shadow-xs z-10">
-                        Inactive
-                      </div>
                     )}
 
                     {/* Primary Badge */}
