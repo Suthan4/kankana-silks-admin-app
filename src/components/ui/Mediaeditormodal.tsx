@@ -348,7 +348,9 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 border-t border-gray-200">
+          <p className="text-xs text-gray-500 max-w-md">Save changes applies this edit to the product form. Save the product to upload the edited image and replace the previous file.</p>
+          <div className="flex justify-end gap-3">
           <button
             type="button"
             onClick={onCancel}
@@ -375,6 +377,7 @@ const MediaEditorModal: React.FC<MediaEditorModalProps> = ({
               </>
             )}
           </button>
+          </div>
         </div>
       </div>
     </div>
