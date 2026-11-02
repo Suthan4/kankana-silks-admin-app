@@ -75,6 +75,7 @@ export function usePatchProductMutation(setError?: UseFormSetError<any>) {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["admin-product-edit", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-product-edit", variables.id] });
       toast.success("Changes saved successfully!");
     },
     onError: (error) => {
@@ -98,6 +99,7 @@ export function useUpdateProductMutation(setError?: UseFormSetError<any>) {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-product-edit", variables.id] });
       toast.success("Product updated successfully!");
     },
     onError: (error) => {
