@@ -51,22 +51,19 @@ class S3Api {
     file: File,
     folder: string = "products",
     uploadType?: "product" | "category" | "banner" | "bulk",
+    onProgress?: (percent: number) => void,
   ) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", folder);
     if (uploadType) formData.append("uploadType", uploadType);
 
-    const response = await axios.post(
-      `${API_BASE_URL}`,
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
-
+    const response = await axios.post(`${API_BASE_URL}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (event) => {
+        if (event.total) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      },
+    });
     return response.data;
   }
 
@@ -162,7 +159,37 @@ class S3Api {
     uploadType: "product" | "category" | "banner" | "bulk",
     onProgress?: (percent: number) => void,
   ): Promise<FinalizedUploadResponse> {
-    const staged = await this.getPresignedUrl(file.name, file.type, file.size, folder, uploadType);
+    let staged: PresignedUrlResponse;
+    try {
+      staged = await this.getPresignedUrl(file.name, file.type, file.size, folder, uploadType);
+    } catch (error: any) {
+      const payload = error?.response?.data;
+      const stagingUnavailable =
+        error?.response?.status === 503 &&
+        payload?.code === "SECURITY_VALIDATION_FAILED" &&
+        /AWS_S3_STAGING_BUCKET|private staging bucket/i.test(String(payload?.error || payload?.message || ""));
+      if (!stagingUnavailable) throw error;
+
+      // Use the authenticated backend's existing optimizer and public-media
+      // bucket path when this environment has no private staging bucket.
+      const uploaded = await this.uploadSingle(file, folder, uploadType, onProgress);
+      if (!uploaded?.success || !uploaded?.url) {
+        throw new Error(uploaded?.error || "Upload did not return a public media URL.");
+      }
+      onProgress?.(100);
+      return {
+        success: true,
+        url: uploaded.url,
+        key: uploaded.key,
+        size: uploaded.size,
+        width: uploaded.width,
+        height: uploaded.height,
+        format: uploaded.format,
+        qualityUsed: uploaded.qualityUsed,
+        attempts: uploaded.attempts,
+      };
+    }
+
     await axios.put(staged.uploadUrl, file, {
       headers: { "Content-Type": file.type },
       onUploadProgress: (event) => {
