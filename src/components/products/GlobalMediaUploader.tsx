@@ -344,9 +344,8 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
                   <button
                     type="button"
                     onClick={() => void handleRemoveMedia(idx)}
-                    disabled={deletingMediaId === String(item.id)}
-                    className="p-1 bg-red-600 hover:bg-red-700 text-white rounded shadow-xs transition-colors disabled:opacity-50 disabled:cursor-wait"
-                    title={deletingMediaId === String(item.id) ? "Deleting from S3..." : "Delete"}
+                    className="p-1 bg-red-600 hover:bg-red-700 text-white rounded shadow-xs transition-colors"
+                    title="Remove"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
