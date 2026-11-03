@@ -96,10 +96,13 @@ export function useUpdateProductMutation(setError?: UseFormSetError<any>) {
       const response = await productApi.updateProduct(id, data);
       return response.data;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (updatedProduct, variables) => {
+      // Keep the edit screen's cache aligned with the server's saved response.
+      // Refetching this query immediately can race the form reset and rehydrate
+      // an older media array, making a just-removed image appear again.
+      queryClient.setQueryData(["admin-product-edit", variables.id], updatedProduct);
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", variables.id] });
-      queryClient.invalidateQueries({ queryKey: ["admin-product-edit", variables.id] });
       toast.success("Product updated successfully!");
     },
     onError: (error) => {

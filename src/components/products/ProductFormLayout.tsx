@@ -701,6 +701,16 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
         await createMutation.mutateAsync(payload);
       }
 
+      // The API update has succeeded. Mark the exact submitted state as clean
+      // immediately, before best-effort S3 cleanup. Otherwise the user can see a
+      // success toast while the navigation guard still thinks the form is dirty.
+      const savedFormValues = {
+        ...data,
+        media: finalGlobalMedia,
+        variants: finalVariants,
+      } as ProductFormValues;
+      reset(savedFormValues);
+
       // Product persistence succeeded. Compare the old product/variant S3 URLs
       // with all URLs still referenced by the saved payload before deleting.
       const retainedUrls = getProductMediaUrls(payload);
@@ -717,8 +727,6 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
         toast.error("Product saved successfully, but old media cleanup needs attention.");
       }
 
-      // Keep the form showing the newly-persisted public URLs, not stale blob URLs.
-      reset({ ...data, media: finalGlobalMedia, variants: finalVariants } as ProductFormValues);
       onSuccess?.();
     } catch (err: any) {
       if (uploadToastId) {
