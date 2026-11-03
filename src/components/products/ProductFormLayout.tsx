@@ -847,7 +847,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
                 </p>
               </div>
             )}
-            <GlobalMediaUploader />
+            <GlobalMediaUploader productId={activeProductId} />
 
             {/* 3. Variants Section Card with Inline Toggle */}
             <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-5">

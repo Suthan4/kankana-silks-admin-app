@@ -1,4 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { productApi } from "@/lib/api/product.api";
 import { useFormContext, useWatch } from "react-hook-form";
 import {
   Check,
@@ -20,6 +23,7 @@ import MediaEditorModal from "@/components/ui/Mediaeditormodal";
 
 export interface GlobalMediaUploaderProps {
   className?: string;
+  productId?: string;
 }
 
 /**
@@ -32,8 +36,11 @@ export interface GlobalMediaUploaderProps {
  */
 export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
   className = "",
+  productId,
 }) => {
   const { control, setValue } = useFormContext<ProductFormValues>();
+  const queryClient = useQueryClient();
+  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
   const media = useWatch({ control, name: "media" }) || [];
   const [isDragOver, setIsDragOver] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -84,28 +91,44 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
     handleFiles(files);
   };
 
-  const handleRemoveMedia = (index: number) => {
+  const handleRemoveMedia = async (index: number) => {
     const target = media[index] as any;
+    const mediaId = target?.id ? String(target.id) : "";
+    const isPersistedMedia = Boolean(productId && mediaId && !target?.file);
     const label = target?.title || target?.file?.name || `photo ${index + 1}`;
-    const isStoredMedia = /^https?:\/\//i.test(String(target?.url || ""));
-    const confirmation = isStoredMedia
-      ? `Are you sure you want to remove ${label}? Its S3 file will be deleted only after the product is saved successfully.`
-      : `Are you sure you want to remove ${label} from this product?`;
+    const confirmation = isPersistedMedia
+      ? `Delete ${label} permanently from S3 and this product? This happens immediately.`
+      : `Remove ${label} from this unsaved product?`;
     if (!window.confirm(confirmation)) return;
-    revokePreviewUrl(target?.preview || target?.url);
 
+    if (isPersistedMedia) {
+      if (deletingMediaId) return;
+      setDeletingMediaId(mediaId);
+      try {
+        await productApi.deleteMedia(productId!, mediaId);
+        const updated = media
+          .filter((_, i) => i !== index)
+          .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
+        setValue("media", updated as any, { shouldDirty: true, shouldValidate: true });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["admin-product-edit", productId] }),
+          queryClient.invalidateQueries({ queryKey: ["product", productId] }),
+          queryClient.invalidateQueries({ queryKey: ["products"] }),
+        ]);
+        toast.success("Image deleted from S3 and product.");
+      } catch (error: any) {
+        toast.error(error?.response?.data?.message || error?.message || "Image deletion failed. The image was kept.");
+      } finally {
+        setDeletingMediaId(null);
+      }
+      return;
+    }
+
+    revokePreviewUrl(target?.preview || target?.url);
     const updated = media
       .filter((_, i) => i !== index)
-      .map((item, i) => ({
-        ...item,
-        order: i,
-        isPrimary: i === 0,
-      }));
-
-    setValue("media", updated as any, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
+      .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
+    setValue("media", updated as any, { shouldDirty: true, shouldValidate: true });
   };
 
   const handleMoveMedia = (index: number, direction: -1 | 1) => {
@@ -344,9 +367,10 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
                   )}
                   <button
                     type="button"
-                    onClick={() => handleRemoveMedia(idx)}
-                    className="p-1 bg-red-600 hover:bg-red-700 text-white rounded shadow-xs transition-colors"
-                    title="Delete"
+                    onClick={() => void handleRemoveMedia(idx)}
+                    disabled={deletingMediaId === String(item.id)}
+                    className="p-1 bg-red-600 hover:bg-red-700 text-white rounded shadow-xs transition-colors disabled:opacity-50 disabled:cursor-wait"
+                    title={deletingMediaId === String(item.id) ? "Deleting from S3..." : "Delete"}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
