@@ -1100,6 +1100,8 @@ export const VariantMatrixBuilder: React.FC<VariantMatrixBuilderProps> = ({
               .join(", ") || "Variant"
           }
           variantSku={watchedVariants[activeMediaModalVariantIndex]?.sku || ""}
+          productId={productId}
+          variantId={String(watchedVariants[activeMediaModalVariantIndex]?.id || watchedVariants[activeMediaModalVariantIndex]?.variantId || "")}
           media={watchedVariants[activeMediaModalVariantIndex]?.media || []}
           onUpdateMedia={(updatedMedia) => {
             setValue(

@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { productApi } from "@/lib/api/product.api";
 import {
   Check,
   Crop,
@@ -23,6 +26,8 @@ export interface VariantMediaModalProps {
   onClose: () => void;
   variantTitle: string;
   variantSku: string;
+  productId?: string;
+  variantId?: string;
   media: any[];
   onUpdateMedia: (updatedMedia: any[]) => void;
 }
@@ -37,12 +42,16 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
   onClose,
   variantTitle,
   variantSku,
+  productId,
+  variantId,
   media = [],
   onUpdateMedia,
 }) => {
   const [items, setItems] = useState<any[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (isOpen) {
@@ -90,22 +99,44 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
     handleFiles(files);
   };
 
-  const handleRemove = (index: number) => {
+  const handleRemove = async (index: number) => {
     const target = items[index];
+    const mediaId = target?.id ? String(target.id) : "";
+    const isPersistedMedia = Boolean(productId && variantId && mediaId && !target?.file);
     const label = target?.title || target?.file?.name || `photo ${index + 1}`;
-    const isStoredMedia = /^https?:\/\//i.test(String(target?.url || ""));
-    const confirmation = isStoredMedia
-      ? `Are you sure you want to remove ${label}? Its S3 file will be deleted only after the product is saved successfully.`
-      : `Are you sure you want to remove ${label} from this variant?`;
+    const confirmation = isPersistedMedia
+      ? `Delete ${label} permanently from S3 and this product variant? This happens immediately.`
+      : `Remove ${label} from this unsaved variant?`;
     if (!window.confirm(confirmation)) return;
+
+    if (isPersistedMedia) {
+      if (deletingMediaId) return;
+      setDeletingMediaId(mediaId);
+      try {
+        await productApi.deleteVariantMedia(productId!, variantId!, mediaId);
+        const updated = items
+          .filter((_, i) => i !== index)
+          .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
+        setItems(updated);
+        onUpdateMedia(updated);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["admin-product-edit", productId] }),
+          queryClient.invalidateQueries({ queryKey: ["product", productId] }),
+          queryClient.invalidateQueries({ queryKey: ["products"] }),
+        ]);
+        toast.success("Variant image deleted from S3 and product.");
+      } catch (error: any) {
+        toast.error(error?.response?.data?.message || error?.message || "Variant image deletion failed. The image was kept.");
+      } finally {
+        setDeletingMediaId(null);
+      }
+      return;
+    }
+
     revokePreviewUrl(target?.preview || target?.url);
     const updated = items
       .filter((_, i) => i !== index)
-      .map((item, i) => ({
-        ...item,
-        order: i,
-        isPrimary: i === 0,
-      }));
+      .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
     setItems(updated);
   };
 
