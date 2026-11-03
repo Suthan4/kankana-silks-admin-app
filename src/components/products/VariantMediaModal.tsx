@@ -5,6 +5,8 @@ import { productApi } from "@/lib/api/product.api";
 import {
   Check,
   Crop,
+  ArrowUp,
+  ArrowDown,
   Image as ImageIcon,
   Plus,
   Trash2,
@@ -119,8 +121,9 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
           .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
         setItems(updated);
         onUpdateMedia(updated);
+        // Keep other unsaved form fields intact; do not refetch the edit query
+        // while its form-prefill effect is active.
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["admin-product-edit", productId] }),
           queryClient.invalidateQueries({ queryKey: ["product", productId] }),
           queryClient.invalidateQueries({ queryKey: ["products"] }),
         ]);
@@ -138,6 +141,18 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
       .filter((_, i) => i !== index)
       .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
     setItems(updated);
+  };
+
+  const handleMoveMedia = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+    const reordered = [...items];
+    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    setItems(reordered.map((item, order) => ({
+      ...item,
+      order,
+      isPrimary: order === 0,
+    })));
   };
 
   const handleSetCover = (index: number) => {
@@ -173,7 +188,12 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
   };
 
   const handleDone = () => {
-    onUpdateMedia(items);
+    const orderedItems = items.map((item, index) => ({
+      ...item,
+      order: index,
+      isPrimary: index === 0,
+    }));
+    onUpdateMedia(orderedItems);
     onClose();
   };
 
@@ -302,6 +322,26 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
                           <Crop className="h-3.5 w-3.5" />
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => handleMoveMedia(idx, -1)}
+                        disabled={idx === 0}
+                        className="p-1.5 bg-white text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed rounded shadow-xs"
+                        title="Move image earlier"
+                        aria-label={`Move variant image ${idx + 1} earlier`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveMedia(idx, 1)}
+                        disabled={idx === items.length - 1}
+                        className="p-1.5 bg-white text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed rounded shadow-xs"
+                        title="Move image later"
+                        aria-label={`Move variant image ${idx + 1} later`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
                       {!isCover && (
                         <button
                           type="button"
@@ -334,7 +374,7 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
           <span className="text-xs text-gray-500">
-            {items.length} photo(s) selected
+            {items.length} photo(s) · order is committed when you save the product
           </span>
           <button
             type="button"
