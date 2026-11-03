@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { productApi } from "@/lib/api/product.api";
 import {
   Check,
   Crop,
+  ArrowUp,
+  ArrowDown,
   Image as ImageIcon,
   Plus,
   Trash2,
@@ -50,8 +50,6 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
   const [items, setItems] = useState<any[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (isOpen) {
@@ -99,45 +97,31 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
     handleFiles(files);
   };
 
-  const handleRemove = async (index: number) => {
+  // Keep deletion local until Save Product. The parent form submits the
+  // complete ordered collection, allowing the backend to reconcile removed
+  // rows and retained media atomically in the product update transaction.
+  const handleRemove = (index: number) => {
     const target = items[index];
-    const mediaId = target?.id ? String(target.id) : "";
-    const isPersistedMedia = Boolean(productId && variantId && mediaId && !target?.file);
     const label = target?.title || target?.file?.name || `photo ${index + 1}`;
-    const confirmation = isPersistedMedia
-      ? `Delete ${label} permanently from S3 and this product variant? This happens immediately.`
-      : `Remove ${label} from this unsaved variant?`;
-    if (!window.confirm(confirmation)) return;
-
-    if (isPersistedMedia) {
-      if (deletingMediaId) return;
-      setDeletingMediaId(mediaId);
-      try {
-        await productApi.deleteVariantMedia(productId!, variantId!, mediaId);
-        const updated = items
-          .filter((_, i) => i !== index)
-          .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
-        setItems(updated);
-        onUpdateMedia(updated);
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["admin-product-edit", productId] }),
-          queryClient.invalidateQueries({ queryKey: ["product", productId] }),
-          queryClient.invalidateQueries({ queryKey: ["products"] }),
-        ]);
-        toast.success("Variant image deleted from S3 and product.");
-      } catch (error: any) {
-        toast.error(error?.response?.data?.message || error?.message || "Variant image deletion failed. The image was kept.");
-      } finally {
-        setDeletingMediaId(null);
-      }
-      return;
-    }
+    if (!window.confirm(`Remove ${label} from this variant? The change will be saved when you click Save Product.`)) return;
 
     revokePreviewUrl(target?.preview || target?.url);
     const updated = items
       .filter((_, i) => i !== index)
       .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
     setItems(updated);
+  };
+
+  const handleMoveMedia = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+    const reordered = [...items];
+    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    setItems(reordered.map((item, order) => ({
+      ...item,
+      order,
+      isPrimary: order === 0,
+    })));
   };
 
   const handleSetCover = (index: number) => {
@@ -173,7 +157,12 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
   };
 
   const handleDone = () => {
-    onUpdateMedia(items);
+    const orderedItems = items.map((item, index) => ({
+      ...item,
+      order: index,
+      isPrimary: index === 0,
+    }));
+    onUpdateMedia(orderedItems);
     onClose();
   };
 
@@ -196,7 +185,7 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
               Variant Media: {variantTitle || "Variant"}
             </h3>
             <p className="text-xs text-gray-500 font-mono mt-0.5">
-              SKU: {variantSku || "—"} &nbsp;·&nbsp; {items.length} photo(s) attached
+              SKU: {variantSku || "—"} &nbsp;·&nbsp; {items.length} photo(s) attached · removals save with the product
             </p>
           </div>
           <button
@@ -302,6 +291,26 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
                           <Crop className="h-3.5 w-3.5" />
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => handleMoveMedia(idx, -1)}
+                        disabled={idx === 0}
+                        className="p-1.5 bg-white text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed rounded shadow-xs"
+                        title="Move image earlier"
+                        aria-label={`Move variant image ${idx + 1} earlier`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveMedia(idx, 1)}
+                        disabled={idx === items.length - 1}
+                        className="p-1.5 bg-white text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed rounded shadow-xs"
+                        title="Move image later"
+                        aria-label={`Move variant image ${idx + 1} later`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
                       {!isCover && (
                         <button
                           type="button"
@@ -334,7 +343,7 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
           <span className="text-xs text-gray-500">
-            {items.length} photo(s) selected
+            {items.length} photo(s) · order is committed when you save the product
           </span>
           <button
             type="button"
