@@ -569,13 +569,17 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
           type: item.type || (item.file?.type?.startsWith("video/") ? "VIDEO" : "IMAGE"),
           url: uploaded?.url || item.url,
           key: uploaded?.key || item.key,
-          thumbnailUrl: item.thumbnailUrl,
+          // An edited/re-uploaded original must not keep the previous image's
+          // thumbnail URL; use the new original until a fresh thumbnail exists.
+          thumbnailUrl: uploaded?.thumbnailUrl || (item.file ? undefined : item.thumbnailUrl),
           title: item.title,
           description: item.description,
           mimeType: uploaded?.mimeType || item.mimeType || item.file?.type,
           fileSize: uploaded?.size ?? item.fileSize ?? item.file?.size,
           width: uploaded?.width ?? item.width,
           height: uploaded?.height ?? item.height,
+          // The array order is the source of truth after drag/arrow/cover changes.
+          // Never trust stale order fields from the pre-edit API response.
           order: index,
           altText: item.altText || altTextFallback,
           isActive: item.isActive ?? true,
@@ -601,6 +605,7 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
       if (data.hasVariants && data.variants?.length) {
         finalVariants = await mapSequential(data.variants, async (variant: any) => ({
           ...variant,
+          // Variant media follows the same ordered-array contract as product media.
           media: await uploadMediaCollection(
             variant.media || [],
             "products/variants",

@@ -110,8 +110,10 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
           .filter((_, i) => i !== index)
           .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
         setValue("media", updated as any, { shouldDirty: true, shouldValidate: true });
+        // Do not refetch the edit query here: its form-prefill effect would
+        // overwrite unrelated unsaved edits. The current form is updated above;
+        // reopening the page will fetch the authoritative server response.
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["admin-product-edit", productId] }),
           queryClient.invalidateQueries({ queryKey: ["product", productId] }),
           queryClient.invalidateQueries({ queryKey: ["products"] }),
         ]);
@@ -193,7 +195,7 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
             Product Photos &amp; Media
           </h3>
           <p className="text-xs text-slate-500">
-            Upload high resolution photography and videos. Hover over any photo to crop, reposition, or set as cover.
+            Upload high resolution photography and videos. Reorder or set a cover, then click Save Product to persist the order.
           </p>
         </div>
       </div>
@@ -235,6 +237,8 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
 
       {/* Media Thumbnails Grid */}
       {media.length > 0 && (
+        <>
+        <p className="text-[11px] text-slate-500">Image order is saved with the product. The first image is used as the cover.</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 w-full">
           {media.map((item: any, idx: number) => {
             const isCover = idx === 0;
@@ -379,6 +383,7 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
             );
           })}
         </div>
+        </>
       )}
 
       {/* Crop / Move Image Modal */}
