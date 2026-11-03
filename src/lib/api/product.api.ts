@@ -262,7 +262,7 @@ export const productApi = {
   deleteMedia: async (
     productId: string,
     mediaId: string
-  ): Promise<ApiResponse<void>> => {
+  ): Promise<ApiResponse<Product>> => {
     return apiCall("DELETE", `/products/${productId}/media/${mediaId}`);
   },
 
@@ -380,7 +380,7 @@ export const productApi = {
     productId: string,
     variantId: string,
     mediaId: string
-  ): Promise<ApiResponse<void>> => {
+  ): Promise<ApiResponse<Product>> => {
     return apiCall(
       "DELETE",
       `/products/${productId}/variants/${variantId}/media/${mediaId}`
