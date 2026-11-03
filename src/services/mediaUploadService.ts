@@ -147,7 +147,7 @@ export async function uploadFilesToS3WithMetadata(
       );
 
       const entries = Array.isArray(response?.files) ? response.files : [];
-      const batch = entries.map((entry: any) => {
+      const batch: UploadedMediaResult[] = entries.map((entry: any): UploadedMediaResult => {
         const metadata = entry?.result || entry?.data || entry;
         const url = typeof entry === "string"
           ? entry
@@ -164,7 +164,7 @@ export async function uploadFilesToS3WithMetadata(
         } as UploadedMediaResult;
       });
 
-      if (!response?.success || batch.length !== chunk.length || batch.some((item) => !item.url)) {
+      if (!response?.success || batch.length !== chunk.length || batch.some((item: UploadedMediaResult) => !item.url)) {
         const partialUrls = batch
           .map((item) => item.url)
           .filter((url): url is string => typeof url === "string" && url.length > 0);
