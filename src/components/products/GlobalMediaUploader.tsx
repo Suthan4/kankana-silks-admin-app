@@ -86,6 +86,12 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
 
   const handleRemoveMedia = (index: number) => {
     const target = media[index] as any;
+    const label = target?.title || target?.file?.name || `photo ${index + 1}`;
+    const isStoredMedia = /^https?:\/\//i.test(String(target?.url || ""));
+    const confirmation = isStoredMedia
+      ? `Are you sure you want to remove ${label}? Its S3 file will be deleted only after the product is saved successfully.`
+      : `Are you sure you want to remove ${label} from this product?`;
+    if (!window.confirm(confirmation)) return;
     revokePreviewUrl(target?.preview || target?.url);
 
     const updated = media
@@ -141,6 +147,8 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
     const updated = [...media];
     updated[index] = {
       ...target,
+      originalUrl: target?.originalUrl || target?.url,
+      originalKey: target?.originalKey || target?.key,
       file: editedFile,
       url: editedPreviewUrl,
       preview: editedPreviewUrl,

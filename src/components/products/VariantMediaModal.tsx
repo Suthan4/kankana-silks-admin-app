@@ -92,6 +92,12 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
 
   const handleRemove = (index: number) => {
     const target = items[index];
+    const label = target?.title || target?.file?.name || `photo ${index + 1}`;
+    const isStoredMedia = /^https?:\/\//i.test(String(target?.url || ""));
+    const confirmation = isStoredMedia
+      ? `Are you sure you want to remove ${label}? Its S3 file will be deleted only after the product is saved successfully.`
+      : `Are you sure you want to remove ${label} from this variant?`;
+    if (!window.confirm(confirmation)) return;
     revokePreviewUrl(target?.preview || target?.url);
     const updated = items
       .filter((_, i) => i !== index)
@@ -126,6 +132,8 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
     const updated = [...items];
     updated[index] = {
       ...target,
+      originalUrl: target?.originalUrl || target?.url,
+      originalKey: target?.originalKey || target?.key,
       file: editedFile,
       url: editedPreviewUrl,
       preview: editedPreviewUrl,

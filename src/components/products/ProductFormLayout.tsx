@@ -29,7 +29,8 @@ import {
   useProductQuery,
   useUpdateProductMutation,
 } from "@/lib/hooks/useProductMutations";
-import { uploadFileToS3WithMetadata } from "@/services/mediaUploadService";
+import { uploadFileToS3WithMetadata, uploadFilesToS3WithMetadata } from "@/services/mediaUploadService";
+import { s3Api } from "@/lib/api/s3.api";
 import { BasicProductInfoCard } from "./BasicProductInfoCard";
 import { GlobalMediaUploader } from "./GlobalMediaUploader";
 import { VariantMatrixBuilder } from "./VariantMatrixBuilder";
@@ -46,6 +47,87 @@ async function mapSequential<T, R>(
     results.push(await mapper(items[index], index));
   }
   return results;
+}
+
+
+const S3_MEDIA_DELETE_RETRY_KEY = "admin:s3-media-delete-retry:v1";
+
+function getProductMediaUrls(product: any): string[] {
+  const allMedia = [
+    ...(Array.isArray(product?.media) ? product.media : []),
+    ...((Array.isArray(product?.variants) ? product.variants : []).flatMap((variant: any) =>
+      Array.isArray(variant?.media) ? variant.media : [],
+    )),
+  ];
+  return Array.from(new Set(allMedia.flatMap((item: any) =>
+    [item?.url, item?.thumbnailUrl].filter((url): url is string =>
+      typeof url === "string" && /^https?:\/\//i.test(url),
+    ),
+  )));
+}
+
+function getStoredS3DeleteRetries(): string[] {
+  try {
+    const stored = window.localStorage.getItem(S3_MEDIA_DELETE_RETRY_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed) ? parsed.filter((url) => typeof url === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Deletes only media URLs that are no longer referenced by the saved product.
+ * Failed cleanup is persisted locally and retried on the next successful save.
+ */
+async function deleteObsoleteS3Media(
+  urls: string[],
+  retainedUrls: string[] = [],
+  includeQueuedRetries = true,
+): Promise<string[]> {
+  const retained = new Set(retainedUrls);
+  const candidates = Array.from(new Set([
+    ...(includeQueuedRetries ? getStoredS3DeleteRetries() : []),
+    ...urls,
+  ])).filter((url) => /^https?:\/\//i.test(url) && !retained.has(url));
+
+  if (!candidates.length) {
+    if (includeQueuedRetries) {
+      try { window.localStorage.removeItem(S3_MEDIA_DELETE_RETRY_KEY); } catch { /* storage may be disabled */ }
+    }
+    return [];
+  }
+
+  try {
+    const response = await s3Api.deleteMultipleFiles(candidates);
+    if (response?.success) {
+      if (includeQueuedRetries) {
+        try { window.localStorage.removeItem(S3_MEDIA_DELETE_RETRY_KEY); } catch { /* best effort */ }
+      }
+      return [];
+    }
+  } catch {
+    // Fall back to the existing single-delete endpoint.
+  }
+
+  const results = await Promise.allSettled(candidates.map((url) => s3Api.deleteFileByUrl(url)));
+  const failed = candidates.filter((_, index) => {
+    const result = results[index];
+    return result.status === "rejected" || !result.value?.success;
+  });
+
+  try {
+    if (includeQueuedRetries) {
+      if (failed.length) window.localStorage.setItem(S3_MEDIA_DELETE_RETRY_KEY, JSON.stringify(failed));
+      else window.localStorage.removeItem(S3_MEDIA_DELETE_RETRY_KEY);
+    } else if (failed.length) {
+      const queued = getStoredS3DeleteRetries();
+      window.localStorage.setItem(S3_MEDIA_DELETE_RETRY_KEY, JSON.stringify(Array.from(new Set([...queued, ...failed]))));
+    }
+  } catch {
+    // The product save must remain successful even if browser storage is unavailable.
+  }
+  return failed;
 }
 
 export interface ProductFormLayoutProps {
@@ -436,150 +518,108 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
   const onSubmit = async (data: ProductFormValues) => {
     setIsUploadingMedia(true);
     let uploadToastId: string | undefined;
+    const newlyUploadedUrls: string[] = [];
 
-    try {
-      // 1. Upload pending simple product photos if any
-      let finalGlobalMedia = data.media || [];
-      const pendingGlobalFiles = (data.media || []).filter((m: any) => m.file);
+    const uploadMediaCollection = async (
+      items: any[],
+      folder: string,
+      altTextFallback: string,
+    ) => {
+      const source = items || [];
+      const pendingImages = source
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item?.file && item.file.type?.startsWith("image/"));
+      const pendingVideos = source
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item?.file && item.file.type?.startsWith("video/"));
+      const uploadedByIndex = new Map<number, any>();
 
-      if (pendingGlobalFiles.length > 0) {
-        uploadToastId = toast.loading(
-          `Uploading ${pendingGlobalFiles.length} product photo(s)...`,
-        );
-      }
-
-      if (data.media && data.media.length > 0) {
-        finalGlobalMedia = await mapSequential(
-          data.media,
-          async (m: any, idx: number) => {
-            if (m.file) {
-              const uploaded = await uploadFileToS3WithMetadata(
-                m.file,
-                "products",
-                uploadType,
-                (percent) => {
-                  if (uploadToastId) toast.loading(`Uploading ${m.file.name}: ${percent}%`, { id: uploadToastId });
-                },
-              );
-              return {
-                type: m.type || "IMAGE",
-                url: uploaded.url,
-                key: uploaded.key,
-                thumbnailUrl: m.thumbnailUrl,
-                title: m.title,
-                description: m.description,
-                mimeType: uploaded.mimeType || m.mimeType || m.file?.type,
-                fileSize: uploaded.size ?? m.file?.size ?? m.fileSize,
-                width: uploaded.width ?? m.width,
-                height: uploaded.height ?? m.height,
-                order: m.order ?? idx,
-                altText: m.altText || data.name,
-                isActive: m.isActive ?? true,
-              };
+      // Images use the existing multi-file multipart S3 endpoint in batches of 10.
+      if (pendingImages.length) {
+        const uploadedImages = await uploadFilesToS3WithMetadata(
+          pendingImages.map(({ item }) => item.file),
+          folder,
+          uploadType,
+          (percent) => {
+            if (uploadToastId) {
+              toast.loading(`Uploading product media: ${percent}%`, { id: uploadToastId });
             }
-            return {
-              type: m.type || "IMAGE",
-              url: m.url,
-              key: m.key,
-              thumbnailUrl: m.thumbnailUrl,
-              title: m.title,
-              description: m.description,
-              mimeType: m.mimeType,
-              fileSize: m.fileSize,
-              width: m.width,
-              height: m.height,
-              order: m.order ?? idx,
-              altText: m.altText,
-              isActive: m.isActive ?? true,
-            };
           },
         );
+        uploadedImages.forEach((uploaded, resultIndex) => {
+          uploadedByIndex.set(pendingImages[resultIndex].index, uploaded);
+          newlyUploadedUrls.push(uploaded.url);
+        });
       }
 
-      // 2. Upload pending variant photos if any
-      let finalVariants = data.variants || [];
-      if (data.hasVariants && data.variants && data.variants.length > 0) {
-        const totalPendingVariantFiles = data.variants.reduce(
-          (acc, v: any) =>
-            acc + (v.media || []).filter((m: any) => m.file).length,
-          0,
-        );
+      // Preserve the existing single-file multipart flow for videos.
+      for (const { item, index } of pendingVideos) {
+        const uploaded = await uploadFileToS3WithMetadata(item.file, folder, uploadType);
+        uploadedByIndex.set(index, uploaded);
+        newlyUploadedUrls.push(uploaded.url);
+      }
 
-        if (totalPendingVariantFiles > 0 && !uploadToastId) {
-          uploadToastId = toast.loading(
-            `Uploading ${totalPendingVariantFiles} variant photo(s)...`,
-          );
+      return source.map((item, index) => {
+        const uploaded = uploadedByIndex.get(index);
+        if (!uploaded && /^blob:/i.test(String(item?.url || ""))) {
+          throw new Error("An edited image is missing its local File data. Reopen the image editor and save the edit again.");
         }
 
-        finalVariants = await mapSequential(
-          data.variants,
-          async (v: any) => {
-            const vMedia = v.media || [];
-            const uploadedVMedia = await mapSequential(
-              vMedia,
-              async (m: any, mOrder: number) => {
-                if (m.file) {
-                  const uploaded = await uploadFileToS3WithMetadata(
-                    m.file,
-                    "products/variants",
-                    uploadType,
-                    (percent) => {
-                      if (uploadToastId) toast.loading(`Uploading ${m.file.name}: ${percent}%`, { id: uploadToastId });
-                    },
-                  );
-                  return {
-                    type: m.type || "IMAGE",
-                    url: uploaded.url,
-                    key: uploaded.key,
-                    thumbnailUrl: m.thumbnailUrl,
-                    title: m.title,
-                    description: m.description,
-                    mimeType: uploaded.mimeType || m.mimeType || m.file?.type,
-                    fileSize: uploaded.size ?? m.file?.size ?? m.fileSize,
-                    width: uploaded.width ?? m.width,
-                    height: uploaded.height ?? m.height,
-                    order: m.order ?? mOrder,
-                    altText: m.altText || `${v.sku || data.name} photo`,
-                    isActive: m.isActive ?? true,
-                  };
-                }
-                return {
-                  type: m.type || "IMAGE",
-                  url: m.url,
-                  key: m.key,
-                  thumbnailUrl: m.thumbnailUrl,
-                  title: m.title,
-                  description: m.description,
-                  mimeType: m.mimeType,
-                  fileSize: m.fileSize,
-                  width: m.width,
-                  height: m.height,
-                  order: m.order ?? mOrder,
-                  altText: m.altText,
-                  isActive: m.isActive ?? true,
-                };
-              },
-            );
-            return {
-              ...v,
-              media: uploadedVMedia,
-            };
-          },
-        );
+        return {
+          type: item.type || (item.file?.type?.startsWith("video/") ? "VIDEO" : "IMAGE"),
+          url: uploaded?.url || item.url,
+          key: uploaded?.key || item.key,
+          thumbnailUrl: item.thumbnailUrl,
+          title: item.title,
+          description: item.description,
+          mimeType: uploaded?.mimeType || item.mimeType || item.file?.type,
+          fileSize: uploaded?.size ?? item.fileSize ?? item.file?.size,
+          width: uploaded?.width ?? item.width,
+          height: uploaded?.height ?? item.height,
+          order: index,
+          altText: item.altText || altTextFallback,
+          isActive: item.isActive ?? true,
+        };
+      });
+    };
+
+    try {
+      const pendingCount =
+        (data.media || []).filter((item: any) => item.file).length +
+        (data.hasVariants ? (data.variants || []).reduce(
+          (count: number, variant: any) => count + (variant.media || []).filter((item: any) => item.file).length,
+          0,
+        ) : 0);
+
+      if (pendingCount > 0) {
+        uploadToastId = toast.loading(`Preparing ${pendingCount} media file(s)...`);
+      }
+
+      const finalGlobalMedia = await uploadMediaCollection(data.media || [], "products", data.name);
+
+      let finalVariants = data.variants || [];
+      if (data.hasVariants && data.variants?.length) {
+        finalVariants = await mapSequential(data.variants, async (variant: any) => ({
+          ...variant,
+          media: await uploadMediaCollection(
+            variant.media || [],
+            "products/variants",
+            `${variant.sku || data.name} photo`,
+          ),
+        }));
       }
 
       if (uploadToastId) {
-        toast.success("Photos uploaded successfully!", { id: uploadToastId });
+        toast.success("Media uploaded successfully.", { id: uploadToastId });
+        uploadToastId = undefined;
       }
 
-      // 3. Build the final payload with verified permanent S3 URLs
       const payload: CreateProductData = {
         name: data.name,
         description: data.description,
         categoryId: data.categoryId,
         basePrice: data.basePrice || data.variants?.[0]?.basePrice || 100,
-        sellingPrice:
-          data.sellingPrice || data.variants?.[0]?.sellingPrice || 100,
+        sellingPrice: data.sellingPrice || data.variants?.[0]?.sellingPrice || 100,
         sku: data.sku || undefined,
         isActive: data.isActive,
         hsnCode: data.hsnCode || undefined,
@@ -596,22 +636,8 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
         hasVideoConsultation: data.hasVideoConsultation,
         videoPurchasingEnabled: data.videoPurchasingEnabled,
         videoConsultationNote: data.videoConsultationNote || undefined,
-        specifications: data.specifications?.filter((s) => s.key && s.value),
-        media: finalGlobalMedia.map((m, idx) => ({
-          type: m.type,
-          url: m.url,
-          key: m.key,
-          thumbnailUrl: m.thumbnailUrl,
-          title: m.title,
-          description: m.description,
-          mimeType: m.mimeType,
-          fileSize: m.fileSize,
-          width: m.width,
-          height: m.height,
-          order: m.order ?? idx,
-          altText: m.altText,
-          isActive: m.isActive ?? true,
-        })),
+        specifications: data.specifications?.filter((spec) => spec.key && spec.value),
+        media: finalGlobalMedia,
       };
 
       if (!data.hasVariants) {
@@ -621,85 +647,92 @@ export const ProductFormLayout: React.FC<ProductFormLayoutProps> = ({
           lowStockThreshold: Number(data.stock?.lowStockThreshold || 5),
         };
       } else {
-        const defaultVar =
-          finalVariants.find((v: any) => v.isDefault) || finalVariants[0];
-        if (defaultVar) {
-          payload.defaultVariantId = defaultVar.id || defaultVar.variantId;
-          payload.defaultVariantSku = defaultVar.sku;
+        const defaultVariant = finalVariants.find((variant: any) => variant.isDefault) || finalVariants[0];
+        if (defaultVariant) {
+          payload.defaultVariantId = defaultVariant.id || defaultVariant.variantId;
+          payload.defaultVariantSku = defaultVariant.sku;
         }
 
-        payload.variants = finalVariants.map((v) => {
-          const isThisDefault = Boolean(v.isDefault);
-          return {
-            id: v.id,
-            variantId: v.variantId || v.id,
-            sku: v.sku,
-            isDefault: isThisDefault,
-            attributes: {
-              ...v.attributes,
-              ...(isThisDefault ? { isDefault: true } : {}),
-            },
-            size: v.size || v.attributes?.["Size"] || v.attributes?.["size"],
-            color:
-              v.color || v.attributes?.["Color"] || v.attributes?.["color"],
-            fabric:
-              v.fabric || v.attributes?.["Fabric"] || v.attributes?.["fabric"],
-            basePrice: v.basePrice,
-            sellingPrice: v.sellingPrice,
-            price: v.price || v.sellingPrice || 100,
-            weight: v.weight,
-            length: v.length,
-            breadth: v.breadth,
-            height: v.height,
-            media: v.media?.map((m: any, order: number) => ({
-              type: m.type,
-              url: m.url,
-              key: m.key,
-              thumbnailUrl: m.thumbnailUrl,
-              title: m.title,
-              description: m.description,
-              mimeType: m.mimeType,
-              fileSize: m.fileSize,
-              width: m.width,
-              height: m.height,
-              order: m.order ?? order,
-              altText: m.altText,
-              isActive: m.isActive ?? true,
-            })),
-            stock: {
-              warehouseId: v.stock?.warehouseId || warehouses[0]?.id || "",
-              quantity: Number(v.stock?.quantity || 0),
-              lowStockThreshold: Number(v.stock?.lowStockThreshold || 5),
-            },
-          };
-        });
+        payload.variants = finalVariants.map((variant: any) => ({
+          id: variant.id,
+          variantId: variant.variantId || variant.id,
+          sku: variant.sku,
+          isDefault: Boolean(variant.isDefault),
+          attributes: {
+            ...variant.attributes,
+            ...(variant.isDefault ? { isDefault: true } : {}),
+          },
+          size: variant.size || variant.attributes?.Size || variant.attributes?.size,
+          color: variant.color || variant.attributes?.Color || variant.attributes?.color,
+          fabric: variant.fabric || variant.attributes?.Fabric || variant.attributes?.fabric,
+          basePrice: variant.basePrice,
+          sellingPrice: variant.sellingPrice,
+          price: variant.price || variant.sellingPrice || 100,
+          weight: variant.weight,
+          length: variant.length,
+          breadth: variant.breadth,
+          height: variant.height,
+          media: variant.media || [],
+          stock: {
+            warehouseId: variant.stock?.warehouseId || warehouses[0]?.id || "",
+            quantity: Number(variant.stock?.quantity || 0),
+            lowStockThreshold: Number(variant.stock?.lowStockThreshold || 5),
+          },
+        }));
       }
 
       if (draftMode) {
         if (!onDraftSave) throw new Error("Bulk draft save handler is not configured.");
         await onDraftSave(payload);
-        reset(data);
+        reset({ ...data, media: finalGlobalMedia, variants: finalVariants } as ProductFormValues);
         toast.success("Review changes saved to the bulk draft. No live product was created.");
         onSuccess?.();
         return;
       }
 
       if (isEditMode && activeProductId) {
-        await updateMutation.mutateAsync({
-          id: activeProductId,
-          data: payload,
-        });
+        await updateMutation.mutateAsync({ id: activeProductId, data: payload });
       } else {
         await createMutation.mutateAsync(payload);
       }
 
-      reset(data); // Clear dirty state
+      // Product persistence succeeded. Compare the old product/variant S3 URLs
+      // with all URLs still referenced by the saved payload before deleting.
+      const retainedUrls = getProductMediaUrls(payload);
+      const previousUrls = getProductMediaUrls(productData || initialProduct);
+      const obsoleteUrls = previousUrls.filter((url) => !retainedUrls.includes(url));
+
+      try {
+        const failedCleanup = await deleteObsoleteS3Media(obsoleteUrls, retainedUrls, true);
+        if (failedCleanup.length) {
+          toast.error(`Product saved, but ${failedCleanup.length} obsolete S3 file(s) could not be deleted. Cleanup is queued for retry.`);
+        }
+      } catch (cleanupError) {
+        console.error("S3 cleanup failed after product save:", cleanupError);
+        toast.error("Product saved successfully, but old media cleanup needs attention.");
+      }
+
+      // Keep the form showing the newly-persisted public URLs, not stale blob URLs.
+      reset({ ...data, media: finalGlobalMedia, variants: finalVariants } as ProductFormValues);
       onSuccess?.();
     } catch (err: any) {
       if (uploadToastId) {
-        toast.error(err?.message || "Failed to upload photos", {
-          id: uploadToastId,
-        });
+        toast.error(err?.message || "Failed to upload media.", { id: uploadToastId });
+      } else {
+        toast.error(err?.message || "Failed to save product.");
+      }
+
+      // If persistence failed, only newly-created uploads are eligible for cleanup.
+      // Never delete the original S3 files in this path.
+      if (newlyUploadedUrls.length) {
+        try {
+          const failedCleanup = await deleteObsoleteS3Media(newlyUploadedUrls, [], false);
+          if (failedCleanup.length) {
+            console.error("Newly uploaded S3 media cleanup requires retry:", failedCleanup);
+          }
+        } catch (cleanupError) {
+          console.error("Unable to clean up newly uploaded S3 media:", cleanupError);
+        }
       }
       console.error("Submission failed:", err);
     } finally {
