@@ -54,26 +54,35 @@ export async function uploadFileToS3WithMetadata(
   uploadType: "product" | "category" | "banner" | "bulk" = "product",
   onProgress?: (percent: number) => void,
 ): Promise<UploadedMediaResult> {
-  // Images use browser-to-S3 staging, then trusted server-side validation and
-  // compression. Video uploads retain the existing non-image upload path.
+  // Images use the existing backend multipart S3 endpoint (/api/upload/multiple).
+  // This is the same public-bucket optimizer pipeline used by the admin uploader;
+  // do not route image uploads through presigned/staging endpoints.
   const res = file.type.startsWith("image/")
-    ? await s3Api.uploadDirect(file, folder, uploadType, onProgress)
+    ? await s3Api.uploadMultiple([file], folder, uploadType, onProgress)
     : await s3Api.uploadSingle(file, folder, uploadType);
 
-  const url = res?.url || res?.data?.url ||
+  const uploadedFile = Array.isArray(res?.files) ? res.files[0] : undefined;
+  if (file.type.startsWith("image/") && uploadedFile?.success === false) {
+    throw new Error(uploadedFile.error || `Failed to upload ${file.name}.`);
+  }
+
+  const metadata = uploadedFile?.result || uploadedFile?.data || uploadedFile;
+  const url = metadata?.url || res?.url || res?.data?.url ||
     (typeof res?.data === "string" ? res.data : "") ||
     (typeof res === "string" ? res : "");
-  if (!url) throw new Error(`Failed to upload ${file.name}: No permanent storage URL returned.`);
+  if (!res?.success || !url) {
+    throw new Error(res?.message || `Failed to upload ${file.name}: No permanent storage URL returned.`);
+  }
 
   return {
     url,
-    key: res?.key || res?.data?.key,
-    size: res?.size,
-    width: res?.width,
-    height: res?.height,
-    mimeType: res?.format === "webp" ? "image/webp" : file.type,
-    format: res?.format,
-    qualityUsed: res?.qualityUsed,
+    key: metadata?.key || res?.key || res?.data?.key,
+    size: metadata?.size,
+    width: metadata?.width,
+    height: metadata?.height,
+    mimeType: metadata?.format === "webp" ? "image/webp" : file.type,
+    format: metadata?.format,
+    qualityUsed: metadata?.qualityUsed,
   };
 }
 

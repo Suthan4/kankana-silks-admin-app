@@ -51,46 +51,45 @@ class S3Api {
     file: File,
     folder: string = "products",
     uploadType?: "product" | "category" | "banner" | "bulk",
+    onProgress?: (percent: number) => void,
   ) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", folder);
     if (uploadType) formData.append("uploadType", uploadType);
 
-    const response = await axios.post(
-      `${API_BASE_URL}`,
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
-
+    const response = await axios.post(`${API_BASE_URL}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (event) => {
+        if (event.total) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      },
+    });
     return response.data;
   }
 
   /**
    * Upload multiple files to S3
    */
-  async uploadMultiple(files: File[], folder: string = "products") {
+  async uploadMultiple(
+    files: File[],
+    folder: string = "products",
+    uploadType: "product" | "category" | "banner" | "bulk" = "product",
+    onProgress?: (percent: number) => void,
+  ) {
+    if (!files.length) throw new Error("Select at least one file to upload.");
+    if (files.length > 10) throw new Error("A maximum of 10 files can be uploaded per request.");
+
     const formData = new FormData();
-
-    files.forEach((file) => {
-      formData.append("files", file);
-    });
+    files.forEach((file) => formData.append("files", file));
     formData.append("folder", folder);
+    formData.append("uploadType", uploadType);
 
-    const response = await axios.post(
-      `${API_BASE_URL}/multiple`,
-      formData,
-      {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
-
+    const response = await axios.post(`${API_BASE_URL}/multiple`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (event) => {
+        if (event.total) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      },
+    });
     return response.data;
   }
 
@@ -125,53 +124,42 @@ class S3Api {
     return { Authorization: `Bearer ${token}` };
   }
 
-  /** Ask the authenticated backend for a short-lived URL to a private staging object. */
-  async getPresignedUrl(
-    fileName: string,
-    fileType: string,
-    fileSize: number,
-    folder: string = "products",
-    uploadType: "product" | "category" | "banner" | "bulk" = "product",
-  ): Promise<PresignedUrlResponse> {
-    const response = await axios.post<{ data: PresignedUrlResponse }>(
-      `${API_BASE_URL}/presigned-url`,
-      { fileName, fileType, fileSize, folder, uploadType },
-      { headers: this.authHeaders() },
-    );
-    return response.data.data;
-  }
-
-  /** Complete server-side validation/optimization and return the permanent media URL. */
-  async finalizeStagedUpload(
-    stagingKey: string,
-    folder: string,
-    uploadType: "product" | "category" | "banner" | "bulk",
-  ): Promise<FinalizedUploadResponse> {
-    const response = await axios.post<FinalizedUploadResponse>(
-      `${API_BASE_URL}/finalize`,
-      { stagingKey, folder, uploadType },
-      { headers: this.authHeaders() },
-    );
-    return response.data;
-  }
-
-  /** Upload bytes directly to S3, then finalize through the trusted backend pipeline. */
+  /**
+   * Upload image bytes through the backend's multipart /multiple endpoint.
+   * This path uses the configured public media bucket and never requests a
+   * presigned URL or private staging bucket.
+   */
   async uploadDirect(
     file: File,
     folder: string,
     uploadType: "product" | "category" | "banner" | "bulk",
     onProgress?: (percent: number) => void,
   ): Promise<FinalizedUploadResponse> {
-    const staged = await this.getPresignedUrl(file.name, file.type, file.size, folder, uploadType);
-    await axios.put(staged.uploadUrl, file, {
-      headers: { "Content-Type": file.type },
-      onUploadProgress: (event) => {
-        if (event.total) onProgress?.(Math.round((event.loaded / event.total) * 90));
-      },
-    });
-    const finalized = await this.finalizeStagedUpload(staged.stagingKey, folder, uploadType);
+    const response = await this.uploadMultiple([file], folder, uploadType, onProgress);
+    const item = Array.isArray(response?.files) ? response.files[0] : undefined;
+    const result = item?.result || item?.data || item;
+    const url = result?.url || result?.data?.url;
+
+    if (!response?.success || item?.success === false || typeof url !== "string" || !url) {
+      throw new Error(
+        item?.error || response?.error || response?.message ||
+        `Upload failed for ${file.name}: the server did not return a public media URL.`,
+      );
+    }
+
     onProgress?.(100);
-    return finalized;
+    return {
+      success: true,
+      url,
+      key: result?.key || result?.data?.key,
+      size: result?.size ?? result?.data?.size,
+      width: result?.width ?? result?.data?.width,
+      height: result?.height ?? result?.data?.height,
+      format: result?.format ?? result?.data?.format,
+      qualityUsed: result?.qualityUsed ?? result?.data?.qualityUsed,
+      attempts: result?.attempts ?? result?.data?.attempts,
+    };
+
   }
 }
 
