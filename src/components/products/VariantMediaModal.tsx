@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { productApi } from "@/lib/api/product.api";
 import {
   Check,
   Crop,
@@ -52,8 +50,6 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
   const [items, setItems] = useState<any[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (isOpen) {
@@ -101,40 +97,13 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
     handleFiles(files);
   };
 
-  const handleRemove = async (index: number) => {
+  // Keep deletion local until Save Product. The parent form submits the
+  // complete ordered collection, allowing the backend to reconcile removed
+  // rows and retained media atomically in the product update transaction.
+  const handleRemove = (index: number) => {
     const target = items[index];
-    const mediaId = target?.id ? String(target.id) : "";
-    const isPersistedMedia = Boolean(productId && variantId && mediaId && !target?.file);
     const label = target?.title || target?.file?.name || `photo ${index + 1}`;
-    const confirmation = isPersistedMedia
-      ? `Delete ${label} permanently from S3 and this product variant? This happens immediately.`
-      : `Remove ${label} from this unsaved variant?`;
-    if (!window.confirm(confirmation)) return;
-
-    if (isPersistedMedia) {
-      if (deletingMediaId) return;
-      setDeletingMediaId(mediaId);
-      try {
-        await productApi.deleteVariantMedia(productId!, variantId!, mediaId);
-        const updated = items
-          .filter((_, i) => i !== index)
-          .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
-        setItems(updated);
-        onUpdateMedia(updated);
-        // Keep other unsaved form fields intact; do not refetch the edit query
-        // while its form-prefill effect is active.
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["product", productId] }),
-          queryClient.invalidateQueries({ queryKey: ["products"] }),
-        ]);
-        toast.success("Variant image deleted from S3 and product.");
-      } catch (error: any) {
-        toast.error(error?.response?.data?.message || error?.message || "Variant image deletion failed. The image was kept.");
-      } finally {
-        setDeletingMediaId(null);
-      }
-      return;
-    }
+    if (!window.confirm(`Remove ${label} from this variant? The change will be saved when you click Save Product.`)) return;
 
     revokePreviewUrl(target?.preview || target?.url);
     const updated = items
@@ -216,7 +185,7 @@ export const VariantMediaModal: React.FC<VariantMediaModalProps> = ({
               Variant Media: {variantTitle || "Variant"}
             </h3>
             <p className="text-xs text-gray-500 font-mono mt-0.5">
-              SKU: {variantSku || "—"} &nbsp;·&nbsp; {items.length} photo(s) attached
+              SKU: {variantSku || "—"} &nbsp;·&nbsp; {items.length} photo(s) attached · removals save with the product
             </p>
           </div>
           <button

@@ -1,7 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { productApi } from "@/lib/api/product.api";
 import { useFormContext, useWatch } from "react-hook-form";
 import {
   Check,
@@ -39,8 +37,6 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
   productId,
 }) => {
   const { control, setValue } = useFormContext<ProductFormValues>();
-  const queryClient = useQueryClient();
-  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
   const media = useWatch({ control, name: "media" }) || [];
   const [isDragOver, setIsDragOver] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -91,46 +87,22 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
     handleFiles(files);
   };
 
-  const handleRemoveMedia = async (index: number) => {
+  // Deletions are staged in the form and persisted with the main product save.
+  // Calling DELETE immediately here races with the subsequent full media PUT and
+  // can allow a stale form snapshot to reintroduce the removed media row.
+  const handleRemoveMedia = (index: number) => {
     const target = media[index] as any;
-    const mediaId = target?.id ? String(target.id) : "";
-    const isPersistedMedia = Boolean(productId && mediaId && !target?.file);
     const label = target?.title || target?.file?.name || `photo ${index + 1}`;
-    const confirmation = isPersistedMedia
-      ? `Delete ${label} permanently from S3 and this product? This happens immediately.`
-      : `Remove ${label} from this unsaved product?`;
-    if (!window.confirm(confirmation)) return;
-
-    if (isPersistedMedia) {
-      if (deletingMediaId) return;
-      setDeletingMediaId(mediaId);
-      try {
-        await productApi.deleteMedia(productId!, mediaId);
-        const updated = media
-          .filter((_, i) => i !== index)
-          .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
-        setValue("media", updated as any, { shouldDirty: true, shouldValidate: true });
-        // Do not refetch the edit query here: its form-prefill effect would
-        // overwrite unrelated unsaved edits. The current form is updated above;
-        // reopening the page will fetch the authoritative server response.
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["product", productId] }),
-          queryClient.invalidateQueries({ queryKey: ["products"] }),
-        ]);
-        toast.success("Image deleted from S3 and product.");
-      } catch (error: any) {
-        toast.error(error?.response?.data?.message || error?.message || "Image deletion failed. The image was kept.");
-      } finally {
-        setDeletingMediaId(null);
-      }
-      return;
-    }
+    if (!window.confirm(`Remove ${label} from this product? The change will be saved when you click Save Product.`)) return;
 
     revokePreviewUrl(target?.preview || target?.url);
     const updated = media
       .filter((_, i) => i !== index)
       .map((item, i) => ({ ...item, order: i, isPrimary: i === 0 }));
-    setValue("media", updated as any, { shouldDirty: true, shouldValidate: true });
+    setValue("media", updated as any, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
   };
 
   const handleMoveMedia = (index: number, direction: -1 | 1) => {
@@ -238,7 +210,7 @@ export const GlobalMediaUploader: React.FC<GlobalMediaUploaderProps> = ({
       {/* Media Thumbnails Grid */}
       {media.length > 0 && (
         <>
-        <p className="text-[11px] text-slate-500">Image order is saved with the product. The first image is used as the cover.</p>
+        <p className="text-[11px] text-slate-500">Image additions, removals and order are saved together when you click Save Product. The first image is the cover.</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 w-full">
           {media.map((item: any, idx: number) => {
             const isCover = idx === 0;
