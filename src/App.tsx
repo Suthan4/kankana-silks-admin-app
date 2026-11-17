@@ -34,6 +34,7 @@ import SuperAdminDashboard from "./pages/superAdmin/superAdminDashboard";
 import CouponsPage from "./pages/admin/couponPage";
 import ProductRequestsPage from "./pages/admin/productRequest";
 import ImageCompressionSettingsPage from "./pages/admin/imageCompressionSettingsPage";
+import AnalyticsReportsPage from "./pages/admin/analyticsReportsPage";
 
 // Create query client
 const queryClient = new QueryClient({
@@ -101,6 +102,19 @@ const router = createBrowserRouter(
       />
 
       {/* Admin Module Routes */}
+      <Route
+        path="/admin/analytics"
+        element={
+          <ProtectedRoute
+            allowedRoles={["ADMIN", "SUPER_ADMIN"]}
+            requiredModule="orders"
+            requiredPermission="canRead"
+          >
+            <AnalyticsReportsPage />
+          </ProtectedRoute>
+        }
+      />
+
       <Route
         path="/admin/products"
         element={
