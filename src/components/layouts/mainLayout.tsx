@@ -23,6 +23,7 @@ import {
   ClipboardList,
   FileSpreadsheet,
   Settings2,
+  BarChart3,
 } from "lucide-react";
 
 interface NavItem {
@@ -108,6 +109,13 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
         icon: <FileSpreadsheet className="h-5 w-5" />,
         roles: ["ADMIN", "SUPER_ADMIN"],
         module: "products",
+      },
+      {
+        name: "Analytics & Reports",
+        path: "/admin/analytics",
+        icon: <BarChart3 className="h-5 w-5" />,
+        roles: ["ADMIN", "SUPER_ADMIN"],
+        module: "orders",
       },
       {
         name: "Orders",
