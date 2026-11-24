@@ -54,7 +54,7 @@ export const SectionCTASchema = z.object({
 export const createHomeSectionSchema = z
   .object({
     type: SectionTypeEnum,
-    title: z.string().optional(),
+    title: z.string().trim().optional().nullable(),
     subtitle: z.string().max(500).optional(),
     description: z.string().max(2000).optional(),
     customTypeName: z.string().min(1).max(100).optional(),
@@ -102,7 +102,7 @@ export const createHomeSectionSchema = z
 export const updateHomeSectionSchema = z
   .object({
     type: SectionTypeEnum.optional(),
-    title: z.string().optional(),
+    title: z.string().trim().optional().nullable(),
     subtitle: z.string().max(500).optional().nullable(),
     description: z.string().max(2000).optional().nullable(),
     customTypeName: z.string().min(1).max(100).optional().nullable(),
