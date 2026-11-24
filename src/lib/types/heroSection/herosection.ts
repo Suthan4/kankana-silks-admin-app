@@ -66,7 +66,7 @@ export interface SectionCTA {
 export interface HomeSection {
   id: string;
   type: SectionType;
-  title: string;
+  title: string | null;
   subtitle?: string;
   description?: string;
   customTypeName?: string;
@@ -96,7 +96,7 @@ export interface HomeSection {
 
 export interface CreateHomeSectionData {
   type: SectionType;
-  title: string;
+  title?: string | null;
   subtitle?: string;
   description?: string;
   customTypeName?: string;
@@ -123,7 +123,7 @@ export interface CreateHomeSectionData {
 
 export interface UpdateHomeSectionData {
   type?: SectionType;
-  title?: string;
+  title?: string | null;
   subtitle?: string | null;
   description?: string | null;
   customTypeName?: string | null;

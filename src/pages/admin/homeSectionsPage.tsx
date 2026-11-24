@@ -206,7 +206,7 @@ const SectionCard: React.FC<{
           <span className="text-xl">{config.icon}</span>
           <div>
             <h3 className="text-sm font-bold text-gray-900 leading-tight">
-              {section.title}
+              {section.title || section.customTypeName || config.label}
             </h3>
             <p className={`text-xs font-medium ${config.textColor}`}>
               {section.customTypeName || config.label}
@@ -225,7 +225,7 @@ const SectionCard: React.FC<{
           {section.media[0].type === "IMAGE" ? (
             <img
               src={section.media[0].url}
-              alt={section.media[0].altText || section.title}
+              alt={section.media[0].altText || section.title || section.customTypeName || config.label}
               className="w-full h-full object-cover"
             />
           ) : (
@@ -490,7 +490,7 @@ export const HomeSectionsPage: React.FC = () => {
   const handleEdit = (section: HomeSection) => {
     setEditingSection(section);
     setValue("type", section.type as any);
-    setValue("title", section.title);
+    setValue("title", section.title ?? "");
     setValue("subtitle", section.subtitle || "");
     setValue("description", section.description || "");
     setValue("isActive", section.isActive);
@@ -692,6 +692,7 @@ export const HomeSectionsPage: React.FC = () => {
       );
       const payload = {
         ...data,
+        title: data.title?.trim() || null,
         customTypeName:
           selectedType === "CUSTOM" ? getValues("customTypeName") : undefined,
         backgroundColor,
@@ -807,7 +808,7 @@ export const HomeSectionsPage: React.FC = () => {
   const filteredSections =
     sectionsData?.sections?.filter(
       (s) =>
-        s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (s.title ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.subtitle?.toLowerCase().includes(searchQuery.toLowerCase()),
     ) || [];
 
@@ -1070,7 +1071,7 @@ export const HomeSectionsPage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-xs font-semibold text-gray-600 mb-1">
-                          Title <span className="text-red-500">*</span>
+                          Title (Optional)
                         </label>
                         <input
                           {...register("title")}
