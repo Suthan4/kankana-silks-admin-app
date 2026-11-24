@@ -360,6 +360,7 @@ export const HomeSectionsPage: React.FC = () => {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const [media, setMedia] = useState<SectionMediaForm[]>([]);
+  const [productLinkUrls, setProductLinkUrls] = useState<Record<string, string>>({});
   const [ctaButtons, setCtaButtons] = useState<SectionCTA[]>([]);
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
   const [textColor, setTextColor] = useState("#000000");
@@ -479,6 +480,7 @@ export const HomeSectionsPage: React.FC = () => {
   const resetForm = () => {
     reset();
     setMedia([]);
+    setProductLinkUrls({});
     setCtaButtons([]);
     setValue("customTypeName", undefined);
     setBackgroundColor("#ffffff");
@@ -499,6 +501,7 @@ export const HomeSectionsPage: React.FC = () => {
     setValue("showTitle", section.showTitle);
     setValue("showSubtitle", section.showSubtitle);
     setValue("productIds", section.products?.map((p) => p.id.toString()) || []);
+    setProductLinkUrls(Object.fromEntries((section.productLinks || []).map((item: any) => [String(item.productId), item.linkUrl || ""])));
     setValue(
       "categoryIds",
       section.categories?.map((c) => c.id.toString()) || [],
@@ -704,6 +707,9 @@ export const HomeSectionsPage: React.FC = () => {
         layout,
         columns: layout === "grid" ? columns : undefined,
         media: uploadedMedia,
+        productLinks: selectedType === "CUSTOM" && getValues("customTypeName")?.trim().toLowerCase() === "circular collections"
+          ? (data.productIds || []).map((productId, idx) => ({ productId, linkUrl: productLinkUrls[productId]?.trim() || null, order: idx }))
+          : undefined,
         ctaButtons: ctaButtons.map((c, idx) => ({
           ...c,
           icon: c.icon ?? "",
@@ -1706,6 +1712,38 @@ export const HomeSectionsPage: React.FC = () => {
                       onCategoriesChange={(ids) => setValue("categoryIds", ids)}
                       isLoading={false}
                     />
+                    {selectedType === "CUSTOM" &&
+                      getValues("customTypeName")?.trim().toLowerCase() === "circular collections" && (
+                        <div className="mt-3 space-y-2 rounded-lg border border-purple-100 bg-white p-3">
+                          <div>
+                            <p className="text-xs font-semibold text-gray-800">Collection card links</p>
+                            <p className="text-[11px] text-gray-500">Selected products use their existing primary product image and name. Add a custom destination for each card, or leave blank to open its product page.</p>
+                          </div>
+                          {(watch("productIds") || []).map((productId) => {
+                            const product = productsData?.products?.find((item) => item.id.toString() === productId);
+                            if (!product) return null;
+                            return (
+                              <div key={productId} className="flex items-center gap-3 rounded-lg border border-gray-100 p-2">
+                                {product.media?.[0]?.url ? (
+                                  <img src={product.media[0].url} alt="" className="h-12 w-12 rounded-full object-cover" />
+                                ) : (
+                                  <div className="h-12 w-12 rounded-full bg-gray-100" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs font-medium text-gray-800">{product.name}</p>
+                                  <input
+                                    type="text"
+                                    value={productLinkUrls[productId] || ""}
+                                    onChange={(event) => setProductLinkUrls((current) => ({ ...current, [productId]: event.target.value }))}
+                                    className={inp + " mt-1"}
+                                    placeholder={"Default: /products/" + product.slug}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                   </div>
 
                   {/* 6 · Display Settings */}
