@@ -251,6 +251,22 @@ export const SectionTypeSelector: React.FC<SectionTypeSelectorProps> = ({
           <p className="mt-1 text-xs text-gray-500">
             Enter a descriptive name for your custom section type
           </p>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {[
+              { name: "Instagram Trends", detail: "Portrait image/video cards with individual shop or Instagram links" },
+              { name: "Circular Collections", detail: "Round collection images with swipe and pagination" },
+            ].map((preset) => (
+              <button
+                key={preset.name}
+                type="button"
+                onClick={() => handleCustomNameChange(preset.name)}
+                className={`rounded-lg border px-3 py-2 text-left transition-colors ${localCustomName === preset.name ? "border-purple-500 bg-purple-50" : "border-gray-200 bg-white hover:border-purple-300"}`}
+              >
+                <span className="block text-xs font-semibold text-gray-900">{preset.name}</span>
+                <span className="mt-0.5 block text-[10px] leading-4 text-gray-500">{preset.detail}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

@@ -683,6 +683,10 @@ export const HomeSectionsPage: React.FC = () => {
             type: m.type,
             url,
             mobileUrl: isDualImageLayout && mobileUrl ? mobileUrl : undefined,
+            thumbnailUrl: m.thumbnailUrl || undefined,
+            altText: m.altText || undefined,
+            title: m.title || undefined,
+            linkUrl: m.linkUrl?.trim() || undefined,
             order: idx,
             overlayPosition: m.overlayPosition,
             overlayTitle: m.overlayTitle ?? "",
@@ -1973,19 +1977,40 @@ export const HomeSectionsPage: React.FC = () => {
                 {currentMedia.type === "VIDEO" && (
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                      Thumbnail (Optional)
+                      Video Poster / Thumbnail URL (Optional)
                     </label>
-                    <ImageUpload
-                      value={currentMedia.file || currentMedia.url}
-                      onChange={(file) =>
-                        setCurrentMedia({ ...currentMedia, file })
+                    <input
+                      type="url"
+                      value={currentMedia.thumbnailUrl || ""}
+                      onChange={(e) =>
+                        setCurrentMedia({ ...currentMedia, thumbnailUrl: e.target.value })
                       }
-                      accept="image/*"
-                      maxSizeMB={60}
+                      className={inp}
+                      placeholder="https://cdn.example.com/video-poster.webp"
                     />
+                    <p className="mt-1 text-[10px] text-gray-400">
+                      Add an image URL shown before the video plays. This does not replace your video upload.
+                    </p>
                   </div>
                 )}
 
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Card Link / Shop URL (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={currentMedia.linkUrl || ""}
+                    onChange={(e) =>
+                      setCurrentMedia({ ...currentMedia, linkUrl: e.target.value })
+                    }
+                    className={inp}
+                    placeholder="/products/saree-slug or https://instagram.com/p/..."
+                  />
+                  <p className="mt-1 text-[10px] text-gray-400">
+                    Use a product URL to shop this look, or an Instagram URL to open the original post.
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">
