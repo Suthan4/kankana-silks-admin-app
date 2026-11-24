@@ -1977,16 +1977,20 @@ export const HomeSectionsPage: React.FC = () => {
                 {currentMedia.type === "VIDEO" && (
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                      Thumbnail (Optional)
+                      Video Poster / Thumbnail URL (Optional)
                     </label>
-                    <ImageUpload
-                      value={currentMedia.file || currentMedia.url}
-                      onChange={(file) =>
-                        setCurrentMedia({ ...currentMedia, file })
+                    <input
+                      type="url"
+                      value={currentMedia.thumbnailUrl || ""}
+                      onChange={(e) =>
+                        setCurrentMedia({ ...currentMedia, thumbnailUrl: e.target.value })
                       }
-                      accept="image/*"
-                      maxSizeMB={60}
+                      className={inp}
+                      placeholder="https://cdn.example.com/video-poster.webp"
                     />
+                    <p className="mt-1 text-[10px] text-gray-400">
+                      Add an image URL shown before the video plays. This does not replace your video upload.
+                    </p>
                   </div>
                 )}
 
