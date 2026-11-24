@@ -39,6 +39,7 @@ export interface SectionMedia {
   thumbnailUrl?: string;
   altText?: string;
   title?: string;
+  linkUrl?: string;
   order: number;
   overlayTitle?: string;
   overlaySubtitle?: string;
