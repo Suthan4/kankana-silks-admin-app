@@ -87,6 +87,7 @@ export interface HomeSection {
 
   // Relations
   products?: any[];
+  productLinks?: { productId: string; title?: string | null; linkUrl?: string | null; order: number }[] | null;
   categories?: any[];
   media?: SectionMedia[];
   ctaButtons?: SectionCTA[];
@@ -117,6 +118,7 @@ export interface CreateHomeSectionData {
 
   // Relations
   productIds?: string[];
+  productLinks?: { productId: string; linkUrl?: string | null; order: number }[];
   categoryIds?: string[];
   media?: SectionMedia[];
   ctaButtons?: SectionCTA[];
