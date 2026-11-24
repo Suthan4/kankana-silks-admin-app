@@ -25,8 +25,8 @@ const AnalyticsReportsPage: React.FC = () => {
 
   const rows = data?.ga4.rows ?? [];
   const totals = rows.reduce((acc, row) => {
-    for (const key of ["sessions", "totalUsers", "screenPageViews", "addToCarts", "checkouts", "ecommercePurchases", "purchaseRevenue"]) {
-      acc[key] = (acc[key] ?? 0) + Number(row[key] ?? 0);
+    for (const key of ["sessions", "totalUsers", "screenPageViews", "addToCarts", "checkouts", "ecommercePurchases", "purchaseRevenue"] as const) {
+      acc[key] = Number(acc[key] ?? 0) + Number(row[key] ?? 0);
     }
     return acc;
   }, {} as Record<string, number>);
