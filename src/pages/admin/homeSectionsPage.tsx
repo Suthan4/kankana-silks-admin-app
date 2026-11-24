@@ -361,6 +361,7 @@ export const HomeSectionsPage: React.FC = () => {
 
   const [media, setMedia] = useState<SectionMediaForm[]>([]);
   const [productLinkUrls, setProductLinkUrls] = useState<Record<string, string>>({});
+  const [productLinkTitles, setProductLinkTitles] = useState<Record<string, string>>({});
   const [ctaButtons, setCtaButtons] = useState<SectionCTA[]>([]);
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
   const [textColor, setTextColor] = useState("#000000");
@@ -481,6 +482,7 @@ export const HomeSectionsPage: React.FC = () => {
     reset();
     setMedia([]);
     setProductLinkUrls({});
+    setProductLinkTitles({});
     setCtaButtons([]);
     setValue("customTypeName", undefined);
     setBackgroundColor("#ffffff");
@@ -502,6 +504,7 @@ export const HomeSectionsPage: React.FC = () => {
     setValue("showSubtitle", section.showSubtitle);
     setValue("productIds", section.products?.map((p) => p.id.toString()) || []);
     setProductLinkUrls(Object.fromEntries((section.productLinks || []).map((item: any) => [String(item.productId), item.linkUrl || ""])));
+    setProductLinkTitles(Object.fromEntries((section.productLinks || []).map((item: any) => [String(item.productId), item.title || ""])));
     setValue(
       "categoryIds",
       section.categories?.map((c) => c.id.toString()) || [],
@@ -708,7 +711,7 @@ export const HomeSectionsPage: React.FC = () => {
         columns: layout === "grid" ? columns : undefined,
         media: uploadedMedia,
         productLinks: selectedType === "CUSTOM" && getValues("customTypeName")?.trim().toLowerCase() === "circular collections"
-          ? (data.productIds || []).map((productId, idx) => ({ productId, linkUrl: productLinkUrls[productId]?.trim() || null, order: idx }))
+          ? (data.productIds || []).map((productId, idx) => ({ productId, title: productLinkTitles[productId]?.trim() || null, linkUrl: productLinkUrls[productId]?.trim() || null, order: idx }))
           : undefined,
         ctaButtons: ctaButtons.map((c, idx) => ({
           ...c,
@@ -1731,6 +1734,13 @@ export const HomeSectionsPage: React.FC = () => {
                                 )}
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-xs font-medium text-gray-800">{product.name}</p>
+                                  <input
+                                    type="text"
+                                    value={productLinkTitles[productId] || ""}
+                                    onChange={(event) => setProductLinkTitles((current) => ({ ...current, [productId]: event.target.value }))}
+                                    className={inp + " mt-1"}
+                                    placeholder="Collection label (defaults to product name)"
+                                  />
                                   <input
                                     type="text"
                                     value={productLinkUrls[productId] || ""}

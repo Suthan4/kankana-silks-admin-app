@@ -87,7 +87,7 @@ export interface HomeSection {
 
   // Relations
   products?: any[];
-  productLinks?: { productId: string; linkUrl?: string | null; order: number }[] | null;
+  productLinks?: { productId: string; title?: string | null; linkUrl?: string | null; order: number }[] | null;
   categories?: any[];
   media?: SectionMedia[];
   ctaButtons?: SectionCTA[];
