@@ -306,6 +306,8 @@ const ProductRequestsPage: React.FC = () => {
                             <button
                               onClick={() => {
                                 setSelectedRequest(request);
+                                setAdminNote("");
+                                setEstimatedAvailability("");
                                 setShowApproveModal(true);
                               }}
                               className="text-green-600 hover:text-green-900"
@@ -445,7 +447,11 @@ const ProductRequestsPage: React.FC = () => {
               <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl">
                 <h3 className="text-xl font-bold">Approve Request</h3>
                 <button
-                  onClick={() => setShowApproveModal(false)}
+                  onClick={() => {
+                    setShowApproveModal(false);
+                    setAdminNote("");
+                    setEstimatedAvailability("");
+                  }}
                   className="text-white"
                 >
                   ×
@@ -477,7 +483,11 @@ const ProductRequestsPage: React.FC = () => {
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setShowApproveModal(false)}
+                    onClick={() => {
+                      setShowApproveModal(false);
+                      setAdminNote("");
+                      setEstimatedAvailability("");
+                    }}
                     className="flex-1 px-4 py-2 bg-gray-100 rounded-lg"
                   >
                     Cancel
