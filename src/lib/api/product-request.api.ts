@@ -89,6 +89,9 @@ export const productRequestApi = {
     });
   },
 
+  closeRequest: async (id: string): Promise<ApiResponse<ProductRequest>> =>
+    apiCall("PATCH", `/admin/product-requests/${id}/close`),
+
   rejectRequest: async (
     id: string,
     adminNote: string,
