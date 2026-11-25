@@ -29,10 +29,7 @@ export interface ProductRequest {
     name: string;
     slug: string;
     sku: string;
-    media?: Array<{
-      url: string;
-      type: string;
-    }>;
+    media?: Array<{ url: string; type: string }>;
   };
   variant?: {
     id: string;
@@ -46,77 +43,63 @@ export interface ProductRequest {
 
 type ProductRequestListResponse = ApiResponse<{
   requests: ProductRequest[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  pagination: { page: number; limit: number; total: number; totalPages: number };
 }>;
 
 export const productRequestApi = {
-  // User endpoints
   createRequest: async (data: {
     productId: string;
     variantId?: string;
     quantity: number;
     customerNote?: string;
-  }): Promise<ApiResponse<ProductRequest>> => {
-    return apiCall("POST", "/product-requests", data);
-  },
+  }): Promise<ApiResponse<ProductRequest>> => apiCall("POST", "/product-requests", data),
 
   getUserRequests: async (params?: {
     page?: number;
     limit?: number;
     status?: string;
-  }): Promise<ProductRequestListResponse> => {
-    return apiCall("GET", "/product-requests/my-requests", undefined, {
-      params,
-    });
-  },
+  }): Promise<ProductRequestListResponse> =>
+    apiCall("GET", "/product-requests/my-requests", undefined, { params }),
 
-  getRequest: async (id: string): Promise<ApiResponse<ProductRequest>> => {
-    return apiCall("GET", `/product-requests/${id}`);
-  },
+  getRequest: async (id: string): Promise<ApiResponse<ProductRequest>> =>
+    apiCall("GET", `/product-requests/${id}`),
 
-  cancelRequest: async (id: string): Promise<ApiResponse<ProductRequest>> => {
-    return apiCall("DELETE", `/product-requests/${id}`);
-  },
+  cancelRequest: async (id: string): Promise<ApiResponse<ProductRequest>> =>
+    apiCall("DELETE", `/product-requests/${id}`),
 
-  // Admin endpoints
   getAllRequests: async (params?: {
     page?: number;
     limit?: number;
     status?: string;
-  }): Promise<ProductRequestListResponse> => {
-    return apiCall("GET", "/admin/product-requests", undefined, { params });
-  },
+  }): Promise<ProductRequestListResponse> =>
+    apiCall("GET", "/admin/product-requests", undefined, { params }),
 
   approveRequest: async (
     id: string,
-    data: {
-      adminNote?: string;
-      estimatedAvailability?: string;
-    }
+    data: { adminNote?: string; estimatedAvailability?: string },
   ): Promise<ApiResponse<ProductRequest>> => {
-    return apiCall("PATCH", `/admin/product-requests/${id}/approve`, data);
+    // <input type="date"> returns YYYY-MM-DD. Backend validates a full ISO datetime.
+    const estimatedAvailability = data.estimatedAvailability
+      ? new Date(`${data.estimatedAvailability}T00:00:00.000Z`).toISOString()
+      : undefined;
+
+    return apiCall("PATCH", `/admin/product-requests/${id}/approve`, {
+      adminNote: data.adminNote?.trim() || undefined,
+      estimatedAvailability,
+    });
   },
 
   rejectRequest: async (
     id: string,
-    adminNote: string
-  ): Promise<ApiResponse<ProductRequest>> => {
-    return apiCall("PATCH", `/admin/product-requests/${id}/reject`, {
-      adminNote,
-    });
-  },
+    adminNote: string,
+  ): Promise<ApiResponse<ProductRequest>> =>
+    apiCall("PATCH", `/admin/product-requests/${id}/reject`, {
+      adminNote: adminNote.trim(),
+    }),
 
   fulfillRequest: async (
     id: string,
-    orderId: string
-  ): Promise<ApiResponse<ProductRequest>> => {
-    return apiCall("PATCH", `/admin/product-requests/${id}/fulfill`, {
-      orderId,
-    });
-  },
+    orderId: string,
+  ): Promise<ApiResponse<ProductRequest>> =>
+    apiCall("PATCH", `/admin/product-requests/${id}/fulfill`, { orderId }),
 };
