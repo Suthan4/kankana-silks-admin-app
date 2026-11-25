@@ -7,7 +7,7 @@ export interface ProductRequest {
   productId: string;
   variantId?: string;
   quantity: number;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED" | "CANCELLED";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED" | "CANCELLED" | "CLOSED";
   customerNote?: string;
   adminNote?: string;
   notifyWhenAvailable: boolean;
