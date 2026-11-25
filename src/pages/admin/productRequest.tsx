@@ -34,6 +34,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
       icon: ShoppingBag,
     },
     CANCELLED: { bg: "bg-gray-100", text: "text-gray-800", icon: XCircle },
+    CLOSED: { bg: "bg-emerald-100", text: "text-emerald-800", icon: CheckCircle },
   };
 
   const {
@@ -145,7 +146,7 @@ const ProductRequestsPage: React.FC = () => {
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {["PENDING", "APPROVED", "REJECTED", "FULFILLED"].map((status) => {
+          {["PENDING", "APPROVED", "REJECTED", "FULFILLED", "CLOSED"].map((status) => {
             const count =
               data?.requests?.filter((r) => r.status === status).length || 0;
             return (
@@ -191,6 +192,7 @@ const ProductRequestsPage: React.FC = () => {
               <option value="REJECTED">Rejected</option>
               <option value="FULFILLED">Fulfilled</option>
               <option value="CANCELLED">Cancelled</option>
+              <option value="CLOSED">Closed (Available again)</option>
             </select>
           </div>
         </div>
