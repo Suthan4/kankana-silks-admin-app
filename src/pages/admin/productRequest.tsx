@@ -16,6 +16,7 @@ import {
   Loader2,
   Search,
   Filter,
+  Archive,
 } from "lucide-react";
 import {
   productRequestApi,
@@ -112,6 +113,18 @@ const ProductRequestsPage: React.FC = () => {
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || "Failed to reject request");
+    },
+  });
+
+  const closeMutation = useMutation({
+    mutationFn: (id: string) => productRequestApi.closeRequest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-product-requests"] });
+      setSelectedRequest(null);
+      toast.success("Request closed successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Failed to close request");
     },
   });
 
@@ -303,6 +316,25 @@ const ProductRequestsPage: React.FC = () => {
                         >
                           <Eye className="h-4 w-4 inline" />
                         </button>
+                        {canUpdate &&
+                          (request.status === "PENDING" || request.status === "APPROVED") && (
+                            <button
+                              type="button"
+                              title="Close request"
+                              aria-label={`Close request ${request.requestNumber}`}
+                              disabled={closeMutation.isPending}
+                              onClick={() => {
+                                const confirmed = window.confirm(
+                                  "Close this request? It will remain in history, and the customer can submit a new request if the product becomes unavailable again."
+                                );
+                                if (confirmed) closeMutation.mutate(request.id);
+                              }}
+                              className="text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                            >
+                              <Archive className="h-4 w-4 inline" />
+                              <span className="sr-only">Close request</span>
+                            </button>
+                          )}
                         {canUpdate && request.status === "PENDING" && (
                           <>
                             <button
