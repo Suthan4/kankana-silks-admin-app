@@ -870,7 +870,7 @@ const ShipmentsPage: React.FC = () => {
 
                                     {/* Shipment Info */}
                                     {order.shipment && (
-                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                         <div className="bg-white p-3 rounded border border-gray-200">
                                           <p className="text-xs text-gray-600 mb-1">
                                             Shiprocket Order ID
@@ -901,6 +901,19 @@ const ShipmentsPage: React.FC = () => {
                                               selectedCourier.courierName ||
                                               "-"}
                                           </p>
+                                        </div>
+                                        <div className="bg-white p-3 rounded border border-gray-200">
+                                          <p className="text-xs text-gray-600 mb-1">
+                                            Shiprocket Tracking Status
+                                          </p>
+                                          <p className="text-sm font-medium text-gray-900">
+                                            {order.shipment.shiprocketStatus || "Awaiting tracking update"}
+                                          </p>
+                                          {order.shipment.shiprocketStatusId != null && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                              Provider status ID: {order.shipment.shiprocketStatusId}
+                                            </p>
+                                          )}
                                         </div>
                                       </div>
                                     )}
