@@ -293,24 +293,23 @@ const ShipmentsPage: React.FC = () => {
     generateLabelMutation.mutate(order.id);
   };
 
-  // Handle Generate Manifest with validation
+  // Handle Generate Manifest with validation.
+  // Shiprocket requires an AWB and a successfully scheduled pickup.
   const handleGenerateManifest = (order: Order) => {
-    // Handle Generate Manifest with validation
-    const handleGenerateManifest = (order: Order) => {
-      if (!hasAwb(order)) {
-        toast.error(
-          "⚠️ Please generate AWB first before downloading manifest!",
-        );
-        return;
-      }
-      if (!hasPickup(order)) {
-        toast.error(
-          "⚠️ Please schedule pickup first before downloading manifest!",
-        );
-        return;
-      }
-      generateManifestMutation.mutate(order.id);
-    };
+    if (!hasAwb(order)) {
+      toast.error(
+        "⚠️ Please generate AWB first before downloading manifest!",
+      );
+      return;
+    }
+
+    if (!hasPickup(order)) {
+      toast.error(
+        "⚠️ Please schedule pickup first before downloading manifest!",
+      );
+      return;
+    }
+
     generateManifestMutation.mutate(order.id);
   };
 
