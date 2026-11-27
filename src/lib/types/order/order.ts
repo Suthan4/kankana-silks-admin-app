@@ -88,9 +88,9 @@ export interface Shipment {
   estimatedDelivery?: string;
   shippedAt?: string;
   deliveredAt?: string;
-  shiprocketStatus?: string;
-  shiprocketStatusId?: number;
-  statusUpdatedAt?: string;
+  shiprocketStatus?: string | null;
+  shiprocketStatusId?: number | null;
+  statusUpdatedAt?: string | null;
 }
 
 export interface OrderShippingInfo {
