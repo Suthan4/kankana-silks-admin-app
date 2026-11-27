@@ -834,7 +834,6 @@ const OrdersPage: React.FC = () => {
                       "CONFIRMED",
                       "SHIPPED",
                       "OUT_FOR_DELIVERY",
-                      "DELIVERED",
                       "CANCELLED",
                     ].map((status) => (
                       <button
