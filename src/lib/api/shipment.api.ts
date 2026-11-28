@@ -95,10 +95,6 @@ export const shipmentApi = {
     return apiCall("POST", "/admin/shipments/generate-manifest", { orderId });
   },
 
-  markAsDelivered: async (orderId: string): Promise<ApiResponse<any>> => {
-    return apiCall("POST", "/admin/shipments/mark-delivered", { orderId });
-  },
-
   getShiprocketOrderDetails: async (
     orderId: string
   ): Promise<ApiResponse<any>> => {

@@ -57,6 +57,9 @@ const ShipmentsPage: React.FC = () => {
         sortBy: "createdAt",
         sortOrder: "desc",
       }),
+    // Delivery is synchronized from Shiprocket's webhook; refresh to show it automatically.
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 
   // Create shipment mutation
@@ -139,20 +142,6 @@ const ShipmentsPage: React.FC = () => {
     },
   });
 
-  // Mark as delivered mutation
-  const markDeliveredMutation = useMutation({
-    mutationFn: (orderId: string) => shipmentApi.markAsDelivered(orderId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
-      toast.success("Order marked as delivered");
-    },
-    onError: (error: any) => {
-      toast.error(
-        error.response?.data?.message || "Failed to mark as delivered",
-      );
-    },
-  });
-
   // Track shipment mutation
   const trackShipmentMutation = useMutation({
     mutationFn: (orderId: string) => shipmentApi.trackShipment(orderId),
@@ -192,7 +181,12 @@ const ShipmentsPage: React.FC = () => {
 
   const getShipmentStatusColor = (order: Order) => {
     if (!order.shipment) return "bg-gray-100 text-gray-800";
-    if (order.shipment.deliveredAt) return "bg-green-100 text-green-800";
+    if (order.shipment.deliveredAt || order.status === "DELIVERED") {
+      return "bg-green-100 text-green-800";
+    }
+    if (order.status === "OUT_FOR_DELIVERY") {
+      return "bg-orange-100 text-orange-800";
+    }
     if (order.shipment.shippedAt) return "bg-purple-100 text-purple-800";
     if (order.shipment.awbCode) return "bg-blue-100 text-blue-800";
     return "bg-yellow-100 text-yellow-800";
@@ -200,7 +194,10 @@ const ShipmentsPage: React.FC = () => {
 
   const getShipmentStatus = (order: Order) => {
     if (!order.shipment) return "Not Created";
-    if (order.shipment.deliveredAt) return "Delivered";
+    if (order.shipment.deliveredAt || order.status === "DELIVERED") {
+      return "Delivered";
+    }
+    if (order.status === "OUT_FOR_DELIVERY") return "Out for Delivery";
     if (order.shipment.shippedAt) return "Shipped";
     if (order.shipment.awbCode) return "AWB Generated";
     return "Created";
@@ -822,25 +819,6 @@ const ShipmentsPage: React.FC = () => {
                                             </>
                                           )}
 
-                                        {/* Mark as Delivered - Only show if picked up but not delivered */}
-                                        {hasPickup(order) &&
-                                          !isDelivered(order) && (
-                                            <button
-                                              onClick={() =>
-                                                markDeliveredMutation.mutate(
-                                                  order.id,
-                                                )
-                                              }
-                                              disabled={
-                                                markDeliveredMutation.isPending
-                                              }
-                                              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm disabled:opacity-50"
-                                            >
-                                              <CheckCircle className="w-4 h-4" />
-                                              Mark as Delivered
-                                            </button>
-                                          )}
-
                                         {/* Shiprocket Details - Always available if shipment exists */}
                                         {order.shipment && (
                                           <button
@@ -892,7 +870,7 @@ const ShipmentsPage: React.FC = () => {
 
                                     {/* Shipment Info */}
                                     {order.shipment && (
-                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                         <div className="bg-white p-3 rounded border border-gray-200">
                                           <p className="text-xs text-gray-600 mb-1">
                                             Shiprocket Order ID
@@ -923,6 +901,19 @@ const ShipmentsPage: React.FC = () => {
                                               selectedCourier.courierName ||
                                               "-"}
                                           </p>
+                                        </div>
+                                        <div className="bg-white p-3 rounded border border-gray-200">
+                                          <p className="text-xs text-gray-600 mb-1">
+                                            Shiprocket Tracking Status
+                                          </p>
+                                          <p className="text-sm font-medium text-gray-900">
+                                            {order.shipment.shiprocketStatus || "Awaiting tracking update"}
+                                          </p>
+                                          {order.shipment.shiprocketStatusId != null && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                              Provider status ID: {order.shipment.shiprocketStatusId}
+                                            </p>
+                                          )}
                                         </div>
                                       </div>
                                     )}

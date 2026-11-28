@@ -77,6 +77,11 @@ const ReturnsPage: React.FC = () => {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin-returns", queryParams],
     queryFn: () => returnApi.getAllReturns(queryParams),
+    // Shiprocket updates return pickup/transit/received status asynchronously.
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   // Approve return mutation

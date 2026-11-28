@@ -59,6 +59,10 @@ const OrdersPage: React.FC = () => {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin-orders", queryParams],
     queryFn: () => orderApi.getAllOrders(queryParams),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   // Update order status mutation
@@ -834,7 +838,6 @@ const OrdersPage: React.FC = () => {
                       "CONFIRMED",
                       "SHIPPED",
                       "OUT_FOR_DELIVERY",
-                      "DELIVERED",
                       "CANCELLED",
                     ].map((status) => (
                       <button
